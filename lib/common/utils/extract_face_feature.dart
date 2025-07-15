@@ -1,5 +1,6 @@
 import 'package:face_auth/model/user_model.dart';
 import 'package:google_mlkit_face_detection/google_mlkit_face_detection.dart';
+import 'dart:ui'; 
 
 /// Extract face features from input image using ML Kit
 Future<FaceFeatures?> extractFaceFeatures(
@@ -21,80 +22,80 @@ Future<FaceFeatures?> extractFaceFeatures(
       // Right ear landmark
       rightEar: face.landmarks[FaceLandmarkType.rightEar] != null
           ? Points(
-              x: face.landmarks[FaceLandmarkType.rightEar]!.position.x,
-              y: face.landmarks[FaceLandmarkType.rightEar]!.position.y,
+              x: face.landmarks[FaceLandmarkType.rightEar]!.position.x.toDouble(),
+              y: face.landmarks[FaceLandmarkType.rightEar]!.position.y.toDouble(),
             )
           : null,
       
       // Left ear landmark
       leftEar: face.landmarks[FaceLandmarkType.leftEar] != null
           ? Points(
-              x: face.landmarks[FaceLandmarkType.leftEar]!.position.x,
-              y: face.landmarks[FaceLandmarkType.leftEar]!.position.y,
+              x: face.landmarks[FaceLandmarkType.leftEar]!.position.x.toDouble(),
+              y: face.landmarks[FaceLandmarkType.leftEar]!.position.y.toDouble(),
             )
           : null,
       
       // Right mouth landmark
       rightMouth: face.landmarks[FaceLandmarkType.rightMouth] != null
           ? Points(
-              x: face.landmarks[FaceLandmarkType.rightMouth]!.position.x,
-              y: face.landmarks[FaceLandmarkType.rightMouth]!.position.y,
+              x: face.landmarks[FaceLandmarkType.rightMouth]!.position.x.toDouble(),
+              y: face.landmarks[FaceLandmarkType.rightMouth]!.position.y.toDouble(),
             )
           : null,
       
       // Left mouth landmark
       leftMouth: face.landmarks[FaceLandmarkType.leftMouth] != null
           ? Points(
-              x: face.landmarks[FaceLandmarkType.leftMouth]!.position.x,
-              y: face.landmarks[FaceLandmarkType.leftMouth]!.position.y,
+              x: face.landmarks[FaceLandmarkType.leftMouth]!.position.x.toDouble(),
+              y: face.landmarks[FaceLandmarkType.leftMouth]!.position.y.toDouble(),
             )
           : null,
       
       // Right eye landmark
       rightEye: face.landmarks[FaceLandmarkType.rightEye] != null
           ? Points(
-              x: face.landmarks[FaceLandmarkType.rightEye]!.position.x,
-              y: face.landmarks[FaceLandmarkType.rightEye]!.position.y,
+              x: face.landmarks[FaceLandmarkType.rightEye]!.position.x.toDouble(),
+              y: face.landmarks[FaceLandmarkType.rightEye]!.position.y.toDouble(),
             )
           : null,
       
       // Left eye landmark
       leftEye: face.landmarks[FaceLandmarkType.leftEye] != null
           ? Points(
-              x: face.landmarks[FaceLandmarkType.leftEye]!.position.x,
-              y: face.landmarks[FaceLandmarkType.leftEye]!.position.y,
+              x: face.landmarks[FaceLandmarkType.leftEye]!.position.x.toDouble(),
+              y: face.landmarks[FaceLandmarkType.leftEye]!.position.y.toDouble(),
             )
           : null,
       
       // Right cheek landmark
       rightCheek: face.landmarks[FaceLandmarkType.rightCheek] != null
           ? Points(
-              x: face.landmarks[FaceLandmarkType.rightCheek]!.position.x,
-              y: face.landmarks[FaceLandmarkType.rightCheek]!.position.y,
+              x: face.landmarks[FaceLandmarkType.rightCheek]!.position.x.toDouble(),
+              y: face.landmarks[FaceLandmarkType.rightCheek]!.position.y.toDouble(),
             )
           : null,
       
       // Left cheek landmark
       leftCheek: face.landmarks[FaceLandmarkType.leftCheek] != null
           ? Points(
-              x: face.landmarks[FaceLandmarkType.leftCheek]!.position.x,
-              y: face.landmarks[FaceLandmarkType.leftCheek]!.position.y,
+              x: face.landmarks[FaceLandmarkType.leftCheek]!.position.x.toDouble(),
+              y: face.landmarks[FaceLandmarkType.leftCheek]!.position.y.toDouble(),
             )
           : null,
       
       // Nose base landmark
       noseBase: face.landmarks[FaceLandmarkType.noseBase] != null
           ? Points(
-              x: face.landmarks[FaceLandmarkType.noseBase]!.position.x,
-              y: face.landmarks[FaceLandmarkType.noseBase]!.position.y,
+              x: face.landmarks[FaceLandmarkType.noseBase]!.position.x.toDouble(),
+              y: face.landmarks[FaceLandmarkType.noseBase]!.position.y.toDouble(),
             )
           : null,
       
       // Bottom mouth landmark
       bottomMouth: face.landmarks[FaceLandmarkType.bottomMouth] != null
           ? Points(
-              x: face.landmarks[FaceLandmarkType.bottomMouth]!.position.x,
-              y: face.landmarks[FaceLandmarkType.bottomMouth]!.position.y,
+              x: face.landmarks[FaceLandmarkType.bottomMouth]!.position.x.toDouble(),
+              y: face.landmarks[FaceLandmarkType.bottomMouth]!.position.y.toDouble(),
             )
           : null,
     );

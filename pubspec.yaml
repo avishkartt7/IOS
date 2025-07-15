@@ -72,7 +72,7 @@ dev_dependencies:
 
 # Force newer versions of problematic packages
 dependency_overrides:
-  win32: ^5.1.0
+  
 
 flutter:
   uses-material-design: true
@@ -81,4 +81,4 @@ flutter:
     - assets/success.mp3
     - assets/failed.mp3
     - assets/scan_beep.wav
-    - assets/ima
+    - assets/

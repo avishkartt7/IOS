@@ -18,6 +18,8 @@ void main() async {
     print("❌ Firebase initialization failed: $e");
     // Continue with app - some features may not work
   }
+
+  await Firebase.initializeApp();
   
   runApp(const MyApp());
 }

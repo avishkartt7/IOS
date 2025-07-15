@@ -83,7 +83,7 @@ class CustomSnackBar {
           content: Row(
             children: [
               const Icon(
-                Icons.warning_outline,
+                Icons.warning_amber_outlined, // Fixed: was Icons.warning_outline
                 color: Colors.white,
                 size: 20,
               ),

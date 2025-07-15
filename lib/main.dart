@@ -1,23 +1,94 @@
-import 'package:face_auth/authenticate_face/authenticate_face_view.dart';
-import 'package:face_auth/common/views/custom_button.dart';
-import 'package:face_auth/common/utils/custom_snackbar.dart';
-import 'package:face_auth/common/utils/extensions/size_extension.dart';
-import 'package:face_auth/common/utils/screen_size_util.dart';
-import 'package:face_auth/constants/theme.dart';
-import 'package:face_auth/register_face/enter_password_view.dart';
 import 'package:flutter/material.dart';
 import 'package:firebase_core/firebase_core.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+import 'package:face_auth/constants/theme.dart';
+import 'package:face_auth/pin_entry/pin_entry_view.dart';
+import 'package:face_auth/dashboard/dashboard_view.dart';
+import 'package:face_auth/common/utils/custom_snackbar.dart';
+import 'package:face_auth/common/utils/screen_size_util.dart';
+import 'dart:convert';
 
-void main() {
+void main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  Firebase.initializeApp();
+  
+  try {
+    await Firebase.initializeApp();
+    print("✅ Firebase initialized successfully");
+  } catch (e) {
+    print("❌ Firebase initialization failed: $e");
+    // Continue with app - some features may not work
+  }
+  
   runApp(const MyApp());
 }
 
-class MyApp extends StatelessWidget {
+class MyApp extends StatefulWidget {
   const MyApp({super.key});
 
-  // This widget is the root of your application.
+  @override
+  State<MyApp> createState() => _MyAppState();
+}
+
+class _MyAppState extends State<MyApp> {
+  String? _authenticatedUserId;
+  bool _isLoading = true;
+
+  @override
+  void initState() {
+    super.initState();
+    _checkAuthenticationStatus();
+  }
+
+  Future<void> _checkAuthenticationStatus() async {
+    try {
+      SharedPreferences prefs = await SharedPreferences.getInstance();
+      
+      // Check if user is authenticated and registration is complete
+      String? userId = prefs.getString('authenticated_user_id');
+      bool isAuthenticated = prefs.getBool('is_authenticated') ?? false;
+      bool registrationComplete = prefs.getBool('registration_complete_$userId') ?? false;
+      
+      if (isAuthenticated && userId != null && registrationComplete) {
+        // Check if authentication is still valid (not expired)
+        int? authTimestamp = prefs.getInt('authentication_timestamp');
+        if (authTimestamp != null) {
+          DateTime authDate = DateTime.fromMillisecondsSinceEpoch(authTimestamp);
+          DateTime now = DateTime.now();
+          int daysSinceAuth = now.difference(authDate).inDays;
+          
+          if (daysSinceAuth < 30) { // Authentication valid for 30 days
+            setState(() {
+              _authenticatedUserId = userId;
+              _isLoading = false;
+            });
+            return;
+          }
+        }
+      }
+      
+      // Clear expired or invalid authentication
+      await _clearAuthenticationData();
+      
+      setState(() {
+        _authenticatedUserId = null;
+        _isLoading = false;
+      });
+    } catch (e) {
+      print("Error checking authentication: $e");
+      setState(() {
+        _isLoading = false;
+      });
+    }
+  }
+
+  Future<void> _clearAuthenticationData() async {
+    SharedPreferences prefs = await SharedPreferences.getInstance();
+    await prefs.remove('authenticated_user_id');
+    await prefs.remove('authenticated_employee_pin');
+    await prefs.setBool('is_authenticated', false);
+    await prefs.remove('authentication_timestamp');
+  }
+
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
@@ -44,18 +115,26 @@ class MyApp extends StatelessWidget {
           ),
         ),
       ),
-      home: const Home(),
+      home: _isLoading 
+        ? const SplashScreen() 
+        : _authenticatedUserId != null 
+          ? DashboardView(employeeId: _authenticatedUserId!)
+          : const PinEntryView(),
+      builder: (context, child) {
+        // Initialize screen size utility
+        ScreenSizeUtil.context = context;
+        CustomSnackBar.context = context;
+        return child!;
+      },
     );
   }
 }
 
-class Home extends StatelessWidget {
-  const Home({Key? key}) : super(key: key);
+class SplashScreen extends StatelessWidget {
+  const SplashScreen({Key? key}) : super(key: key);
 
   @override
   Widget build(BuildContext context) {
-    initializeUtilContexts(context);
-
     return Scaffold(
       body: Container(
         decoration: const BoxDecoration(
@@ -68,47 +147,32 @@ class Home extends StatelessWidget {
             ],
           ),
         ),
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Text(
-              "Face Authentication",
-              style: TextStyle(
-                color: textColor,
-                fontSize: 0.033.sh,
-                fontWeight: FontWeight.w600,
+        child: const Center(
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              CircularProgressIndicator(color: Colors.white),
+              SizedBox(height: 20),
+              Text(
+                "Face Authentication",
+                style: TextStyle(
+                  color: Colors.white,
+                  fontSize: 24,
+                  fontWeight: FontWeight.bold,
+                ),
               ),
-            ),
-            SizedBox(height: 0.07.sh),
-            CustomButton(
-              text: "Register User",
-              onTap: () {
-                Navigator.of(context).push(
-                  MaterialPageRoute(
-                    builder: (context) => EnterPasswordView(),
-                  ),
-                );
-              },
-            ),
-            SizedBox(height: 0.025.sh),
-            CustomButton(
-              text: "Authenticate User",
-              onTap: () {
-                Navigator.of(context).push(
-                  MaterialPageRoute(
-                    builder: (context) => const AuthenticateFaceView(),
-                  ),
-                );
-              },
-            ),
-          ],
+              SizedBox(height: 10),
+              Text(
+                "Initializing...",
+                style: TextStyle(
+                  color: Colors.white70,
+                  fontSize: 16,
+                ),
+              ),
+            ],
+          ),
         ),
       ),
     );
-  }
-
-  void initializeUtilContexts(BuildContext context) {
-    ScreenSizeUtil.context = context;
-    CustomSnackBar.context = context;
   }
 }

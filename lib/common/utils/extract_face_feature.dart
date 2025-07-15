@@ -3,106 +3,219 @@ import 'package:google_mlkit_face_detection/google_mlkit_face_detection.dart';
 import 'dart:ui'; 
 
 /// Extract face features from input image using ML Kit
+/// Enhanced version with better debugging and error handling
 Future<FaceFeatures?> extractFaceFeatures(
     InputImage inputImage, FaceDetector faceDetector) async {
   try {
+    print("🔍 Starting face detection process...");
+    
     // Process the image to detect faces
     List<Face> faceList = await faceDetector.processImage(inputImage);
     
+    print("🔍 Face detection results: ${faceList.length} faces found");
+    
     // Return null if no faces detected
     if (faceList.isEmpty) {
-      return null;
+      print("❌ No faces detected in image");
+      
+      // Try with more lenient detector as fallback
+      final lenientDetector = FaceDetector(
+        options: FaceDetectorOptions(
+          performanceMode: FaceDetectorMode.fast,
+          minFaceSize: 0.01,
+          enableLandmarks: false,
+        ),
+      );
+      
+      List<Face> lenientFaceList = await lenientDetector.processImage(inputImage);
+      print("🔍 Lenient detection results: ${lenientFaceList.length} faces found");
+      
+      lenientDetector.close();
+      
+      if (lenientFaceList.isEmpty) {
+        return null;
+      }
+      
+      // Use the lenient result if available
+      faceList = lenientFaceList;
     }
     
     // Use the first detected face
     Face face = faceList.first;
+    print("✅ Processing first detected face");
+    print("📏 Face bounding box: ${face.boundingBox}");
     
-    // Extract facial landmarks
+    // Extract facial landmarks with null safety
     FaceFeatures faceFeatures = FaceFeatures(
       // Right ear landmark
+      rightEar: _extractPoint(face, FaceLandmarkType.rightEar),
+      
+      // Left ear landmark
+      leftEar: _extractPoint(face, FaceLandmarkType.leftEar),
+      
+      // Right mouth landmark
+      rightMouth: _extractPoint(face, FaceLandmarkType.rightMouth),
+      
+      // Left mouth landmark
+      leftMouth: _extractPoint(face, FaceLandmarkType.leftMouth),
+      
+      // Right eye landmark
+      rightEye: _extractPoint(face, FaceLandmarkType.rightEye),
+      
+      // Left eye landmark
+      leftEye: _extractPoint(face, FaceLandmarkType.leftEye),
+      
+      // Right cheek landmark
+      rightCheek: _extractPoint(face, FaceLandmarkType.rightCheek),
+      
+      // Left cheek landmark
+      leftCheek: _extractPoint(face, FaceLandmarkType.leftCheek),
+      
+      // Nose base landmark
+      noseBase: _extractPoint(face, FaceLandmarkType.noseBase),
+      
+      // Bottom mouth landmark
+      bottomMouth: _extractPoint(face, FaceLandmarkType.bottomMouth),
+    );
+
+    // Debug: Print which landmarks were detected
+    int detectedLandmarks = _countDetectedLandmarks(faceFeatures);
+    print("🎯 Detected $detectedLandmarks/10 facial landmarks");
+    
+    // Print specific landmark availability
+    _debugLandmarks(faceFeatures);
+    
+    // Check if we have essential features (eyes, nose)
+    bool hasEssentialFeatures = faceFeatures.rightEye != null &&
+        faceFeatures.leftEye != null &&
+        faceFeatures.noseBase != null;
+    
+    if (!hasEssentialFeatures) {
+      print("⚠️ Missing essential features (eyes/nose)");
+      // Still return the features, but log the warning
+    } else {
+      print("✅ Essential features detected successfully");
+    }
+
+    return faceFeatures;
+  } catch (e) {
+    print('❌ Error extracting face features: $e');
+    print('❌ Stack trace: ${StackTrace.current}');
+    return null;
+  }
+}
+
+/// Helper method to safely extract a point from face landmarks
+Points? _extractPoint(Face face, FaceLandmarkType landmarkType) {
+  try {
+    final landmark = face.landmarks[landmarkType];
+    if (landmark != null) {
+      return Points(
+        x: landmark.position.x.toDouble(),
+        y: landmark.position.y.toDouble(),
+      );
+    }
+    return null;
+  } catch (e) {
+    print("❌ Error extracting $landmarkType: $e");
+    return null;
+  }
+}
+
+/// Count how many landmarks were successfully detected
+int _countDetectedLandmarks(FaceFeatures features) {
+  int count = 0;
+  if (features.rightEar != null) count++;
+  if (features.leftEar != null) count++;
+  if (features.rightEye != null) count++;
+  if (features.leftEye != null) count++;
+  if (features.rightCheek != null) count++;
+  if (features.leftCheek != null) count++;
+  if (features.rightMouth != null) count++;
+  if (features.leftMouth != null) count++;
+  if (features.noseBase != null) count++;
+  if (features.bottomMouth != null) count++;
+  return count;
+}
+
+/// Debug print for landmark detection status
+void _debugLandmarks(FaceFeatures features) {
+  print("👁️ Eyes: Right=${features.rightEye != null}, Left=${features.leftEye != null}");
+  print("👂 Ears: Right=${features.rightEar != null}, Left=${features.leftEar != null}");
+  print("👄 Mouth: Right=${features.rightMouth != null}, Left=${features.leftMouth != null}, Bottom=${features.bottomMouth != null}");
+  print("👃 Nose: ${features.noseBase != null}");
+  print("😊 Cheeks: Right=${features.rightCheek != null}, Left=${features.leftCheek != null}");
+}
+
+/// Simple version that exactly matches your original working implementation
+Future<FaceFeatures?> extractFaceFeaturesSimple(
+    InputImage inputImage, FaceDetector faceDetector) async {
+  try {
+    List<Face> faceList = await faceDetector.processImage(inputImage);
+    
+    if (faceList.isEmpty) {
+      print("❌ No faces detected in simple extraction");
+      return null;
+    }
+    
+    Face face = faceList.first;
+
+    FaceFeatures faceFeatures = FaceFeatures(
       rightEar: face.landmarks[FaceLandmarkType.rightEar] != null
           ? Points(
               x: face.landmarks[FaceLandmarkType.rightEar]!.position.x.toDouble(),
-              y: face.landmarks[FaceLandmarkType.rightEar]!.position.y.toDouble(),
-            )
+              y: face.landmarks[FaceLandmarkType.rightEar]!.position.y.toDouble())
           : null,
-      
-      // Left ear landmark
       leftEar: face.landmarks[FaceLandmarkType.leftEar] != null
           ? Points(
               x: face.landmarks[FaceLandmarkType.leftEar]!.position.x.toDouble(),
-              y: face.landmarks[FaceLandmarkType.leftEar]!.position.y.toDouble(),
-            )
+              y: face.landmarks[FaceLandmarkType.leftEar]!.position.y.toDouble())
           : null,
-      
-      // Right mouth landmark
       rightMouth: face.landmarks[FaceLandmarkType.rightMouth] != null
           ? Points(
               x: face.landmarks[FaceLandmarkType.rightMouth]!.position.x.toDouble(),
-              y: face.landmarks[FaceLandmarkType.rightMouth]!.position.y.toDouble(),
-            )
+              y: face.landmarks[FaceLandmarkType.rightMouth]!.position.y.toDouble())
           : null,
-      
-      // Left mouth landmark
       leftMouth: face.landmarks[FaceLandmarkType.leftMouth] != null
           ? Points(
               x: face.landmarks[FaceLandmarkType.leftMouth]!.position.x.toDouble(),
-              y: face.landmarks[FaceLandmarkType.leftMouth]!.position.y.toDouble(),
-            )
+              y: face.landmarks[FaceLandmarkType.leftMouth]!.position.y.toDouble())
           : null,
-      
-      // Right eye landmark
       rightEye: face.landmarks[FaceLandmarkType.rightEye] != null
           ? Points(
               x: face.landmarks[FaceLandmarkType.rightEye]!.position.x.toDouble(),
-              y: face.landmarks[FaceLandmarkType.rightEye]!.position.y.toDouble(),
-            )
+              y: face.landmarks[FaceLandmarkType.rightEye]!.position.y.toDouble())
           : null,
-      
-      // Left eye landmark
       leftEye: face.landmarks[FaceLandmarkType.leftEye] != null
           ? Points(
               x: face.landmarks[FaceLandmarkType.leftEye]!.position.x.toDouble(),
-              y: face.landmarks[FaceLandmarkType.leftEye]!.position.y.toDouble(),
-            )
+              y: face.landmarks[FaceLandmarkType.leftEye]!.position.y.toDouble())
           : null,
-      
-      // Right cheek landmark
       rightCheek: face.landmarks[FaceLandmarkType.rightCheek] != null
           ? Points(
               x: face.landmarks[FaceLandmarkType.rightCheek]!.position.x.toDouble(),
-              y: face.landmarks[FaceLandmarkType.rightCheek]!.position.y.toDouble(),
-            )
+              y: face.landmarks[FaceLandmarkType.rightCheek]!.position.y.toDouble())
           : null,
-      
-      // Left cheek landmark
       leftCheek: face.landmarks[FaceLandmarkType.leftCheek] != null
           ? Points(
               x: face.landmarks[FaceLandmarkType.leftCheek]!.position.x.toDouble(),
-              y: face.landmarks[FaceLandmarkType.leftCheek]!.position.y.toDouble(),
-            )
+              y: face.landmarks[FaceLandmarkType.leftCheek]!.position.y.toDouble())
           : null,
-      
-      // Nose base landmark
       noseBase: face.landmarks[FaceLandmarkType.noseBase] != null
           ? Points(
               x: face.landmarks[FaceLandmarkType.noseBase]!.position.x.toDouble(),
-              y: face.landmarks[FaceLandmarkType.noseBase]!.position.y.toDouble(),
-            )
+              y: face.landmarks[FaceLandmarkType.noseBase]!.position.y.toDouble())
           : null,
-      
-      // Bottom mouth landmark
       bottomMouth: face.landmarks[FaceLandmarkType.bottomMouth] != null
           ? Points(
               x: face.landmarks[FaceLandmarkType.bottomMouth]!.position.x.toDouble(),
-              y: face.landmarks[FaceLandmarkType.bottomMouth]!.position.y.toDouble(),
-            )
+              y: face.landmarks[FaceLandmarkType.bottomMouth]!.position.y.toDouble())
           : null,
     );
 
     return faceFeatures;
   } catch (e) {
-    print('Error extracting face features: $e');
+    print('❌ Error in simple face extraction: $e');
     return null;
   }
 }
@@ -122,20 +235,7 @@ bool validateFaceFeatures(FaceFeatures features) {
 /// Get face feature quality score (0.0 to 1.0)
 double getFaceFeatureQuality(FaceFeatures features) {
   int totalFeatures = 10; // Total possible features
-  int detectedFeatures = 0;
-
-  // Count detected features
-  if (features.rightEar != null) detectedFeatures++;
-  if (features.leftEar != null) detectedFeatures++;
-  if (features.rightEye != null) detectedFeatures++;
-  if (features.leftEye != null) detectedFeatures++;
-  if (features.rightCheek != null) detectedFeatures++;
-  if (features.leftCheek != null) detectedFeatures++;
-  if (features.rightMouth != null) detectedFeatures++;
-  if (features.leftMouth != null) detectedFeatures++;
-  if (features.noseBase != null) detectedFeatures++;
-  if (features.bottomMouth != null) detectedFeatures++;
-
+  int detectedFeatures = _countDetectedLandmarks(features);
   return detectedFeatures / totalFeatures;
 }
 
@@ -169,54 +269,6 @@ bool isFaceProperlyPositioned(Face face, double imageWidth, double imageHeight) 
   return isCentered && isGoodSize;
 }
 
-/// Check if face angle is appropriate for registration
-bool isFaceAngleGood(Face face) {
-  // Get face rotation angles
-  double? headEulerAngleX = face.headEulerAngleX; // Pitch (up/down)
-  double? headEulerAngleY = face.headEulerAngleY; // Yaw (left/right)
-  double? headEulerAngleZ = face.headEulerAngleZ; // Roll (tilt)
-  
-  // Define acceptable angle ranges (in degrees)
-  const double maxPitch = 15.0;
-  const double maxYaw = 15.0;
-  const double maxRoll = 15.0;
-  
-  // Check if all angles are within acceptable range
-  bool pitchOk = headEulerAngleX == null || headEulerAngleX.abs() <= maxPitch;
-  bool yawOk = headEulerAngleY == null || headEulerAngleY.abs() <= maxYaw;
-  bool rollOk = headEulerAngleZ == null || headEulerAngleZ.abs() <= maxRoll;
-  
-  return pitchOk && yawOk && rollOk;
-}
-
-/// Check if eyes are open and visible
-bool areEyesOpen(Face face) {
-  // Get eye open probabilities
-  double? leftEyeOpenProbability = face.leftEyeOpenProbability;
-  double? rightEyeOpenProbability = face.rightEyeOpenProbability;
-  
-  // Define minimum probability for eyes to be considered open
-  const double minEyeOpenProbability = 0.5;
-  
-  // Check if both eyes are open
-  bool leftEyeOpen = leftEyeOpenProbability == null || 
-                     leftEyeOpenProbability >= minEyeOpenProbability;
-  bool rightEyeOpen = rightEyeOpenProbability == null || 
-                      rightEyeOpenProbability >= minEyeOpenProbability;
-  
-  return leftEyeOpen && rightEyeOpen;
-}
-
-/// Check if person is smiling (optional for registration)
-bool isSmiling(Face face) {
-  double? smilingProbability = face.smilingProbability;
-  
-  // Define minimum probability for smiling
-  const double minSmilingProbability = 0.7;
-  
-  return smilingProbability != null && smilingProbability >= minSmilingProbability;
-}
-
 /// Get comprehensive face analysis
 Map<String, dynamic> analyzeFace(Face face, double imageWidth, double imageHeight) {
   return {
@@ -227,9 +279,6 @@ Map<String, dynamic> analyzeFace(Face face, double imageWidth, double imageHeigh
       'height': face.boundingBox.height,
     },
     'isProperlyPositioned': isFaceProperlyPositioned(face, imageWidth, imageHeight),
-    'isAngleGood': isFaceAngleGood(face),
-    'areEyesOpen': areEyesOpen(face),
-    'isSmiling': isSmiling(face),
     'headEulerAngleX': face.headEulerAngleX,
     'headEulerAngleY': face.headEulerAngleY,
     'headEulerAngleZ': face.headEulerAngleZ,
@@ -238,76 +287,5 @@ Map<String, dynamic> analyzeFace(Face face, double imageWidth, double imageHeigh
     'smilingProbability': face.smilingProbability,
     'trackingId': face.trackingId,
   };
-}
+} 
 
-/// Get face quality assessment
-Map<String, dynamic> getFaceQualityAssessment(Face face, FaceFeatures features, 
-    double imageWidth, double imageHeight) {
-  
-  double featureQuality = getFaceFeatureQuality(features);
-  bool isPositioned = isFaceProperlyPositioned(face, imageWidth, imageHeight);
-  bool isAngleGood = isFaceAngleGood(face);
-  bool eyesOpen = areEyesOpen(face);
-  
-  // Calculate overall quality score
-  double qualityScore = 0.0;
-  
-  if (featureQuality > 0.7) qualityScore += 0.3;
-  if (isPositioned) qualityScore += 0.3;
-  if (isAngleGood) qualityScore += 0.2;
-  if (eyesOpen) qualityScore += 0.2;
-  
-  String qualityLevel = 'Poor';
-  if (qualityScore >= 0.8) {
-    qualityLevel = 'Excellent';
-  } else if (qualityScore >= 0.6) {
-    qualityLevel = 'Good';
-  } else if (qualityScore >= 0.4) {
-    qualityLevel = 'Fair';
-  }
-  
-  return {
-    'qualityScore': qualityScore,
-    'qualityLevel': qualityLevel,
-    'featureQuality': featureQuality,
-    'isProperlyPositioned': isPositioned,
-    'isAngleGood': isAngleGood,
-    'areEyesOpen': eyesOpen,
-    'recommendations': _getQualityRecommendations(
-      featureQuality, isPositioned, isAngleGood, eyesOpen
-    ),
-  };
-}
-
-/// Get recommendations for improving face quality
-List<String> _getQualityRecommendations(
-    double featureQuality, bool isPositioned, bool isAngleGood, bool eyesOpen) {
-  
-  List<String> recommendations = [];
-  
-  if (featureQuality < 0.7) {
-    recommendations.add('Improve lighting conditions');
-    recommendations.add('Move closer to the camera');
-  }
-  
-  if (!isPositioned) {
-    recommendations.add('Center your face in the frame');
-    recommendations.add('Adjust distance from camera');
-  }
-  
-  if (!isAngleGood) {
-    recommendations.add('Look straight at the camera');
-    recommendations.add('Keep your head level');
-  }
-  
-  if (!eyesOpen) {
-    recommendations.add('Keep your eyes open');
-    recommendations.add('Look directly at the camera');
-  }
-  
-  if (recommendations.isEmpty) {
-    recommendations.add('Face quality is good!');
-  }
-  
-  return recommendations;
-}

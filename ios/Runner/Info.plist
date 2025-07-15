@@ -33,14 +33,26 @@
 		<key>NSExceptionDomains</key>
 		<dict/>
 	</dict>
+	<!-- Camera Permission -->
 	<key>NSCameraUsageDescription</key>
-	<string>This app needs camera access for face authentication and registration.</string>
-	<key>NSLocationWhenInUseUsageDescription</key>
-	<string>This app needs location access for attendance tracking.</string>
-	<key>NSMicrophoneUsageDescription</key>
-	<string>This app needs microphone access for authentication feedback.</string>
+	<string>This app needs camera access for face authentication and registration. Please allow camera access to capture your face for secure authentication.</string>
+	
+	<!-- Photo Library Permission -->
 	<key>NSPhotoLibraryUsageDescription</key>
-	<string>This app needs photo library access to select profile images.</string>
+	<string>This app needs photo library access to select profile images for face authentication setup.</string>
+	
+	<!-- Photo Library Add Permission (iOS 11+) -->
+	<key>NSPhotoLibraryAddUsageDescription</key>
+	<string>This app needs permission to save photos to your photo library.</string>
+	
+	<!-- Location Permission -->
+	<key>NSLocationWhenInUseUsageDescription</key>
+	<string>This app needs location access for attendance tracking and security purposes.</string>
+	
+	<!-- Microphone Permission -->
+	<key>NSMicrophoneUsageDescription</key>
+	<string>This app needs microphone access for authentication feedback and security features.</string>
+	
 	<key>UIApplicationSupportsIndirectInputEvents</key>
 	<true/>
 	<key>UILaunchStoryboardName</key>

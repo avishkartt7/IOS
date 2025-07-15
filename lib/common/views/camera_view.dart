@@ -5,7 +5,6 @@ import 'package:face_auth/constants/theme.dart';
 import 'package:flutter/material.dart';
 import 'package:google_mlkit_face_detection/google_mlkit_face_detection.dart';
 import 'package:image_picker/image_picker.dart';
-import 'package:permission_handler/permission_handler.dart';
 
 class CameraView extends StatefulWidget {
   const CameraView({
@@ -25,12 +24,13 @@ class _CameraViewState extends State<CameraView> {
   File? _image;
   ImagePicker? _imagePicker;
   bool _isProcessing = false;
-  String _statusMessage = "Tap to capture your face";
+  String _statusMessage = "Tap camera icon to capture";
 
   @override
   void initState() {
     super.initState();
     _imagePicker = ImagePicker();
+    print("📷 CameraView initialized");
   }
 
   @override
@@ -39,15 +39,19 @@ class _CameraViewState extends State<CameraView> {
       width: double.infinity,
       height: double.infinity,
       decoration: BoxDecoration(
-        color: Colors.black,
+        color: Colors.black87,
         borderRadius: BorderRadius.circular(20),
+        border: Border.all(
+          color: _image != null ? Colors.green : Colors.white.withOpacity(0.3),
+          width: 2,
+        ),
       ),
       child: Stack(
         children: [
-          // Camera preview or placeholder
+          // Main content area
           if (_image != null)
             ClipRRect(
-              borderRadius: BorderRadius.circular(20),
+              borderRadius: BorderRadius.circular(18),
               child: Image.file(
                 _image!,
                 width: double.infinity,
@@ -62,8 +66,8 @@ class _CameraViewState extends State<CameraView> {
           if (_isProcessing)
             Container(
               decoration: BoxDecoration(
-                color: Colors.black.withOpacity(0.7),
-                borderRadius: BorderRadius.circular(20),
+                color: Colors.black.withOpacity(0.8),
+                borderRadius: BorderRadius.circular(18),
               ),
               child: const Center(
                 child: Column(
@@ -71,6 +75,7 @@ class _CameraViewState extends State<CameraView> {
                   children: [
                     CircularProgressIndicator(
                       color: accentColor,
+                      strokeWidth: 3,
                     ),
                     SizedBox(height: 16),
                     Text(
@@ -78,6 +83,7 @@ class _CameraViewState extends State<CameraView> {
                       style: TextStyle(
                         color: Colors.white,
                         fontSize: 16,
+                        fontWeight: FontWeight.w500,
                       ),
                     ),
                   ],
@@ -85,12 +91,12 @@ class _CameraViewState extends State<CameraView> {
               ),
             ),
 
-          // Control buttons
+          // Camera control button
           Positioned(
             bottom: 20,
-            left: 20,
-            right: 20,
-            child: _buildControlButtons(),
+            left: 0,
+            right: 0,
+            child: _buildCameraControls(),
           ),
 
           // Status message
@@ -109,6 +115,7 @@ class _CameraViewState extends State<CameraView> {
                 style: const TextStyle(
                   color: Colors.white,
                   fontSize: 12,
+                  fontWeight: FontWeight.w500,
                 ),
                 textAlign: TextAlign.center,
               ),
@@ -125,37 +132,42 @@ class _CameraViewState extends State<CameraView> {
       height: double.infinity,
       decoration: BoxDecoration(
         gradient: LinearGradient(
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
+          begin: Alignment.topCenter,
+          end: Alignment.bottomCenter,
           colors: [
             Colors.grey[800]!,
             Colors.grey[900]!,
           ],
         ),
-        borderRadius: BorderRadius.circular(20),
+        borderRadius: BorderRadius.circular(18),
       ),
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
           Icon(
-            Icons.camera_alt,
-            size: 64,
-            color: Colors.white.withOpacity(0.5),
+            Icons.camera_alt_rounded,
+            size: 80,
+            color: Colors.white.withOpacity(0.6),
           ),
-          const SizedBox(height: 16),
+          const SizedBox(height: 20),
           Text(
-            "Tap to capture your face",
+            "Take a Photo",
             style: TextStyle(
-              color: Colors.white.withOpacity(0.7),
-              fontSize: 16,
+              color: Colors.white.withOpacity(0.8),
+              fontSize: 18,
+              fontWeight: FontWeight.w600,
             ),
           ),
           const SizedBox(height: 8),
-          Text(
-            "Make sure you have good lighting",
-            style: TextStyle(
-              color: Colors.white.withOpacity(0.5),
-              fontSize: 12,
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 40),
+            child: Text(
+              "Position your face clearly in good lighting",
+              style: TextStyle(
+                color: Colors.white.withOpacity(0.6),
+                fontSize: 14,
+              ),
+              textAlign: TextAlign.center,
             ),
           ),
         ],
@@ -163,32 +175,36 @@ class _CameraViewState extends State<CameraView> {
     );
   }
 
-  Widget _buildControlButtons() {
+  Widget _buildCameraControls() {
     return Row(
       mainAxisAlignment: MainAxisAlignment.spaceEvenly,
       children: [
-        // Retake button
-        if (_image != null)
-          _buildControlButton(
-            icon: Icons.refresh,
-            label: "Retake",
-            onPressed: _retakeImage,
-          ),
-
-        // Capture button
+        // Gallery button
         _buildControlButton(
-          icon: _image == null ? Icons.camera_alt : Icons.check,
-          label: _image == null ? "Capture" : "Use Photo",
-          onPressed: _image == null ? _getImage : _processCurrentImage,
+          icon: Icons.photo_library_rounded,
+          label: "Gallery",
+          onPressed: _getImageFromGallery,
+          isSecondary: true,
+        ),
+
+        // Main camera button
+        _buildControlButton(
+          icon: _image == null ? Icons.camera_alt_rounded : Icons.refresh_rounded,
+          label: _image == null ? "Camera" : "Retake",
+          onPressed: _getImageFromCamera,
           isPrimary: true,
         ),
 
-        // Gallery button
-        _buildControlButton(
-          icon: Icons.photo_library,
-          label: "Gallery",
-          onPressed: _getImageFromGallery,
-        ),
+        // Process button (if image exists)
+        if (_image != null)
+          _buildControlButton(
+            icon: Icons.check_rounded,
+            label: "Use Photo",
+            onPressed: _processCurrentImage,
+            isSuccess: true,
+          )
+        else
+          Container(width: 60), // Placeholder for spacing
       ],
     );
   }
@@ -198,19 +214,37 @@ class _CameraViewState extends State<CameraView> {
     required String label,
     required VoidCallback onPressed,
     bool isPrimary = false,
+    bool isSecondary = false,
+    bool isSuccess = false,
   }) {
+    Color buttonColor;
+    if (isPrimary) {
+      buttonColor = accentColor;
+    } else if (isSuccess) {
+      buttonColor = Colors.green;
+    } else {
+      buttonColor = Colors.white.withOpacity(0.2);
+    }
+
     return GestureDetector(
       onTap: _isProcessing ? null : onPressed,
       child: Container(
-        width: 70,
-        height: 70,
+        width: 60,
+        height: 60,
         decoration: BoxDecoration(
-          color: isPrimary ? accentColor : Colors.white.withOpacity(0.2),
+          color: buttonColor,
           shape: BoxShape.circle,
           border: Border.all(
             color: Colors.white.withOpacity(0.3),
             width: 2,
           ),
+          boxShadow: [
+            BoxShadow(
+              color: buttonColor.withOpacity(0.3),
+              blurRadius: 8,
+              offset: const Offset(0, 4),
+            ),
+          ],
         ),
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
@@ -218,9 +252,9 @@ class _CameraViewState extends State<CameraView> {
             Icon(
               icon,
               color: Colors.white,
-              size: 24,
+              size: 20,
             ),
-            const SizedBox(height: 4),
+            const SizedBox(height: 2),
             Text(
               label,
               style: const TextStyle(
@@ -235,13 +269,9 @@ class _CameraViewState extends State<CameraView> {
     );
   }
 
-  Future<void> _getImage() async {
-    // Check camera permission
-    if (!await _checkCameraPermission()) {
-      _updateStatusMessage("Camera permission required");
-      return;
-    }
-
+  Future<void> _getImageFromCamera() async {
+    print("📷 Opening camera...");
+    
     setState(() {
       _isProcessing = true;
       _statusMessage = "Opening camera...";
@@ -250,19 +280,19 @@ class _CameraViewState extends State<CameraView> {
     try {
       final pickedFile = await _imagePicker?.pickImage(
         source: ImageSource.camera,
-        maxWidth: 400,
-        maxHeight: 400,
-        imageQuality: 85,
+        maxWidth: 800,
+        maxHeight: 800,
+        imageQuality: 90,
       );
 
       if (pickedFile != null) {
         await _setPickedFile(pickedFile);
       } else {
-        _updateStatusMessage("No image captured");
+        _updateStatusMessage("No photo taken");
       }
     } catch (e) {
-      debugPrint("Error capturing image: $e");
-      _updateStatusMessage("Error capturing image");
+      print("❌ Error opening camera: $e");
+      _updateStatusMessage("Camera error: $e");
     } finally {
       setState(() {
         _isProcessing = false;
@@ -271,12 +301,8 @@ class _CameraViewState extends State<CameraView> {
   }
 
   Future<void> _getImageFromGallery() async {
-    // Check storage permission
-    if (!await _checkStoragePermission()) {
-      _updateStatusMessage("Storage permission required");
-      return;
-    }
-
+    print("📷 Opening gallery...");
+    
     setState(() {
       _isProcessing = true;
       _statusMessage = "Opening gallery...";
@@ -285,19 +311,19 @@ class _CameraViewState extends State<CameraView> {
     try {
       final pickedFile = await _imagePicker?.pickImage(
         source: ImageSource.gallery,
-        maxWidth: 400,
-        maxHeight: 400,
-        imageQuality: 85,
+        maxWidth: 800,
+        maxHeight: 800,
+        imageQuality: 90,
       );
 
       if (pickedFile != null) {
         await _setPickedFile(pickedFile);
       } else {
-        _updateStatusMessage("No image selected");
+        _updateStatusMessage("No photo selected");
       }
     } catch (e) {
-      debugPrint("Error selecting image: $e");
-      _updateStatusMessage("Error selecting image");
+      print("❌ Error opening gallery: $e");
+      _updateStatusMessage("Gallery error: $e");
     } finally {
       setState(() {
         _isProcessing = false;
@@ -307,71 +333,66 @@ class _CameraViewState extends State<CameraView> {
 
   Future<void> _setPickedFile(XFile pickedFile) async {
     final path = pickedFile.path;
+    print("📷 Processing image from: $path");
     
     setState(() {
       _image = File(path);
-      _statusMessage = "Image captured successfully";
-    });
-
-    // Process the image
-    await _processImage(path);
-  }
-
-  Future<void> _processImage(String imagePath) async {
-    setState(() {
-      _isProcessing = true;
-      _statusMessage = "Processing image...";
+      _statusMessage = "Photo captured successfully";
     });
 
     try {
       // Read image bytes
-      Uint8List imageBytes = await File(imagePath).readAsBytes();
+      Uint8List imageBytes = await _image!.readAsBytes();
       
       // Create InputImage for ML Kit
-      InputImage inputImage = InputImage.fromFilePath(imagePath);
+      InputImage inputImage = InputImage.fromFilePath(path);
       
       // Call the callbacks
       widget.onImage(imageBytes);
       widget.onInputImage(inputImage);
       
-      _updateStatusMessage("Image processed successfully");
+      _updateStatusMessage("Photo ready for processing");
+      
     } catch (e) {
-      debugPrint("Error processing image: $e");
-      _updateStatusMessage("Error processing image");
+      print("❌ Error processing image: $e");
+      _updateStatusMessage("Error processing photo");
+    }
+  }
+
+  Future<void> _processCurrentImage() async {
+    if (_image == null) {
+      print("❌ No image to process");
+      return;
+    }
+    
+    print("🔄 Reprocessing current image...");
+    
+    setState(() {
+      _isProcessing = true;
+      _statusMessage = "Reprocessing photo...";
+    });
+
+    try {
+      // Read image bytes again
+      Uint8List imageBytes = await _image!.readAsBytes();
+      
+      // Create InputImage for ML Kit
+      InputImage inputImage = InputImage.fromFilePath(_image!.path);
+      
+      // Call the callbacks
+      widget.onImage(imageBytes);
+      widget.onInputImage(inputImage);
+      
+      _updateStatusMessage("Photo reprocessed");
+      
+    } catch (e) {
+      print("❌ Error reprocessing image: $e");
+      _updateStatusMessage("Error reprocessing photo");
     } finally {
       setState(() {
         _isProcessing = false;
       });
     }
-  }
-
-  Future<void> _processCurrentImage() async {
-    if (_image == null) return;
-    
-    await _processImage(_image!.path);
-  }
-
-  void _retakeImage() {
-    setState(() {
-      _image = null;
-      _statusMessage = "Tap to capture your face";
-    });
-  }
-
-  Future<bool> _checkCameraPermission() async {
-    var status = await Permission.camera.status;
-    if (status != PermissionStatus.granted) {
-      status = await Permission.camera.request();
-    }
-    return status == PermissionStatus.granted;
-  }
-
-  Future<bool> _checkStoragePermission() async {
-    var status = await Permission.storage.status;
-    if (status != PermissionStatus.granted) {
-      status = await Permission.storage.request();
-    }
-    return status == PermissionStatus.granted;
   }
 
   void _updateStatusMessage(String message) {
@@ -384,8 +405,8 @@ class _CameraViewState extends State<CameraView> {
       if (mounted) {
         setState(() {
           _statusMessage = _image == null 
-              ? "Tap to capture your face" 
-              : "Image ready for processing";
+              ? "Tap camera icon to capture" 
+              : "Photo ready";
         });
       }
     });

@@ -279,11 +279,12 @@ class _CameraViewState extends State<CameraView> {
 
     try {
       final pickedFile = await _imagePicker?.pickImage(
-        source: ImageSource.camera,
-        maxWidth: 800,
-        maxHeight: 800,
-        imageQuality: 90,
-      );
+      source: ImageSource.camera, // or gallery
+      maxWidth: 1024,  // Higher resolution
+      maxHeight: 1024,
+      imageQuality: 95, // Higher quality
+      preferredCameraDevice: CameraDevice.front, // For camera only
+    );
 
       if (pickedFile != null) {
         await _setPickedFile(pickedFile);
@@ -310,11 +311,12 @@ class _CameraViewState extends State<CameraView> {
 
     try {
       final pickedFile = await _imagePicker?.pickImage(
-        source: ImageSource.gallery,
-        maxWidth: 800,
-        maxHeight: 800,
-        imageQuality: 90,
-      );
+      source: ImageSource.camera, // or gallery
+      maxWidth: 1024,  // Higher resolution
+      maxHeight: 1024,
+      imageQuality: 95, // Higher quality
+      preferredCameraDevice: CameraDevice.front, // For camera only
+    );
 
       if (pickedFile != null) {
         await _setPickedFile(pickedFile);

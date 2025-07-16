@@ -30,14 +30,14 @@ class RegisterFaceView extends StatefulWidget {
 }
 
 class _RegisterFaceViewState extends State<RegisterFaceView> {
-  // Fixed face detector with more lenient settings
+  // Enhanced face detector with construction-friendly settings
   final FaceDetector _faceDetector = FaceDetector(
     options: FaceDetectorOptions(
       enableLandmarks: true,
       enableClassification: false,
       enableTracking: false,
-      performanceMode: FaceDetectorMode.fast, // Changed from accurate
-      minFaceSize: 0.05, // Smaller minimum face size (default is 0.15)
+      performanceMode: FaceDetectorMode.accurate, // Use accurate for better results
+      minFaceSize: 0.1, // Reasonable minimum size
       enableContours: false,
     ),
   );
@@ -178,27 +178,68 @@ class _RegisterFaceViewState extends State<RegisterFaceView> {
 
   Widget _buildStatusSection() {
     if (_image != null && _faceFeatures != null) {
+      double qualityScore = getFaceFeatureQuality(_faceFeatures!);
+      int featuresDetected = _countDetectedLandmarks(_faceFeatures!);
+      
+      Color statusColor = Colors.green;
+      IconData statusIcon = Icons.check_circle;
+      String statusText = "Face detected successfully!";
+      
+      if (qualityScore < 0.5) {
+        statusColor = Colors.orange;
+        statusIcon = Icons.warning;
+        statusText = "Face detected but quality could be improved";
+      } else if (qualityScore < 0.7) {
+        statusColor = Colors.blue;
+        statusIcon = Icons.info;
+        statusText = "Good face detection quality";
+      }
+      
       return Container(
         margin: EdgeInsets.only(bottom: 0.02.sh),
         padding: EdgeInsets.all(0.015.sh),
         decoration: BoxDecoration(
-          color: Colors.green.withOpacity(0.2),
+          color: statusColor.withOpacity(0.2),
           borderRadius: BorderRadius.circular(8),
         ),
-        child: Row(
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            const Icon(Icons.check_circle, color: Colors.green, size: 20),
-            const SizedBox(width: 8),
-            Expanded(
-              child: Text(
-                "✅ Face detected successfully!",
+            Row(
+              children: [
+                Icon(statusIcon, color: statusColor, size: 20),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    statusText,
+                    style: TextStyle(
+                      color: statusColor,
+                      fontSize: 14,
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 8),
+            Text(
+              "Quality: ${(qualityScore * 100).toStringAsFixed(1)}% • Features: $featuresDetected/10",
+              style: TextStyle(
+                color: statusColor.withOpacity(0.8),
+                fontSize: 12,
+              ),
+            ),
+            if (validateFaceFeatures(_faceFeatures!)) ...[
+              const SizedBox(height: 4),
+              Text(
+                "✅ Ready for registration",
                 style: TextStyle(
                   color: Colors.green,
-                  fontSize: 14,
+                  fontSize: 12,
                   fontWeight: FontWeight.w500,
                 ),
               ),
-            ),
+            ],
           ],
         ),
       );
@@ -207,20 +248,45 @@ class _RegisterFaceViewState extends State<RegisterFaceView> {
         margin: EdgeInsets.only(bottom: 0.02.sh),
         padding: EdgeInsets.all(0.015.sh),
         decoration: BoxDecoration(
-          color: Colors.orange.withOpacity(0.2),
+          color: Colors.red.withOpacity(0.2),
           borderRadius: BorderRadius.circular(8),
         ),
-        child: Row(
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            const Icon(Icons.warning, color: Colors.orange, size: 20),
-            const SizedBox(width: 8),
-            Expanded(
+            Row(
+              children: [
+                const Icon(Icons.error, color: Colors.red, size: 20),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    "No face detected",
+                    style: TextStyle(
+                      color: Colors.red,
+                      fontSize: 14,
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 8),
+            Text(
+              "Please retake with better lighting and ensure your face fills the frame",
+              style: TextStyle(
+                color: Colors.red.withOpacity(0.8),
+                fontSize: 12,
+              ),
+            ),
+            const SizedBox(height: 4),
+            GestureDetector(
+              onTap: _showFaceDetectionTips,
               child: Text(
-                "⚠️ No face detected. Please retake with better lighting and ensure your face fills the frame",
+                "📱 Tap here for tips",
                 style: TextStyle(
-                  color: Colors.orange,
-                  fontSize: 14,
-                  fontWeight: FontWeight.w500,
+                  color: Colors.blue,
+                  fontSize: 12,
+                  decoration: TextDecoration.underline,
                 ),
               ),
             ),
@@ -237,11 +303,11 @@ class _RegisterFaceViewState extends State<RegisterFaceView> {
         ),
         child: Row(
           children: [
-            const Icon(Icons.info, color: Colors.blue, size: 20),
+            const Icon(Icons.camera_alt, color: Colors.blue, size: 20),
             const SizedBox(width: 8),
             Expanded(
               child: Text(
-                "📸 Take a clear photo of your face to continue",
+                "Take a clear photo of your face to continue",
                 style: TextStyle(
                   color: Colors.blue,
                   fontSize: 14,
@@ -310,7 +376,7 @@ class _RegisterFaceViewState extends State<RegisterFaceView> {
   }
 
   Future<void> _getImage() async {
-    print("📸 Starting image capture...");
+    print("📸 Starting enhanced image capture...");
     
     setState(() {
       _imageFile = null;
@@ -321,9 +387,10 @@ class _RegisterFaceViewState extends State<RegisterFaceView> {
     try {
       final pickedFile = await _imagePicker.pickImage(
         source: ImageSource.camera,
-        maxWidth: 800, // Increased resolution for better face detection
-        maxHeight: 800,
-        imageQuality: 90, // Higher quality
+        maxWidth: 1024, // Higher resolution for better face detection
+        maxHeight: 1024,
+        imageQuality: 95, // Higher quality for industrial environments
+        preferredCameraDevice: CameraDevice.front, // Use front camera for selfies
       );
       
       if (pickedFile != null) {
@@ -388,21 +455,35 @@ class _RegisterFaceViewState extends State<RegisterFaceView> {
   }
 
   Future<void> _processFaceDetection(InputImage inputImage) async {
-    print("🔍 Starting face detection...");
+    print("🔍 Starting enhanced face detection...");
     
     try {
+      // Use enhanced face detection
       _faceFeatures = await extractFaceFeatures(inputImage, _faceDetector);
       
       if (_faceFeatures != null) {
         print("✅ Face detected and features extracted successfully!");
+        
+        // Validate features quality
+        if (validateFaceFeatures(_faceFeatures!)) {
+          print("✅ Face features are sufficient for registration");
+        } else {
+          print("⚠️ Face features detected but may need improvement");
+        }
+        
+        // Get quality score
+        double qualityScore = getFaceFeatureQuality(_faceFeatures!);
+        print("📊 Face quality score: ${(qualityScore * 100).toStringAsFixed(1)}%");
+        
       } else {
-        print("❌ No face detected or failed to extract features");
+        print("❌ No face detected with enhanced detection");
+        _showFaceDetectionTips();
       }
       
       setState(() {});
       
     } catch (e) {
-      print("❌ Error in face detection: $e");
+      print("❌ Error in enhanced face detection: $e");
       setState(() {
         _faceFeatures = null;
       });
@@ -447,17 +528,28 @@ class _RegisterFaceViewState extends State<RegisterFaceView> {
       showDialog(
         context: context,
         builder: (context) => AlertDialog(
-          title: const Text("Face Detection Test Results"),
+          backgroundColor: const Color(0xFF2E2E2E),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(16),
+          ),
+          title: const Text(
+            "Face Detection Test Results",
+            style: TextStyle(color: Colors.white),
+          ),
           content: Text(
             "Ultra-lenient: ${faces1.length} faces\n"
             "Default: ${faces2.length} faces\n"
             "Current: ${faces3.length} faces\n\n"
-            "${faces1.isNotEmpty || faces2.isNotEmpty || faces3.isNotEmpty ? '✅ Face detection working!' : '❌ No faces detected with any setting'}"
+            "${faces1.isNotEmpty || faces2.isNotEmpty || faces3.isNotEmpty ? '✅ Face detection working!' : '❌ No faces detected with any setting'}",
+            style: const TextStyle(color: Colors.white),
           ),
           actions: [
             TextButton(
               onPressed: () => Navigator.pop(context),
-              child: const Text("OK"),
+              child: const Text(
+                "OK",
+                style: TextStyle(color: Colors.white),
+              ),
             ),
           ],
         ),
@@ -470,6 +562,75 @@ class _RegisterFaceViewState extends State<RegisterFaceView> {
     } catch (e) {
       print("❌ Face detection test error: $e");
       CustomSnackBar.errorSnackBar("Test failed: $e");
+    }
+  }
+
+  void _showFaceDetectionTips() {
+    if (mounted) {
+      showDialog(
+        context: context,
+        builder: (context) => AlertDialog(
+          backgroundColor: const Color(0xFF2E2E2E),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(16),
+          ),
+          title: const Row(
+            children: [
+              Icon(Icons.lightbulb, color: Colors.orange),
+              SizedBox(width: 8),
+              Text(
+                "Face Detection Tips",
+                style: TextStyle(color: Colors.white),
+              ),
+            ],
+          ),
+          content: const Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                "For better face detection:",
+                style: TextStyle(color: Colors.white, fontWeight: FontWeight.w600),
+              ),
+              SizedBox(height: 12),
+              Text(
+                "• Use good lighting conditions",
+                style: TextStyle(color: Colors.white),
+              ),
+              Text(
+                "• Face camera directly",
+                style: TextStyle(color: Colors.white),
+              ),
+              Text(
+                "• Remove sunglasses if possible",
+                style: TextStyle(color: Colors.white),
+              ),
+              Text(
+                "• Fill frame with your face",
+                style: TextStyle(color: Colors.white),
+              ),
+              Text(
+                "• Clean camera lens",
+                style: TextStyle(color: Colors.white),
+              ),
+              SizedBox(height: 8),
+              Text(
+                "Even with helmets or dust, our system can detect faces!",
+                style: TextStyle(color: Colors.green, fontSize: 12),
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text(
+                "Try Again",
+                style: TextStyle(color: Colors.white),
+              ),
+            ),
+          ],
+        ),
+      );
     }
   }
 
@@ -574,5 +735,21 @@ class _RegisterFaceViewState extends State<RegisterFaceView> {
     } catch (e) {
       print("❌ Error marking registration complete: $e");
     }
+  }
+
+  // Helper function to count detected landmarks
+  int _countDetectedLandmarks(FaceFeatures features) {
+    int count = 0;
+    if (features.rightEar != null) count++;
+    if (features.leftEar != null) count++;
+    if (features.rightEye != null) count++;
+    if (features.leftEye != null) count++;
+    if (features.rightCheek != null) count++;
+    if (features.leftCheek != null) count++;
+    if (features.rightMouth != null) count++;
+    if (features.leftMouth != null) count++;
+    if (features.noseBase != null) count++;
+    if (features.bottomMouth != null) count++;
+    return count;
   }
 }

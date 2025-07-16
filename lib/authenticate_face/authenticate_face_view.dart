@@ -283,15 +283,29 @@ class _AuthenticateFaceViewState extends State<AuthenticateFaceView> {
   }
 
   Future<void> _processInputImage(InputImage inputImage) async {
-    try {
-      setState(() => isMatching = true);
-      _faceFeatures = await extractFaceFeatures(inputImage, _faceDetector);
-      setState(() => isMatching = false);
-    } catch (e) {
-      setState(() => isMatching = false);
-      debugPrint("Error processing input image: $e");
+  try {
+    setState(() => isMatching = true);
+    
+    // Use enhanced face detection
+    _faceFeatures = await extractFaceFeatures(inputImage, _faceDetector);
+    
+    if (_faceFeatures != null) {
+      // Validate face features quality
+      bool isValid = validateFaceFeatures(_faceFeatures!);
+      double qualityScore = getFaceFeatureQuality(_faceFeatures!);
+      
+      print("🔍 Face detected with quality score: ${(qualityScore * 100).toStringAsFixed(1)}%");
+      print("✅ Face features are ${isValid ? 'valid' : 'needs improvement'} for authentication");
+    } else {
+      print("❌ No face detected during authentication");
     }
+    
+    setState(() => isMatching = false);
+  } catch (e) {
+    setState(() => isMatching = false);
+    debugPrint("Error processing input image: $e");
   }
+}
 
   Future<void> _fetchEmployeeData() async {
     if (widget.employeeId == null) return;

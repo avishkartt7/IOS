@@ -4,12 +4,12 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:face_auth_compatible/model/leave_application_model.dart';
-import 'package:face_auth_compatible/services/leave_application_service.dart';
-import 'package:face_auth_compatible/services/service_locator.dart';
-import 'package:face_auth_compatible/repositories/leave_application_repository.dart';
-import 'package:face_auth_compatible/services/connectivity_service.dart';
-import 'package:face_auth_compatible/common/utils/custom_snackbar.dart';
+import 'package:face_auth/model/leave_application_model.dart';
+import 'package:face_auth/services/leave_application_service.dart';
+import 'package:face_auth/services/service_locator.dart';
+import 'package:face_auth/repositories/leave_application_repository.dart';
+import 'package:face_auth/services/connectivity_service.dart';
+import 'package:face_auth/common/utils/custom_snackbar.dart';
 
 class ManagerLeaveApprovalView extends StatefulWidget {
   final String managerId;

@@ -3,11 +3,11 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:intl/intl.dart';
-import 'package:face_auth_compatible/constants/theme.dart';
-import 'package:face_auth_compatible/common/utils/custom_snackbar.dart';
-import 'package:face_auth_compatible/model/overtime_request_model.dart';
-import 'package:face_auth_compatible/services/employee_overtime_service.dart';
-import 'package:face_auth_compatible/services/service_locator.dart';
+import 'package:face_auth/constants/theme.dart';
+import 'package:face_auth/common/utils/custom_snackbar.dart';
+import 'package:face_auth/model/overtime_request_model.dart';
+import 'package:face_auth/services/employee_overtime_service.dart';
+import 'package:face_auth/services/service_locator.dart';
 
 class MyAttendanceView extends StatefulWidget {
   final String employeeId;

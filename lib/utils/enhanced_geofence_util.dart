@@ -2,12 +2,12 @@
 
 import 'package:flutter/material.dart';
 import 'package:geolocator/geolocator.dart';
-import 'package:face_auth_compatible/model/location_model.dart';
-import 'package:face_auth_compatible/model/polygon_location_model.dart';
+import 'package:face_auth/model/location_model.dart';
+import 'package:face_auth/model/polygon_location_model.dart';
 import 'package:geodesy/geodesy.dart';
-import 'package:face_auth_compatible/repositories/polygon_location_repository.dart';
-import 'package:face_auth_compatible/repositories/location_repository.dart';
-import 'package:face_auth_compatible/services/service_locator.dart';
+import 'package:face_auth/repositories/polygon_location_repository.dart';
+import 'package:face_auth/repositories/location_repository.dart';
+import 'package:face_auth/services/service_locator.dart';
 import 'dart:math' show sqrt, cos, pi;
 
 class EnhancedGeofenceUtil {

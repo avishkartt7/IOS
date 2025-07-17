@@ -1,3 +1,5 @@
+// lib/register_face/register_face_view.dart - iOS OFFLINE FIXED VERSION
+
 import 'dart:convert';
 import 'dart:typed_data';
 import 'dart:io';
@@ -14,6 +16,7 @@ import 'package:flutter/material.dart';
 import 'package:google_mlkit_face_detection/google_mlkit_face_detection.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:image_picker/image_picker.dart';
+import 'package:connectivity_plus/connectivity_plus.dart';
 
 class RegisterFaceView extends StatefulWidget {
   final String employeeId;
@@ -30,28 +33,31 @@ class RegisterFaceView extends StatefulWidget {
 }
 
 class _RegisterFaceViewState extends State<RegisterFaceView> {
-  // Enhanced face detector with construction-friendly settings
+  // ================ CORE SERVICES ================
   final FaceDetector _faceDetector = FaceDetector(
     options: FaceDetectorOptions(
       enableLandmarks: true,
       enableClassification: false,
       enableTracking: false,
-      performanceMode: FaceDetectorMode.accurate, // Use accurate for better results
-      minFaceSize: 0.1, // Reasonable minimum size
+      performanceMode: FaceDetectorMode.accurate,
+      minFaceSize: 0.1,
       enableContours: false,
     ),
   );
   
+  // ================ STATE VARIABLES ================
   String? _image;
   FaceFeatures? _faceFeatures;
   bool _isRegistering = false;
+  bool _isOfflineMode = false;
   File? _imageFile;
   final ImagePicker _imagePicker = ImagePicker();
 
   @override
   void initState() {
     super.initState();
-    print("🔧 RegisterFaceView initialized for employee: ${widget.employeeId}");
+    print("🚀 iOS RegisterFaceView initialized for employee: ${widget.employeeId}");
+    _checkConnectivity();
   }
 
   @override
@@ -60,6 +66,23 @@ class _RegisterFaceViewState extends State<RegisterFaceView> {
     super.dispose();
   }
 
+  // ================ CONNECTIVITY CHECK ================
+  Future<void> _checkConnectivity() async {
+    try {
+      var connectivityResult = await (Connectivity().checkConnectivity());
+      setState(() {
+        _isOfflineMode = connectivityResult == ConnectivityResult.none;
+      });
+      print("📶 iOS Registration connectivity: ${_isOfflineMode ? 'Offline' : 'Online'}");
+    } catch (e) {
+      setState(() {
+        _isOfflineMode = true;
+      });
+      print("⚠️ Connectivity check failed, assuming offline: $e");
+    }
+  }
+
+  // ================ UI BUILD ================
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -69,6 +92,21 @@ class _RegisterFaceViewState extends State<RegisterFaceView> {
         backgroundColor: appBarColor,
         title: const Text("Register Your Face"),
         elevation: 0,
+        actions: [
+          // Connectivity indicator
+          Container(
+            margin: const EdgeInsets.only(right: 16),
+            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+            decoration: BoxDecoration(
+              color: _isOfflineMode ? Colors.orange : Colors.green,
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: Text(
+              _isOfflineMode ? "Offline" : "Online",
+              style: const TextStyle(color: Colors.white, fontSize: 10),
+            ),
+          ),
+        ],
       ),
       body: Container(
         decoration: const BoxDecoration(
@@ -98,7 +136,7 @@ class _RegisterFaceViewState extends State<RegisterFaceView> {
               child: Column(
                 mainAxisAlignment: MainAxisAlignment.start,
                 children: [
-                  // Camera section - using original approach
+                  // Camera section
                   _buildCameraSection(),
                   
                   const Spacer(),
@@ -117,6 +155,7 @@ class _RegisterFaceViewState extends State<RegisterFaceView> {
     );
   }
 
+  // ================ CAMERA SECTION ================
   Widget _buildCameraSection() {
     return Column(
       children: [
@@ -176,6 +215,7 @@ class _RegisterFaceViewState extends State<RegisterFaceView> {
     );
   }
 
+  // ================ STATUS SECTION ================
   Widget _buildStatusSection() {
     if (_image != null && _faceFeatures != null) {
       double qualityScore = getFaceFeatureQuality(_faceFeatures!);
@@ -183,16 +223,16 @@ class _RegisterFaceViewState extends State<RegisterFaceView> {
       
       Color statusColor = Colors.green;
       IconData statusIcon = Icons.check_circle;
-      String statusText = "Face detected successfully!";
+      String statusText = "✅ Face detected successfully!";
       
       if (qualityScore < 0.5) {
         statusColor = Colors.orange;
         statusIcon = Icons.warning;
-        statusText = "Face detected but quality could be improved";
+        statusText = "⚠️ Face detected but quality could be improved";
       } else if (qualityScore < 0.7) {
         statusColor = Colors.blue;
         statusIcon = Icons.info;
-        statusText = "Good face detection quality";
+        statusText = "ℹ️ Good face detection quality";
       }
       
       return Container(
@@ -223,7 +263,7 @@ class _RegisterFaceViewState extends State<RegisterFaceView> {
             ),
             const SizedBox(height: 8),
             Text(
-              "Quality: ${(qualityScore * 100).toStringAsFixed(1)}% • Features: $featuresDetected/10",
+              "📊 Quality: ${(qualityScore * 100).toStringAsFixed(1)}% • Features: $featuresDetected/10",
               style: TextStyle(
                 color: statusColor.withOpacity(0.8),
                 fontSize: 12,
@@ -232,7 +272,7 @@ class _RegisterFaceViewState extends State<RegisterFaceView> {
             if (validateFaceFeatures(_faceFeatures!)) ...[
               const SizedBox(height: 4),
               Text(
-                "✅ Ready for registration",
+                "✅ Ready for registration (${_isOfflineMode ? 'Offline Mode' : 'Online Mode'})",
                 style: TextStyle(
                   color: Colors.green,
                   fontSize: 12,
@@ -260,7 +300,7 @@ class _RegisterFaceViewState extends State<RegisterFaceView> {
                 const SizedBox(width: 8),
                 Expanded(
                   child: Text(
-                    "No face detected",
+                    "❌ No face detected",
                     style: TextStyle(
                       color: Colors.red,
                       fontSize: 14,
@@ -282,7 +322,7 @@ class _RegisterFaceViewState extends State<RegisterFaceView> {
             GestureDetector(
               onTap: _showFaceDetectionTips,
               child: Text(
-                "📱 Tap here for tips",
+                "💡 Tap here for iOS face detection tips",
                 style: TextStyle(
                   color: Colors.blue,
                   fontSize: 12,
@@ -301,26 +341,41 @@ class _RegisterFaceViewState extends State<RegisterFaceView> {
           color: Colors.blue.withOpacity(0.2),
           borderRadius: BorderRadius.circular(8),
         ),
-        child: Row(
+        child: Column(
           children: [
-            const Icon(Icons.camera_alt, color: Colors.blue, size: 20),
-            const SizedBox(width: 8),
-            Expanded(
-              child: Text(
-                "Take a clear photo of your face to continue",
+            Row(
+              children: [
+                const Icon(Icons.camera_alt, color: Colors.blue, size: 20),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    "📸 Take a clear photo of your face to continue",
+                    style: TextStyle(
+                      color: Colors.blue,
+                      fontSize: 14,
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+            if (_isOfflineMode) ...[
+              const SizedBox(height: 8),
+              Text(
+                "⚠️ iOS Offline Mode: Face will be saved locally and synced when online",
                 style: TextStyle(
-                  color: Colors.blue,
-                  fontSize: 14,
-                  fontWeight: FontWeight.w500,
+                  color: Colors.orange,
+                  fontSize: 11,
                 ),
               ),
-            ),
+            ],
           ],
         ),
       );
     }
   }
 
+  // ================ ACTION BUTTONS ================
   Widget _buildActionButtons() {
     if (_isRegistering) {
       return Container(
@@ -329,9 +384,11 @@ class _RegisterFaceViewState extends State<RegisterFaceView> {
           children: [
             const CircularProgressIndicator(color: accentColor),
             SizedBox(height: 0.015.sh),
-            const Text(
-              "Registering your face...",
-              style: TextStyle(
+            Text(
+              _isOfflineMode 
+                  ? "Registering face locally..." 
+                  : "Registering your face...",
+              style: const TextStyle(
                 color: Colors.white,
                 fontSize: 16,
               ),
@@ -346,7 +403,7 @@ class _RegisterFaceViewState extends State<RegisterFaceView> {
         // Test Face Detection Button (for debugging)
         if (_image != null) ...[
           CustomButton(
-            text: "Test Face Detection",
+            text: "🧪 Test iOS Face Detection",
             onTap: _testFaceDetection,
           ),
           SizedBox(height: 0.02.sh),
@@ -355,14 +412,16 @@ class _RegisterFaceViewState extends State<RegisterFaceView> {
         // Main Register Button
         if (_image != null && _faceFeatures != null)
           CustomButton(
-            text: "Start Registering",
+            text: _isOfflineMode 
+                ? "📱 Register Offline" 
+                : "🌐 Register Face",
             onTap: _registerFace,
           ),
         
         // Retake Button
         if (_image != null && _faceFeatures == null)
           CustomButton(
-            text: "Retake Photo",
+            text: "🔄 Retake Photo",
             onTap: () {
               setState(() {
                 _image = null;
@@ -375,8 +434,9 @@ class _RegisterFaceViewState extends State<RegisterFaceView> {
     );
   }
 
+  // ================ IMAGE CAPTURE ================
   Future<void> _getImage() async {
-    print("📸 Starting enhanced image capture...");
+    print("📸 Starting iOS enhanced image capture...");
     
     setState(() {
       _imageFile = null;
@@ -387,10 +447,10 @@ class _RegisterFaceViewState extends State<RegisterFaceView> {
     try {
       final pickedFile = await _imagePicker.pickImage(
         source: ImageSource.camera,
-        maxWidth: 1024, // Higher resolution for better face detection
+        maxWidth: 1024,
         maxHeight: 1024,
-        imageQuality: 95, // Higher quality for industrial environments
-        preferredCameraDevice: CameraDevice.front, // Use front camera for selfies
+        imageQuality: 95,
+        preferredCameraDevice: CameraDevice.front,
       );
       
       if (pickedFile != null) {
@@ -406,7 +466,7 @@ class _RegisterFaceViewState extends State<RegisterFaceView> {
 
   Future<void> _setPickedFile(XFile pickedFile) async {
     final path = pickedFile.path;
-    print("📸 Processing image from: $path");
+    print("📸 Processing iOS image from: $path");
     
     setState(() {
       _imageFile = File(path);
@@ -420,15 +480,10 @@ class _RegisterFaceViewState extends State<RegisterFaceView> {
         _image = base64Encode(imageBytes);
       });
       
-      print("📸 Image encoded to base64");
+      print("📸 iOS Image encoded to base64");
 
       // Create InputImage for face detection
       InputImage inputImage = InputImage.fromFilePath(path);
-      
-      // Debug image properties
-      print("📊 Image size: ${inputImage.metadata?.size}");
-      print("📊 Image format: ${inputImage.metadata?.format}");
-      print("📊 Image rotation: ${inputImage.metadata?.rotation}");
       
       // Show loading dialog
       showDialog(
@@ -454,15 +509,16 @@ class _RegisterFaceViewState extends State<RegisterFaceView> {
     }
   }
 
+  // ================ FACE DETECTION ================
   Future<void> _processFaceDetection(InputImage inputImage) async {
-    print("🔍 Starting enhanced face detection...");
+    print("🔍 Starting iOS enhanced face detection...");
     
     try {
       // Use enhanced face detection
       _faceFeatures = await extractFaceFeatures(inputImage, _faceDetector);
       
       if (_faceFeatures != null) {
-        print("✅ Face detected and features extracted successfully!");
+        print("✅ iOS Face detected and features extracted successfully!");
         
         // Validate features quality
         if (validateFaceFeatures(_faceFeatures!)) {
@@ -473,7 +529,7 @@ class _RegisterFaceViewState extends State<RegisterFaceView> {
         
         // Get quality score
         double qualityScore = getFaceFeatureQuality(_faceFeatures!);
-        print("📊 Face quality score: ${(qualityScore * 100).toStringAsFixed(1)}%");
+        print("📊 iOS Face quality score: ${(qualityScore * 100).toStringAsFixed(1)}%");
         
       } else {
         print("❌ No face detected with enhanced detection");
@@ -490,13 +546,14 @@ class _RegisterFaceViewState extends State<RegisterFaceView> {
     }
   }
 
+  // ================ FACE DETECTION TESTING ================
   Future<void> _testFaceDetection() async {
     if (_imageFile == null) {
       CustomSnackBar.errorSnackBar("No image to test");
       return;
     }
     
-    print("🧪 Testing face detection with multiple settings...");
+    print("🧪 Testing iOS face detection with multiple settings...");
     
     try {
       InputImage inputImage = InputImage.fromFilePath(_imageFile!.path);
@@ -511,18 +568,18 @@ class _RegisterFaceViewState extends State<RegisterFaceView> {
       );
       
       List<Face> faces1 = await detector1.processImage(inputImage);
-      print("🧪 Test 1 (ultra-lenient): ${faces1.length} faces");
+      print("🧪 iOS Test 1 (ultra-lenient): ${faces1.length} faces");
       
       // Test 2: Default settings
       final detector2 = FaceDetector(
         options: FaceDetectorOptions(),
       );
       List<Face> faces2 = await detector2.processImage(inputImage);
-      print("🧪 Test 2 (default): ${faces2.length} faces");
+      print("🧪 iOS Test 2 (default): ${faces2.length} faces");
       
       // Test 3: Current settings
       List<Face> faces3 = await _faceDetector.processImage(inputImage);
-      print("🧪 Test 3 (current): ${faces3.length} faces");
+      print("🧪 iOS Test 3 (current): ${faces3.length} faces");
       
       // Show results
       showDialog(
@@ -533,14 +590,14 @@ class _RegisterFaceViewState extends State<RegisterFaceView> {
             borderRadius: BorderRadius.circular(16),
           ),
           title: const Text(
-            "Face Detection Test Results",
+            "📱 iOS Face Detection Test Results",
             style: TextStyle(color: Colors.white),
           ),
           content: Text(
             "Ultra-lenient: ${faces1.length} faces\n"
             "Default: ${faces2.length} faces\n"
             "Current: ${faces3.length} faces\n\n"
-            "${faces1.isNotEmpty || faces2.isNotEmpty || faces3.isNotEmpty ? '✅ Face detection working!' : '❌ No faces detected with any setting'}",
+            "${faces1.isNotEmpty || faces2.isNotEmpty || faces3.isNotEmpty ? '✅ Face detection working on iOS!' : '❌ No faces detected with any setting'}",
             style: const TextStyle(color: Colors.white),
           ),
           actions: [
@@ -560,11 +617,12 @@ class _RegisterFaceViewState extends State<RegisterFaceView> {
       detector2.close();
       
     } catch (e) {
-      print("❌ Face detection test error: $e");
+      print("❌ iOS Face detection test error: $e");
       CustomSnackBar.errorSnackBar("Test failed: $e");
     }
   }
 
+  // ================ FACE DETECTION TIPS ================
   void _showFaceDetectionTips() {
     if (mounted) {
       showDialog(
@@ -579,7 +637,7 @@ class _RegisterFaceViewState extends State<RegisterFaceView> {
               Icon(Icons.lightbulb, color: Colors.orange),
               SizedBox(width: 8),
               Text(
-                "Face Detection Tips",
+                "📱 iOS Face Detection Tips",
                 style: TextStyle(color: Colors.white),
               ),
             ],
@@ -589,7 +647,7 @@ class _RegisterFaceViewState extends State<RegisterFaceView> {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text(
-                "For better face detection:",
+                "For better iOS face detection:",
                 style: TextStyle(color: Colors.white, fontWeight: FontWeight.w600),
               ),
               SizedBox(height: 12),
@@ -613,9 +671,13 @@ class _RegisterFaceViewState extends State<RegisterFaceView> {
                 "• Clean camera lens",
                 style: TextStyle(color: Colors.white),
               ),
+              Text(
+                "• Hold device steady",
+                style: TextStyle(color: Colors.white),
+              ),
               SizedBox(height: 8),
               Text(
-                "Even with helmets or dust, our system can detect faces!",
+                "✅ iOS ML Kit works great for face recognition!",
                 style: TextStyle(color: Colors.green, fontSize: 12),
               ),
             ],
@@ -634,6 +696,7 @@ class _RegisterFaceViewState extends State<RegisterFaceView> {
     }
   }
 
+  // ================ FACE REGISTRATION ================
   Future<void> _registerFace() async {
     if (_image == null || _faceFeatures == null) {
       CustomSnackBar.errorSnackBar("Please capture your face first");
@@ -645,40 +708,59 @@ class _RegisterFaceViewState extends State<RegisterFaceView> {
     });
 
     try {
-      print("🚀 Starting face registration process...");
+      print("🚀 Starting iOS face registration process...");
+      print("📶 Registration mode: ${_isOfflineMode ? 'Offline' : 'Online'}");
       
       // Clean the image data
       String cleanedImage = _image!;
-      
-      print("💾 Saving to Firestore...");
-      
-      // Save to Firestore
-      await FirebaseFirestore.instance
-          .collection('employees')
-          .doc(widget.employeeId)
-          .update({
-        'image': cleanedImage,
-        'faceFeatures': _faceFeatures!.toJson(),
-        'faceRegistered': true,
-        'registeredOn': FieldValue.serverTimestamp(),
-      });
+      if (cleanedImage.contains('data:image') && cleanedImage.contains(',')) {
+        cleanedImage = cleanedImage.split(',')[1];
+      }
 
-      print("💾 Saving to local storage...");
-      
-      // Save to local storage
+      // ✅ STEP 1: Always save to local storage first (iOS priority)
       await _saveToLocalStorage(cleanedImage);
+      print("✅ iOS Face data saved to local storage");
 
-      // Mark registration as complete
+      // ✅ STEP 2: Save to cloud if online
+      if (!_isOfflineMode) {
+        try {
+          print("🌐 Saving to Firestore...");
+          await FirebaseFirestore.instance
+              .collection('employees')
+              .doc(widget.employeeId)
+              .update({
+            'image': cleanedImage,
+            'faceFeatures': _faceFeatures!.toJson(),
+            'faceRegistered': true,
+            'registeredOn': FieldValue.serverTimestamp(),
+            'platform': 'iOS',
+          });
+          print("✅ Face data saved to Firestore");
+        } catch (e) {
+          print("⚠️ Firestore save failed (offline mode activated): $e");
+          // Continue with local registration
+        }
+      } else {
+        print("📱 Offline mode: Marking for cloud sync when online");
+        final prefs = await SharedPreferences.getInstance();
+        await prefs.setBool('pending_face_registration_${widget.employeeId}', true);
+      }
+
+      // ✅ STEP 3: Mark registration as complete
       await _markRegistrationComplete();
 
       setState(() {
         _isRegistering = false;
       });
 
-      print("✅ Face registration completed successfully!");
+      print("✅ iOS Face registration completed successfully!");
       
       // Show success message
-      CustomSnackBar.successSnackBar("Face registered successfully!");
+      CustomSnackBar.successSnackBar(
+        _isOfflineMode 
+          ? "Face registered locally! Will sync when online." 
+          : "Face registered successfully!"
+      );
 
       // Wait a moment then navigate
       await Future.delayed(const Duration(seconds: 1));
@@ -706,22 +788,54 @@ class _RegisterFaceViewState extends State<RegisterFaceView> {
     }
   }
 
+  // ================ LOCAL STORAGE ================
   Future<void> _saveToLocalStorage(String cleanedImage) async {
     try {
       final prefs = await SharedPreferences.getInstance();
       
-      // Save face image
+      print("💾 Saving iOS face data to SharedPreferences...");
+      
+      // ✅ Save face image
       await prefs.setString('employee_image_${widget.employeeId}', cleanedImage);
+      print("✅ Face image saved");
       
-      // Save face features
-      await prefs.setString('employee_face_features_${widget.employeeId}', 
-          jsonEncode(_faceFeatures!.toJson()));
+      // ✅ Save face features
+      String featuresJson = jsonEncode(_faceFeatures!.toJson());
+      await prefs.setString('employee_face_features_${widget.employeeId}', featuresJson);
+      print("✅ Face features saved");
       
+      // ✅ Save registration flags
       await prefs.setBool('face_registered_${widget.employeeId}', true);
+      await prefs.setString('face_registration_date_${widget.employeeId}', DateTime.now().toIso8601String());
+      await prefs.setString('face_registration_platform_${widget.employeeId}', 'iOS');
       
-      print("💾 Face data saved to local storage");
+      // ✅ Save employee data if available
+      if (widget.employeePin.isNotEmpty) {
+        Map<String, dynamic> employeeData = {
+          'id': widget.employeeId,
+          'pin': widget.employeePin,
+          'faceRegistered': true,
+          'registrationDate': DateTime.now().toIso8601String(),
+          'platform': 'iOS',
+        };
+        await prefs.setString('user_data_${widget.employeeId}', jsonEncode(employeeData));
+      }
+      
+      print("💾 iOS Face data saved to local storage successfully");
+      
+      // ✅ Debug: Verify save was successful
+      String? savedImage = prefs.getString('employee_image_${widget.employeeId}');
+      String? savedFeatures = prefs.getString('employee_face_features_${widget.employeeId}');
+      bool savedRegistered = prefs.getBool('face_registered_${widget.employeeId}') ?? false;
+      
+      print("🔍 iOS Verification:");
+      print("   - Image saved: ${savedImage != null && savedImage.isNotEmpty}");
+      print("   - Features saved: ${savedFeatures != null && savedFeatures.isNotEmpty}");
+      print("   - Registration flag: $savedRegistered");
+      
     } catch (e) {
       print("❌ Error saving to local storage: $e");
+      throw e;
     }
   }
 
@@ -730,14 +844,16 @@ class _RegisterFaceViewState extends State<RegisterFaceView> {
       final prefs = await SharedPreferences.getInstance();
       await prefs.setBool('registration_complete_${widget.employeeId}', true);
       await prefs.setBool('is_authenticated', true);
+      await prefs.setString('authenticated_user_id', widget.employeeId);
+      await prefs.setInt('authentication_timestamp', DateTime.now().millisecondsSinceEpoch);
       
-      print("✅ Registration marked as complete");
+      print("✅ iOS Registration marked as complete");
     } catch (e) {
       print("❌ Error marking registration complete: $e");
     }
   }
 
-  // Helper function to count detected landmarks
+  // ================ HELPER FUNCTIONS ================
   int _countDetectedLandmarks(FaceFeatures features) {
     int count = 0;
     if (features.rightEar != null) count++;

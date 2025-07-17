@@ -3,10 +3,10 @@
 import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:face_auth_compatible/services/database_helper.dart';
-import 'package:face_auth_compatible/services/service_locator.dart';
+import 'package:face_auth/services/database_helper.dart';
+import 'package:face_auth/services/service_locator.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:face_auth_compatible/common/utils/custom_snackbar.dart';
+import 'package:face_auth/common/utils/custom_snackbar.dart';
 
 class DebugDataScreen extends StatefulWidget {
   final String employeeId;

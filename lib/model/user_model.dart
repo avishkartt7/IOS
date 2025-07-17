@@ -1,3 +1,5 @@
+// lib/model/user_model.dart - FIXED VERSION
+
 class UserModel {
   String? id;
   String? name;
@@ -18,7 +20,9 @@ class UserModel {
       id: json['id'],
       name: json['name'],
       image: json['image'],
-      faceFeatures: FaceFeatures.fromJson(json["faceFeatures"]),
+      faceFeatures: json["faceFeatures"] != null 
+          ? FaceFeatures.fromJson(json["faceFeatures"])
+          : null,
       registeredOn: json['registeredOn'],
     );
   }
@@ -60,35 +64,56 @@ class FaceFeatures {
   });
 
   factory FaceFeatures.fromJson(Map<String, dynamic> json) => FaceFeatures(
-        rightMouth: Points.fromJson(json["rightMouth"]),
-        leftMouth: Points.fromJson(json["leftMouth"]),
-        leftCheek: Points.fromJson(json["leftCheek"]),
-        rightCheek: Points.fromJson(json["rightCheek"]),
-        leftEye: Points.fromJson(json["leftEye"]),
-        rightEar: Points.fromJson(json["rightEar"]),
-        leftEar: Points.fromJson(json["leftEar"]),
-        rightEye: Points.fromJson(json["rightEye"]),
-        noseBase: Points.fromJson(json["noseBase"]),
-        bottomMouth: Points.fromJson(json["bottomMouth"]),
+        rightMouth: json["rightMouth"] != null 
+            ? Points.fromJson(json["rightMouth"])
+            : null,
+        leftMouth: json["leftMouth"] != null 
+            ? Points.fromJson(json["leftMouth"])
+            : null,
+        leftCheek: json["leftCheek"] != null 
+            ? Points.fromJson(json["leftCheek"])
+            : null,
+        rightCheek: json["rightCheek"] != null 
+            ? Points.fromJson(json["rightCheek"])
+            : null,
+        leftEye: json["leftEye"] != null 
+            ? Points.fromJson(json["leftEye"])
+            : null,
+        rightEar: json["rightEar"] != null 
+            ? Points.fromJson(json["rightEar"])
+            : null,
+        leftEar: json["leftEar"] != null 
+            ? Points.fromJson(json["leftEar"])
+            : null,
+        rightEye: json["rightEye"] != null 
+            ? Points.fromJson(json["rightEye"])
+            : null,
+        noseBase: json["noseBase"] != null 
+            ? Points.fromJson(json["noseBase"])
+            : null,
+        bottomMouth: json["bottomMouth"] != null 
+            ? Points.fromJson(json["bottomMouth"])
+            : null,
       );
 
   Map<String, dynamic> toJson() => {
-        "rightMouth": rightMouth?.toJson() ?? {},
-        "leftMouth": leftMouth?.toJson() ?? {},
-        "leftCheek": leftCheek?.toJson() ?? {},
-        "rightCheek": rightCheek?.toJson() ?? {},
-        "leftEye": leftEye?.toJson() ?? {},
-        "rightEar": rightEar?.toJson() ?? {},
-        "leftEar": leftEar?.toJson() ?? {},
-        "rightEye": rightEye?.toJson() ?? {},
-        "noseBase": noseBase?.toJson() ?? {},
-        "bottomMouth": bottomMouth?.toJson() ?? {},
+        "rightMouth": rightMouth?.toJson(),
+        "leftMouth": leftMouth?.toJson(),
+        "leftCheek": leftCheek?.toJson(),
+        "rightCheek": rightCheek?.toJson(),
+        "leftEye": leftEye?.toJson(),
+        "rightEar": rightEar?.toJson(),
+        "leftEar": leftEar?.toJson(),
+        "rightEye": rightEye?.toJson(),
+        "noseBase": noseBase?.toJson(),
+        "bottomMouth": bottomMouth?.toJson(),
       };
 }
 
+// 🔧 FIXED: Changed from int? to double? for ML Kit compatibility
 class Points {
-  int? x;
-  int? y;
+  double? x;
+  double? y;
 
   Points({
     required this.x,
@@ -96,9 +121,15 @@ class Points {
   });
 
   factory Points.fromJson(Map<String, dynamic> json) => Points(
-        x: (json['x'] ?? 0) as int,
-        y: (json['y'] ?? 0) as int,
+        x: json['x'] != null ? (json['x'] as num).toDouble() : null,
+        y: json['y'] != null ? (json['y'] as num).toDouble() : null,
       );
 
-  Map<String, dynamic> toJson() => {'x': x, 'y': y};
+  Map<String, dynamic> toJson() => {
+        'x': x, 
+        'y': y
+      };
+
+  @override
+  String toString() => 'Points(x: $x, y: $y)';
 }

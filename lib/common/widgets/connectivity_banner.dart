@@ -1,8 +1,8 @@
 // lib/common/widgets/connectivity_banner.dart
 
 import 'package:flutter/material.dart';
-import 'package:face_auth_compatible/services/connectivity_service.dart';
-import 'package:face_auth_compatible/constants/theme.dart';
+import 'package:face_auth/services/connectivity_service.dart';
+import 'package:face_auth/constants/theme.dart';
 
 class ConnectivityBanner extends StatelessWidget {
   final ConnectivityService connectivityService;

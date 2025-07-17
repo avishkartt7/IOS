@@ -1,3 +1,5 @@
+// lib/common/views/camera_view.dart - iOS ENHANCED VERSION
+
 import 'dart:io';
 import 'dart:typed_data';
 
@@ -25,12 +27,13 @@ class _CameraViewState extends State<CameraView> {
   ImagePicker? _imagePicker;
   bool _isProcessing = false;
   String _statusMessage = "Tap camera icon to capture";
+  bool _isIOS = Platform.isIOS;
 
   @override
   void initState() {
     super.initState();
     _imagePicker = ImagePicker();
-    print("📷 CameraView initialized");
+    print("📷 iOS CameraView initialized");
   }
 
   @override
@@ -110,14 +113,25 @@ class _CameraViewState extends State<CameraView> {
                 color: Colors.black.withOpacity(0.7),
                 borderRadius: BorderRadius.circular(20),
               ),
-              child: Text(
-                _statusMessage,
-                style: const TextStyle(
-                  color: Colors.white,
-                  fontSize: 12,
-                  fontWeight: FontWeight.w500,
-                ),
-                textAlign: TextAlign.center,
+              child: Row(
+                children: [
+                  if (_isIOS)
+                    const Text(
+                      "📱 ",
+                      style: TextStyle(fontSize: 16),
+                    ),
+                  Expanded(
+                    child: Text(
+                      _statusMessage,
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 12,
+                        fontWeight: FontWeight.w500,
+                      ),
+                      textAlign: TextAlign.center,
+                    ),
+                  ),
+                ],
               ),
             ),
           ),
@@ -151,7 +165,7 @@ class _CameraViewState extends State<CameraView> {
           ),
           const SizedBox(height: 20),
           Text(
-            "Take a Photo",
+            _isIOS ? "📱 Take a Photo (iOS)" : "Take a Photo",
             style: TextStyle(
               color: Colors.white.withOpacity(0.8),
               fontSize: 18,
@@ -162,7 +176,9 @@ class _CameraViewState extends State<CameraView> {
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 40),
             child: Text(
-              "Position your face clearly in good lighting",
+              _isIOS 
+                ? "Position your face clearly in good lighting\nOptimized for iOS face detection"
+                : "Position your face clearly in good lighting",
               style: TextStyle(
                 color: Colors.white.withOpacity(0.6),
                 fontSize: 14,
@@ -270,30 +286,30 @@ class _CameraViewState extends State<CameraView> {
   }
 
   Future<void> _getImageFromCamera() async {
-    print("📷 Opening camera...");
+    print("📷 iOS: Opening camera...");
     
     setState(() {
       _isProcessing = true;
-      _statusMessage = "Opening camera...";
+      _statusMessage = _isIOS ? "📱 Opening iOS camera..." : "Opening camera...";
     });
 
     try {
       final pickedFile = await _imagePicker?.pickImage(
-      source: ImageSource.camera, // or gallery
-      maxWidth: 1024,  // Higher resolution
-      maxHeight: 1024,
-      imageQuality: 95, // Higher quality
-      preferredCameraDevice: CameraDevice.front, // For camera only
-    );
+        source: ImageSource.camera,
+        maxWidth: 1024,  // Higher resolution for iOS
+        maxHeight: 1024,
+        imageQuality: 95, // Higher quality for better face detection
+        preferredCameraDevice: CameraDevice.front, // Front camera for selfies
+      );
 
       if (pickedFile != null) {
         await _setPickedFile(pickedFile);
       } else {
-        _updateStatusMessage("No photo taken");
+        _updateStatusMessage(_isIOS ? "📱 No photo taken" : "No photo taken");
       }
     } catch (e) {
-      print("❌ Error opening camera: $e");
-      _updateStatusMessage("Camera error: $e");
+      print("❌ iOS Camera error: $e");
+      _updateStatusMessage(_isIOS ? "📱 iOS camera error: $e" : "Camera error: $e");
     } finally {
       setState(() {
         _isProcessing = false;
@@ -302,30 +318,29 @@ class _CameraViewState extends State<CameraView> {
   }
 
   Future<void> _getImageFromGallery() async {
-    print("📷 Opening gallery...");
+    print("📷 iOS: Opening gallery...");
     
     setState(() {
       _isProcessing = true;
-      _statusMessage = "Opening gallery...";
+      _statusMessage = _isIOS ? "📱 Opening iOS gallery..." : "Opening gallery...";
     });
 
     try {
       final pickedFile = await _imagePicker?.pickImage(
-      source: ImageSource.camera, // or gallery
-      maxWidth: 1024,  // Higher resolution
-      maxHeight: 1024,
-      imageQuality: 95, // Higher quality
-      preferredCameraDevice: CameraDevice.front, // For camera only
-    );
+        source: ImageSource.gallery,
+        maxWidth: 1024,
+        maxHeight: 1024,
+        imageQuality: 95,
+      );
 
       if (pickedFile != null) {
         await _setPickedFile(pickedFile);
       } else {
-        _updateStatusMessage("No photo selected");
+        _updateStatusMessage(_isIOS ? "📱 No photo selected" : "No photo selected");
       }
     } catch (e) {
-      print("❌ Error opening gallery: $e");
-      _updateStatusMessage("Gallery error: $e");
+      print("❌ iOS Gallery error: $e");
+      _updateStatusMessage(_isIOS ? "📱 iOS gallery error: $e" : "Gallery error: $e");
     } finally {
       setState(() {
         _isProcessing = false;
@@ -335,11 +350,11 @@ class _CameraViewState extends State<CameraView> {
 
   Future<void> _setPickedFile(XFile pickedFile) async {
     final path = pickedFile.path;
-    print("📷 Processing image from: $path");
+    print("📷 iOS: Processing image from: $path");
     
     setState(() {
       _image = File(path);
-      _statusMessage = "Photo captured successfully";
+      _statusMessage = _isIOS ? "📱 iOS photo captured successfully" : "Photo captured successfully";
     });
 
     try {
@@ -349,29 +364,34 @@ class _CameraViewState extends State<CameraView> {
       // Create InputImage for ML Kit
       InputImage inputImage = InputImage.fromFilePath(path);
       
+      print("📊 iOS Image info:");
+      print("   - Path: $path");
+      print("   - Size: ${imageBytes.length} bytes");
+      print("   - InputImage created successfully");
+      
       // Call the callbacks
       widget.onImage(imageBytes);
       widget.onInputImage(inputImage);
       
-      _updateStatusMessage("Photo ready for processing");
+      _updateStatusMessage(_isIOS ? "📱 iOS photo ready for processing" : "Photo ready for processing");
       
     } catch (e) {
-      print("❌ Error processing image: $e");
-      _updateStatusMessage("Error processing photo");
+      print("❌ iOS Error processing image: $e");
+      _updateStatusMessage(_isIOS ? "📱 iOS error processing photo" : "Error processing photo");
     }
   }
 
   Future<void> _processCurrentImage() async {
     if (_image == null) {
-      print("❌ No image to process");
+      print("❌ iOS: No image to process");
       return;
     }
     
-    print("🔄 Reprocessing current image...");
+    print("🔄 iOS: Reprocessing current image...");
     
     setState(() {
       _isProcessing = true;
-      _statusMessage = "Reprocessing photo...";
+      _statusMessage = _isIOS ? "📱 iOS reprocessing photo..." : "Reprocessing photo...";
     });
 
     try {
@@ -385,11 +405,11 @@ class _CameraViewState extends State<CameraView> {
       widget.onImage(imageBytes);
       widget.onInputImage(inputImage);
       
-      _updateStatusMessage("Photo reprocessed");
+      _updateStatusMessage(_isIOS ? "📱 iOS photo reprocessed" : "Photo reprocessed");
       
     } catch (e) {
-      print("❌ Error reprocessing image: $e");
-      _updateStatusMessage("Error reprocessing photo");
+      print("❌ iOS Error reprocessing image: $e");
+      _updateStatusMessage(_isIOS ? "📱 iOS error reprocessing photo" : "Error reprocessing photo");
     } finally {
       setState(() {
         _isProcessing = false;
@@ -406,9 +426,13 @@ class _CameraViewState extends State<CameraView> {
     Future.delayed(const Duration(seconds: 3), () {
       if (mounted) {
         setState(() {
-          _statusMessage = _image == null 
-              ? "Tap camera icon to capture" 
-              : "Photo ready";
+          if (_image == null) {
+            _statusMessage = _isIOS 
+                ? "📱 Tap camera icon to capture (iOS)" 
+                : "Tap camera icon to capture";
+          } else {
+            _statusMessage = _isIOS ? "📱 iOS photo ready" : "Photo ready";
+          }
         });
       }
     });

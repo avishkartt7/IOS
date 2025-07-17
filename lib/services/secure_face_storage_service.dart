@@ -7,8 +7,8 @@ import 'package:path_provider/path_provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 // Import the new enhanced model
-import 'package:face_auth_compatible/model/enhanced_face_features.dart';
-import 'package:face_auth_compatible/model/user_model.dart'; // Keep for backward compatibility
+import 'package:face_auth/model/enhanced_face_features.dart';
+import 'package:face_auth/model/user_model.dart'; // Keep for backward compatibility
 import 'dart:convert';
 import 'dart:io';
 import 'package:flutter/foundation.dart';
@@ -17,12 +17,12 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 // ✅ ADD THESE MISSING IMPORTS
 import 'package:cloud_firestore/cloud_firestore.dart';  // For DocumentSnapshot
-import 'package:face_auth_compatible/services/connectivity_service.dart';  // For ConnectivityService
-import 'package:face_auth_compatible/services/service_locator.dart';  // For getIt
+import 'package:face_auth/services/connectivity_service.dart';  // For ConnectivityService
+import 'package:face_auth/services/service_locator.dart';  // For getIt
 
 // Import the new enhanced model
-import 'package:face_auth_compatible/model/enhanced_face_features.dart';
-import 'package:face_auth_compatible/model/user_model.dart';
+import 'package:face_auth/model/enhanced_face_features.dart';
+import 'package:face_auth/model/user_model.dart';
 
 class SecureFaceStorageService {
   static const String _imagePrefix = 'secure_face_image_';

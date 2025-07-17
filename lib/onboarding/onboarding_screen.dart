@@ -1,8 +1,8 @@
 // lib/onboarding/onboarding_screen.dart
 
 import 'package:flutter/material.dart';
-import 'package:face_auth_compatible/constants/theme.dart';
-import 'package:face_auth_compatible/pin_entry/pin_entry_view.dart';
+import 'package:face_auth/constants/theme.dart';
+import 'package:face_auth/pin_entry/pin_entry_view.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 

@@ -4,11 +4,11 @@ import 'dart:io';
 import 'package:cloud_functions/cloud_functions.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_storage/firebase_storage.dart';
-import 'package:face_auth_compatible/model/leave_application_model.dart';
-import 'package:face_auth_compatible/model/leave_balance_model.dart';
-import 'package:face_auth_compatible/repositories/leave_application_repository.dart';
-import 'package:face_auth_compatible/services/connectivity_service.dart';
-import 'package:face_auth_compatible/services/simple_firebase_auth_service.dart'; // ✅ FIXED IMPORT
+import 'package:face_auth/model/leave_application_model.dart';
+import 'package:face_auth/model/leave_balance_model.dart';
+import 'package:face_auth/repositories/leave_application_repository.dart';
+import 'package:face_auth/services/connectivity_service.dart';
+import 'package:face_auth/services/simple_firebase_auth_service.dart'; // ✅ FIXED IMPORT
 import 'package:flutter/foundation.dart';
 import 'package:path/path.dart' as path;
 

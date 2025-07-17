@@ -3,10 +3,10 @@
 import 'package:geolocator/geolocator.dart';
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:face_auth_compatible/model/location_model.dart';
+import 'package:face_auth/model/location_model.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'dart:convert';
-import 'package:face_auth_compatible/model/location_model.dart';
+import 'package:face_auth/model/location_model.dart';
 
 class GeofenceUtil {
   // Cache key

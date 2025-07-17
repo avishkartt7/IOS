@@ -3,7 +3,7 @@
 import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:face_auth_compatible/constants/theme.dart';
+import 'package:face_auth/constants/theme.dart';
 
 class OfflineTestView extends StatefulWidget {
   final String employeeId;

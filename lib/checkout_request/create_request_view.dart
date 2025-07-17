@@ -1,11 +1,11 @@
 // lib/checkout_request/create_request_view.dart - Updated version
 
 import 'package:flutter/material.dart';
-import 'package:face_auth_compatible/constants/theme.dart';
-import 'package:face_auth_compatible/common/utils/custom_snackbar.dart';
-import 'package:face_auth_compatible/model/check_out_request_model.dart';
-import 'package:face_auth_compatible/repositories/check_out_request_repository.dart';
-import 'package:face_auth_compatible/services/service_locator.dart';
+import 'package:face_auth/constants/theme.dart';
+import 'package:face_auth/common/utils/custom_snackbar.dart';
+import 'package:face_auth/model/check_out_request_model.dart';
+import 'package:face_auth/repositories/check_out_request_repository.dart';
+import 'package:face_auth/services/service_locator.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:geocoding/geocoding.dart';
 import 'package:shared_preferences/shared_preferences.dart';

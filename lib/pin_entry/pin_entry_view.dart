@@ -1,14 +1,15 @@
+// lib/pin_entry/pin_entry_view.dart - FIXED TO ROUTE TO SimpleDashboardView
+
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:face_auth/common/utils/custom_snackbar.dart';
 import 'package:face_auth/constants/theme.dart';
-import 'package:face_auth/dashboard/dashboard_view.dart';
+import 'package:face_auth/dashboard/simple_dashboard_view.dart'; // ✅ FIXED: Use SimpleDashboardView
 import 'package:face_auth/pin_entry/user_profile_view.dart';
 import 'package:face_auth/model/user_model.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'dart:convert';
-import 'dart:convert'; // ✅ ADD THIS IMPORT
 
 class PinEntryView extends StatefulWidget {
   const PinEntryView({Key? key}) : super(key: key);
@@ -194,10 +195,10 @@ class _PinEntryViewState extends State<PinEntryView>
 
       if (mounted) {
         if (isRegistered) {
-          // User is fully registered, go to dashboard
+          // ✅ FIXED: User is fully registered, go to SimpleDashboardView
           Navigator.of(context).pushReplacement(
             MaterialPageRoute(
-              builder: (context) => DashboardView(employeeId: employeeId),
+              builder: (context) => SimpleDashboardView(employeeId: employeeId),
             ),
           );
         } else {
@@ -324,7 +325,7 @@ class _PinEntryViewState extends State<PinEntryView>
 
               // Title
               const Text(
-                "Employee Authentication",
+                "📱 iOS Employee Authentication",
                 style: TextStyle(
                   color: Colors.white,
                   fontSize: 24,
@@ -501,10 +502,10 @@ class _PinEntryViewState extends State<PinEntryView>
                 const Padding(
                   padding: EdgeInsets.only(bottom: 40),
                   child: Text(
-                    "If you've forgotten your PIN, please contact your administrator",
+                    "✅ Routes to SimpleDashboardView for comprehensive debug info",
                     style: TextStyle(
-                      color: Colors.white70,
-                      fontSize: 14,
+                      color: Colors.green,
+                      fontSize: 12,
                     ),
                     textAlign: TextAlign.center,
                   ),

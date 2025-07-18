@@ -1,4 +1,4 @@
-// lib/authenticate_face/authenticate_face_view.dart - COMPLETE EMERGENCY LENIENT VERSION
+// lib/authenticate_face/authenticate_face_view.dart - Production Ready
 
 import 'dart:convert';
 import 'dart:developer';
@@ -77,7 +77,7 @@ class _AuthenticateFaceViewState extends State<AuthenticateFaceView> {
   @override
   void initState() {
     super.initState();
-    print("🚀 EMERGENCY iOS AuthenticateFaceView initialized for employee: ${widget.employeeId}");
+    print("🚀 AuthenticateFaceView initialized for employee: ${widget.employeeId}");
     _addDebugLog("🚀 Authentication view initialized");
     _checkConnectivity();
     _fetchEmployeeData();
@@ -130,14 +130,13 @@ class _AuthenticateFaceViewState extends State<AuthenticateFaceView> {
       String? storedFeatures = prefs.getString('employee_face_features_${widget.employeeId}');
       String? secureFeatures = prefs.getString('secure_face_features_${widget.employeeId}');
       bool faceRegistered = prefs.getBool('face_registered_${widget.employeeId}') ?? false;
-      bool enhancedRegistered = prefs.getBool('enhanced_face_registered_${widget.employeeId}') ?? false;
 
       setState(() {
         _hasStoredFace = (storedImage != null && storedImage.isNotEmpty) || 
                         (secureImage != null && secureImage.isNotEmpty) ||
                         (storedFeatures != null && storedFeatures.isNotEmpty) ||
                         (secureFeatures != null && secureFeatures.isNotEmpty) ||
-                        faceRegistered || enhancedRegistered;
+                        faceRegistered;
       });
 
       _addDebugLog("📱 Stored face check for ${widget.employeeId}: $_hasStoredFace");
@@ -177,7 +176,7 @@ class _AuthenticateFaceViewState extends State<AuthenticateFaceView> {
         backgroundColor: appBarColor,
         title: Text(widget.isRegistrationValidation 
             ? "Verify Your Face" 
-            : "🚨 Emergency Face Authentication"),
+            : "🔐 Face Authentication"),
         elevation: 0,
         actions: [
           IconButton(
@@ -269,7 +268,7 @@ class _AuthenticateFaceViewState extends State<AuthenticateFaceView> {
                                       ),
                                       SizedBox(height: 16),
                                       Text(
-                                        "🚨 Emergency verification...",
+                                        "🔐 Verifying face...",
                                         style: TextStyle(
                                           color: Colors.white,
                                           fontSize: 16,
@@ -289,7 +288,7 @@ class _AuthenticateFaceViewState extends State<AuthenticateFaceView> {
                     CustomButton(
                       text: widget.isRegistrationValidation 
                           ? "Verify Face" 
-                          : "🚨 Emergency Authenticate",
+                          : "🔐 Authenticate",
                       onTap: _authenticate,
                     ),
                   if (!_canAuthenticate && !isMatching)
@@ -395,7 +394,7 @@ class _AuthenticateFaceViewState extends State<AuthenticateFaceView> {
               const Icon(Icons.bug_report, color: Colors.yellow, size: 16),
               const SizedBox(width: 8),
               const Text(
-                "🚨 Emergency Debug Panel",
+                "🔐 Authentication Debug Panel",
                 style: TextStyle(color: Colors.yellow, fontSize: 14, fontWeight: FontWeight.bold),
               ),
               const Spacer(),
@@ -441,9 +440,9 @@ class _AuthenticateFaceViewState extends State<AuthenticateFaceView> {
     if (_hasAuthenticated) {
       return "✅ Authentication successful!";
     } else if (isMatching) {
-      return "🚨 Emergency verification in progress...";
+      return "🔐 Verification in progress...";
     } else if (_canAuthenticate) {
-      return "🚨 Ready for emergency authentication";
+      return "🔐 Ready for authentication";
     } else if (_isOfflineMode && !_hasStoredFace) {
       return "📱 Offline mode: No stored face data";
     } else {
@@ -537,20 +536,13 @@ class _AuthenticateFaceViewState extends State<AuthenticateFaceView> {
     try {
       SharedPreferences prefs = await SharedPreferences.getInstance();
       String? localData = prefs.getString('user_data_${widget.employeeId}');
-      String? enhancedData = prefs.getString('enhanced_user_data_${widget.employeeId}');
       
-      if (enhancedData != null) {
-        Map<String, dynamic> data = jsonDecode(enhancedData);
-        setState(() {
-          employeeData = data;
-        });
-        _addDebugLog("✅ Enhanced employee data loaded from local storage");
-      } else if (localData != null) {
+      if (localData != null) {
         Map<String, dynamic> data = jsonDecode(localData);
         setState(() {
           employeeData = data;
         });
-        _addDebugLog("✅ Standard employee data loaded from local storage");
+        _addDebugLog("✅ Employee data loaded from local storage");
       }
 
       if (!_isOfflineMode) {
@@ -590,7 +582,7 @@ class _AuthenticateFaceViewState extends State<AuthenticateFaceView> {
   Future<void> _authenticate() async {
     if (!_canAuthenticate || isMatching) return;
 
-    _addDebugLog("🚨 Starting EMERGENCY iOS authentication process...");
+    _addDebugLog("🔐 Starting authentication process...");
 
     setState(() {
       isMatching = true;
@@ -618,7 +610,7 @@ class _AuthenticateFaceViewState extends State<AuthenticateFaceView> {
   // ================ CORE FACE MATCHING LOGIC ================
   Future<void> _matchFaceWithStored() async {
     try {
-      _addDebugLog("🔍 Enhanced face matching started...");
+      _addDebugLog("🔍 Face matching started...");
       
       String? storedImage;
 
@@ -644,15 +636,15 @@ class _AuthenticateFaceViewState extends State<AuthenticateFaceView> {
       }
 
       if (_isOfflineMode) {
-        _addDebugLog("📱 iOS EMERGENCY Offline mode - using SUPER LENIENT matching");
-        await _performEnhancedOfflineAuthentication(storedImage);
+        _addDebugLog("📱 Offline mode - using local matching");
+        await _performOfflineAuthentication(storedImage);
       } else {
-        _addDebugLog("🌐 iOS Online mode - using Regula SDK matching");
+        _addDebugLog("🌐 Online mode - using Regula SDK matching");
         await _performOnlineAuthentication(storedImage);
       }
 
     } catch (e) {
-      _addDebugLog("❌ Error in enhanced face matching: $e");
+      _addDebugLog("❌ Error in face matching: $e");
       setState(() {
         isMatching = false;
       });
@@ -681,7 +673,7 @@ class _AuthenticateFaceViewState extends State<AuthenticateFaceView> {
       var response = regula.MatchFacesResponse.fromJson(json.decode(value));
 
       dynamic str = await regula.FaceSDK.matchFacesSimilarityThresholdSplit(
-          jsonEncode(response!.results), 0.75);
+          jsonEncode(response!.results), 0.8);
 
       var split = regula.MatchFacesSimilarityThresholdSplit.fromJson(json.decode(str));
       
@@ -693,7 +685,7 @@ class _AuthenticateFaceViewState extends State<AuthenticateFaceView> {
 
       _addDebugLog("📊 Online similarity: $_similarity%");
 
-      if (_similarity != "0.0" && double.parse(_similarity) > 75.0) { // Slightly more lenient
+      if (_similarity != "0.0" && double.parse(_similarity) > 80.0) {
         _addDebugLog("✅ Online authentication SUCCESS!");
         _handleSuccessfulAuthentication();
       } else {
@@ -702,14 +694,14 @@ class _AuthenticateFaceViewState extends State<AuthenticateFaceView> {
       }
     } catch (e) {
       _addDebugLog("❌ Online authentication failed, falling back to offline: $e");
-      await _performEnhancedOfflineAuthentication(storedImage);
+      await _performOfflineAuthentication(storedImage);
     }
   }
 
-  // ✅ 🚨 EMERGENCY OFFLINE AUTHENTICATION - SUPER LENIENT VERSION
-  Future<void> _performEnhancedOfflineAuthentication(String storedImage) async {
+  // ================ OFFLINE AUTHENTICATION ================
+  Future<void> _performOfflineAuthentication(String storedImage) async {
     try {
-      _addDebugLog("🚨 EMERGENCY: Performing SUPER LENIENT offline authentication...");
+      _addDebugLog("📱 Performing offline authentication...");
       
       if (_faceFeatures == null) {
         _addDebugLog("❌ No current face features detected");
@@ -717,8 +709,8 @@ class _AuthenticateFaceViewState extends State<AuthenticateFaceView> {
         return;
       }
 
-      // ✅ STEP 1: Get stored features with multiple attempts
-      FaceFeatures? storedFeatures = await _getStoredFaceFeaturesEnhanced();
+      // Get stored features
+      FaceFeatures? storedFeatures = await _getStoredFaceFeatures();
       
       if (storedFeatures == null) {
         _addDebugLog("❌ No stored face features found - attempting cloud recovery");
@@ -728,104 +720,95 @@ class _AuthenticateFaceViewState extends State<AuthenticateFaceView> {
 
       _addDebugLog("✅ Successfully retrieved stored face features");
 
-      // ✅ STEP 2: SUPER LENIENT face feature comparison
-      double matchPercentage = await _superLenientFaceComparison(storedFeatures, _faceFeatures!);
+      // Compare face features
+      double matchPercentage = await _compareFaceFeatures(storedFeatures, _faceFeatures!);
       
       setState(() {
         _similarity = matchPercentage.toStringAsFixed(2);
       });
 
-      _addDebugLog("📊 SUPER LENIENT iOS Offline similarity: $_similarity%");
+      _addDebugLog("📊 Offline similarity: $_similarity%");
       
-      // ✅ STEP 3: VERY LOW THRESHOLD for registered users
-      double threshold = 45.0; // ⚠️ EMERGENCY: Very low threshold
-      _addDebugLog("🎯 EMERGENCY threshold: ${threshold.toStringAsFixed(1)}% (super lenient)");
+      // Set threshold for offline authentication
+      double threshold = 60.0;
+      _addDebugLog("🎯 Authentication threshold: ${threshold.toStringAsFixed(1)}%");
 
       _authenticationDebugData['lastAuthentication'] = {
-        'method': 'emergency_super_lenient',
+        'method': 'offline_local',
         'similarity': matchPercentage,
         'threshold': threshold,
         'successful': matchPercentage >= threshold,
         'timestamp': DateTime.now().toIso8601String(),
       };
 
-      // ✅ STEP 4: Emergency lenient result
       if (matchPercentage >= threshold) {
-        _addDebugLog("✅ EMERGENCY SUPER LENIENT AUTHENTICATION SUCCESSFUL!");
+        _addDebugLog("✅ OFFLINE AUTHENTICATION SUCCESSFUL!");
         _handleSuccessfulAuthentication();
       } else {
-        _addDebugLog("❌ EMERGENCY: Even super lenient authentication failed");
-        _addDebugLog("🔍 EMERGENCY DEBUG: stored features summary: ${_getFeaturesDebugInfo(storedFeatures)}");
-        _addDebugLog("🔍 EMERGENCY DEBUG: current features summary: ${_getFeaturesDebugInfo(_faceFeatures!)}");
-        _handleFailedAuthentication("Emergency: Match too low (${matchPercentage.toStringAsFixed(1)}% vs ${threshold.toStringAsFixed(1)}%). Debug info logged.");
+        _addDebugLog("❌ Offline authentication failed");
+        _addDebugLog("🔍 DEBUG: stored features summary: ${_getFeaturesDebugInfo(storedFeatures)}");
+        _addDebugLog("🔍 DEBUG: current features summary: ${_getFeaturesDebugInfo(_faceFeatures!)}");
+        _handleFailedAuthentication("Face match too low (${matchPercentage.toStringAsFixed(1)}% vs ${threshold.toStringAsFixed(1)}%).");
       }
     } catch (e) {
-      _addDebugLog("❌ Emergency offline authentication error: $e");
+      _addDebugLog("❌ Offline authentication error: $e");
       _handleFailedAuthentication("Error during face matching: $e");
     }
   }
 
-  // ✅ EMERGENCY: Super lenient face comparison
-  Future<double> _superLenientFaceComparison(FaceFeatures stored, FaceFeatures current) async {
-    _addDebugLog("🚨 EMERGENCY: Starting super lenient face comparison...");
+  // ================ FACE COMPARISON ================
+  Future<double> _compareFaceFeatures(FaceFeatures stored, FaceFeatures current) async {
+    _addDebugLog("🔍 Starting face comparison...");
     
-    // ✅ Algorithm 1: VERY lenient landmark comparison
-    double landmarkScore = _emergencyLenientLandmarkComparison(stored, current);
-    _addDebugLog("📊 Emergency landmark score: ${landmarkScore.toStringAsFixed(1)}%");
+    // Landmark comparison
+    double landmarkScore = _compareLandmarks(stored, current);
+    _addDebugLog("📊 Landmark score: ${landmarkScore.toStringAsFixed(1)}%");
     
-    // ✅ Algorithm 2: Basic distance comparison (if landmarks fail)
-    double distanceScore = _emergencyDistanceComparison(stored, current);
-    _addDebugLog("📊 Emergency distance score: ${distanceScore.toStringAsFixed(1)}%");
+    // Distance comparison
+    double distanceScore = _compareDistances(stored, current);
+    _addDebugLog("📊 Distance score: ${distanceScore.toStringAsFixed(1)}%");
     
-    // ✅ Use the HIGHER of the two scores (most lenient)
+    // Use the higher of the two scores
     double finalScore = max(landmarkScore, distanceScore);
     
-    // ✅ Apply minimum boost for same user
-    if (finalScore > 20.0 && finalScore < 50.0) {
-      finalScore = finalScore * 1.3; // 30% boost for borderline cases
-      _addDebugLog("🆙 Applied 30% boost for borderline case");
-    }
-    
-    // ✅ If we have ANY meaningful features, give minimum 40%
-    int storedCount = _countDetectedLandmarks(stored);
-    int currentCount = _countDetectedLandmarks(current);
-    if (storedCount >= 3 && currentCount >= 3 && finalScore < 40.0) {
-      finalScore = 40.0;
-      _addDebugLog("🆙 Applied minimum 40% for having basic features");
+    // Apply minimum quality boost
+    if (finalScore > 30.0 && finalScore < 60.0) {
+      finalScore = finalScore * 1.15; // 15% boost for borderline cases
+      _addDebugLog("🆙 Applied 15% boost for borderline case");
     }
     
     finalScore = min(finalScore, 100.0); // Cap at 100%
     
-    _addDebugLog("🎯 EMERGENCY FINAL SCORE: ${finalScore.toStringAsFixed(2)}%");
+    _addDebugLog("🎯 FINAL SCORE: ${finalScore.toStringAsFixed(2)}%");
     _addDebugLog("   - Landmark: ${landmarkScore.toStringAsFixed(1)}%");
     _addDebugLog("   - Distance: ${distanceScore.toStringAsFixed(1)}%");
-    _addDebugLog("   - Final (best): ${finalScore.toStringAsFixed(1)}%");
+    _addDebugLog("   - Final: ${finalScore.toStringAsFixed(1)}%");
     
     return finalScore;
   }
 
-  // ✅ EMERGENCY: Very lenient landmark comparison
-  double _emergencyLenientLandmarkComparison(FaceFeatures stored, FaceFeatures current) {
-    _addDebugLog("🚨 Emergency lenient landmark comparison...");
+  // Compare landmarks
+  double _compareLandmarks(FaceFeatures stored, FaceFeatures current) {
+    _addDebugLog("🔍 Landmark comparison...");
     
     int matchCount = 0;
     int totalTests = 0;
     List<String> matchedFeatures = [];
     List<String> failedFeatures = [];
 
-    // ✅ EMERGENCY: VERY loose tolerances
-    Map<String, double> emergencyTolerances = {
-      'leftEye': 80.0,      // VERY loose
-      'rightEye': 80.0,     // VERY loose  
-      'noseBase': 90.0,     // VERY loose
-      'leftMouth': 100.0,   // EXTREMELY loose
-      'rightMouth': 100.0,  // EXTREMELY loose
-      'leftCheek': 120.0,   // EXTREMELY loose
-      'rightCheek': 120.0,  // EXTREMELY loose
+    // Set reasonable tolerances
+    Map<String, double> tolerances = {
+      'leftEye': 50.0,
+      'rightEye': 50.0,
+      'noseBase': 60.0,
+      'leftMouth': 70.0,
+      'rightMouth': 70.0,
+      'leftCheek': 80.0,
+      'rightCheek': 80.0,
     };
 
-    // Emergency eye comparison
-    if (_comparePointsEmergency(stored.leftEye, current.leftEye, 'leftEye', emergencyTolerances['leftEye']!)) {
+    // Eye comparison
+    if (_comparePoints(stored.leftEye, current.leftEye, 'leftEye', tolerances['leftEye']!)) {
       matchCount++;
       matchedFeatures.add('leftEye');
     } else {
@@ -833,7 +816,7 @@ class _AuthenticateFaceViewState extends State<AuthenticateFaceView> {
     }
     totalTests++;
 
-    if (_comparePointsEmergency(stored.rightEye, current.rightEye, 'rightEye', emergencyTolerances['rightEye']!)) {
+    if (_comparePoints(stored.rightEye, current.rightEye, 'rightEye', tolerances['rightEye']!)) {
       matchCount++;
       matchedFeatures.add('rightEye');
     } else {
@@ -841,8 +824,8 @@ class _AuthenticateFaceViewState extends State<AuthenticateFaceView> {
     }
     totalTests++;
 
-    // Emergency nose comparison
-    if (_comparePointsEmergency(stored.noseBase, current.noseBase, 'noseBase', emergencyTolerances['noseBase']!)) {
+    // Nose comparison
+    if (_comparePoints(stored.noseBase, current.noseBase, 'noseBase', tolerances['noseBase']!)) {
       matchCount++;
       matchedFeatures.add('noseBase');
     } else {
@@ -850,8 +833,8 @@ class _AuthenticateFaceViewState extends State<AuthenticateFaceView> {
     }
     totalTests++;
 
-    // Emergency mouth comparison (very loose)
-    if (_comparePointsEmergency(stored.leftMouth, current.leftMouth, 'leftMouth', emergencyTolerances['leftMouth']!)) {
+    // Mouth comparison
+    if (_comparePoints(stored.leftMouth, current.leftMouth, 'leftMouth', tolerances['leftMouth']!)) {
       matchCount++;
       matchedFeatures.add('leftMouth');
     } else {
@@ -859,7 +842,7 @@ class _AuthenticateFaceViewState extends State<AuthenticateFaceView> {
     }
     totalTests++;
 
-    if (_comparePointsEmergency(stored.rightMouth, current.rightMouth, 'rightMouth', emergencyTolerances['rightMouth']!)) {
+    if (_comparePoints(stored.rightMouth, current.rightMouth, 'rightMouth', tolerances['rightMouth']!)) {
       matchCount++;
       matchedFeatures.add('rightMouth');
     } else {
@@ -867,9 +850,9 @@ class _AuthenticateFaceViewState extends State<AuthenticateFaceView> {
     }
     totalTests++;
 
-    // Additional features (if available) - even more loose
+    // Additional features (if available)
     if (stored.leftCheek != null && current.leftCheek != null) {
-      if (_comparePointsEmergency(stored.leftCheek, current.leftCheek, 'leftCheek', emergencyTolerances['leftCheek']!)) {
+      if (_comparePoints(stored.leftCheek, current.leftCheek, 'leftCheek', tolerances['leftCheek']!)) {
         matchCount++;
         matchedFeatures.add('leftCheek');
       } else {
@@ -879,7 +862,7 @@ class _AuthenticateFaceViewState extends State<AuthenticateFaceView> {
     }
 
     if (stored.rightCheek != null && current.rightCheek != null) {
-      if (_comparePointsEmergency(stored.rightCheek, current.rightCheek, 'rightCheek', emergencyTolerances['rightCheek']!)) {
+      if (_comparePoints(stored.rightCheek, current.rightCheek, 'rightCheek', tolerances['rightCheek']!)) {
         matchCount++;
         matchedFeatures.add('rightCheek');
       } else {
@@ -890,15 +873,15 @@ class _AuthenticateFaceViewState extends State<AuthenticateFaceView> {
 
     double percentage = totalTests > 0 ? (matchCount / totalTests) * 100 : 0.0;
     
-    _addDebugLog("📊 Emergency landmark result: $matchCount/$totalTests matches = ${percentage.toStringAsFixed(1)}%");
+    _addDebugLog("📊 Landmark result: $matchCount/$totalTests matches = ${percentage.toStringAsFixed(1)}%");
     _addDebugLog("✅ Matched: ${matchedFeatures.join(', ')}");
     _addDebugLog("❌ Failed: ${failedFeatures.join(', ')}");
     
     return percentage;
   }
 
-  // ✅ EMERGENCY: Point comparison with very loose tolerance
-  bool _comparePointsEmergency(Points? p1, Points? p2, String featureName, double tolerance) {
+  // Point comparison
+  bool _comparePoints(Points? p1, Points? p2, String featureName, double tolerance) {
     if (p1 == null || p2 == null || p1.x == null || p2.x == null || p1.y == null || p2.y == null) {
       _addDebugLog("⚠️ $featureName: Missing coordinate data");
       return false;
@@ -911,14 +894,14 @@ class _AuthenticateFaceViewState extends State<AuthenticateFaceView> {
 
     bool matches = distance <= tolerance;
     
-    _addDebugLog("📍 EMERGENCY $featureName: distance=${distance.toStringAsFixed(1)} (tolerance=$tolerance) -> ${matches ? 'MATCH' : 'FAIL'}");
+    _addDebugLog("📍 $featureName: distance=${distance.toStringAsFixed(1)} (tolerance=$tolerance) -> ${matches ? 'MATCH' : 'FAIL'}");
 
     return matches;
   }
 
-  // ✅ EMERGENCY: Distance comparison (backup algorithm)
-  double _emergencyDistanceComparison(FaceFeatures stored, FaceFeatures current) {
-    _addDebugLog("🚨 Emergency distance-based comparison...");
+  // Distance comparison (backup algorithm)
+  double _compareDistances(FaceFeatures stored, FaceFeatures current) {
+    _addDebugLog("🔍 Distance-based comparison...");
     
     Map<String, double> storedDistances = _calculateFeatureDistances(stored);
     Map<String, double> currentDistances = _calculateFeatureDistances(current);
@@ -926,8 +909,8 @@ class _AuthenticateFaceViewState extends State<AuthenticateFaceView> {
     int matchCount = 0;
     int totalDistances = 0;
     
-    // ✅ EMERGENCY: Very loose tolerance (50% difference allowed)
-    double emergencyTolerance = 50.0;
+    // Set tolerance
+    double tolerance = 30.0;
     
     for (String distanceKey in storedDistances.keys) {
       if (currentDistances.containsKey(distanceKey)) {
@@ -937,11 +920,11 @@ class _AuthenticateFaceViewState extends State<AuthenticateFaceView> {
         if (storedDist > 0 && currentDist > 0) {
           double percentDiff = ((storedDist - currentDist).abs() / storedDist) * 100;
           
-          if (percentDiff <= emergencyTolerance) {
+          if (percentDiff <= tolerance) {
             matchCount++;
-            _addDebugLog("✅ Emergency distance $distanceKey: ${percentDiff.toStringAsFixed(1)}% diff (MATCH)");
+            _addDebugLog("✅ Distance $distanceKey: ${percentDiff.toStringAsFixed(1)}% diff (MATCH)");
           } else {
-            _addDebugLog("❌ Emergency distance $distanceKey: ${percentDiff.toStringAsFixed(1)}% diff (FAIL)");
+            _addDebugLog("❌ Distance $distanceKey: ${percentDiff.toStringAsFixed(1)}% diff (FAIL)");
           }
           totalDistances++;
         }
@@ -949,20 +932,18 @@ class _AuthenticateFaceViewState extends State<AuthenticateFaceView> {
     }
     
     double percentage = totalDistances > 0 ? (matchCount / totalDistances) * 100 : 0.0;
-    _addDebugLog("📊 Emergency distance comparison: $matchCount/$totalDistances = ${percentage.toStringAsFixed(1)}%");
+    _addDebugLog("📊 Distance comparison: $matchCount/$totalDistances = ${percentage.toStringAsFixed(1)}%");
     
     return percentage;
   }
 
-  // ✅ Enhanced stored face features retrieval with multiple fallbacks
-  Future<FaceFeatures?> _getStoredFaceFeaturesEnhanced() async {
+  // Get stored face features
+  Future<FaceFeatures?> _getStoredFaceFeatures() async {
     try {
       SharedPreferences prefs = await SharedPreferences.getInstance();
       
-      // Try multiple storage locations in priority order
+      // Try multiple storage locations
       List<String> storageKeys = [
-        'secure_enhanced_face_features_${widget.employeeId}',
-        'enhanced_face_features_backup_${widget.employeeId}',
         'secure_face_features_${widget.employeeId}',
         'employee_face_features_${widget.employeeId}',
       ];
@@ -1008,7 +989,7 @@ class _AuthenticateFaceViewState extends State<AuthenticateFaceView> {
       return null;
       
     } catch (e) {
-      _addDebugLog("❌ Error in enhanced features retrieval: $e");
+      _addDebugLog("❌ Error in features retrieval: $e");
       return null;
     }
   }
@@ -1045,13 +1026,7 @@ class _AuthenticateFaceViewState extends State<AuthenticateFaceView> {
                 jsonEncode(data['faceFeatures']));
           }
           
-          if (data.containsKey('enhancedFaceFeatures') && data['enhancedFaceFeatures'] != null) {
-            await prefs.setString('secure_enhanced_face_features_${widget.employeeId}', 
-                jsonEncode(data['enhancedFaceFeatures']));
-          }
-          
           await prefs.setBool('face_registered_${widget.employeeId}', true);
-          await prefs.setBool('enhanced_face_registered_${widget.employeeId}', true);
           
           _addDebugLog("✅ Face data recovered from cloud and saved locally");
           
@@ -1083,7 +1058,7 @@ class _AuthenticateFaceViewState extends State<AuthenticateFaceView> {
       _hasAuthenticated = true;
     });
 
-    _addDebugLog("✅ EMERGENCY iOS Authentication successful!");
+    _addDebugLog("✅ Authentication successful!");
 
     if (widget.isRegistrationValidation) {
       Future.delayed(const Duration(seconds: 1), () {
@@ -1137,7 +1112,7 @@ class _AuthenticateFaceViewState extends State<AuthenticateFaceView> {
             Icon(Icons.check_circle, color: Colors.green, size: 28),
             SizedBox(width: 8),
             Text(
-              "🚨 Emergency Authentication Success!",
+              "🔐 Authentication Success!",
               style: TextStyle(color: Colors.white, fontSize: 16),
             ),
           ],
@@ -1160,7 +1135,7 @@ class _AuthenticateFaceViewState extends State<AuthenticateFaceView> {
               style: const TextStyle(color: Colors.white70, fontSize: 14),
             ),
             Text(
-              "Mode: ${_isOfflineMode ? 'Emergency Offline' : 'Online'}",
+              "Mode: ${_isOfflineMode ? 'Offline' : 'Online'}",
               style: const TextStyle(color: Colors.white70, fontSize: 14),
             ),
           ],

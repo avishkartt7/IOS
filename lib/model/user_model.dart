@@ -1,4 +1,4 @@
-// lib/model/user_model.dart - ENHANCED VERSION WITH QUALITY METADATA
+// lib/model/user_model.dart - Production Ready
 
 import 'dart:math' as math;
 
@@ -7,20 +7,18 @@ class UserModel {
   String? name;
   String? image;
   FaceFeatures? faceFeatures;
-  EnhancedFaceFeatures? enhancedFaceFeatures; // ✅ NEW
   int? registeredOn;
-  double? faceQualityScore; // ✅ NEW
-  String? registrationMethod; // ✅ NEW
+  double? faceQualityScore;
+  String? registrationMethod;
 
   UserModel({
     this.id,
     this.name,
     this.image,
     this.faceFeatures,
-    this.enhancedFaceFeatures, // ✅ NEW
     this.registeredOn,
-    this.faceQualityScore, // ✅ NEW
-    this.registrationMethod, // ✅ NEW
+    this.faceQualityScore,
+    this.registrationMethod,
   });
 
   factory UserModel.fromJson(Map<String, dynamic> json) {
@@ -31,12 +29,9 @@ class UserModel {
       faceFeatures: json["faceFeatures"] != null 
           ? FaceFeatures.fromJson(json["faceFeatures"])
           : null,
-      enhancedFaceFeatures: json["enhancedFaceFeatures"] != null 
-          ? EnhancedFaceFeatures.fromJson(json["enhancedFaceFeatures"])
-          : null, // ✅ NEW
       registeredOn: json['registeredOn'],
-      faceQualityScore: json['faceQualityScore']?.toDouble(), // ✅ NEW
-      registrationMethod: json['registrationMethod'], // ✅ NEW
+      faceQualityScore: json['faceQualityScore']?.toDouble(),
+      registrationMethod: json['registrationMethod'],
     );
   }
 
@@ -46,15 +41,14 @@ class UserModel {
       'name': name,
       'image': image,
       'faceFeatures': faceFeatures?.toJson(),
-      'enhancedFaceFeatures': enhancedFaceFeatures?.toJson(), // ✅ NEW
       'registeredOn': registeredOn,
-      'faceQualityScore': faceQualityScore, // ✅ NEW
-      'registrationMethod': registrationMethod, // ✅ NEW
+      'faceQualityScore': faceQualityScore,
+      'registrationMethod': registrationMethod,
     };
   }
 }
 
-/// ✅ ENHANCED: Standard FaceFeatures with better validation
+/// Production-ready FaceFeatures with validation
 class FaceFeatures {
   Points? rightEar;
   Points? leftEar;
@@ -126,7 +120,7 @@ class FaceFeatures {
         "bottomMouth": bottomMouth?.toJson(),
       };
 
-  /// ✅ NEW: Validate feature quality
+  /// Validate feature quality for authentication
   bool isValidForAuthentication() {
     // Must have essential features (eyes + nose)
     bool hasEssentials = leftEye != null && rightEye != null && noseBase != null;
@@ -138,13 +132,8 @@ class FaceFeatures {
     return hasEssentials && hasMinimumFeatures;
   }
 
-  /// ✅ NEW: Count detected features (public method)
+  /// Count detected features
   int countFeatures() {
-    return _countFeatures();
-  }
-
-  /// ✅ NEW: Count detected features
-  int _countFeatures() {
     int count = 0;
     if (rightEar != null) count++;
     if (leftEar != null) count++;
@@ -159,7 +148,7 @@ class FaceFeatures {
     return count;
   }
 
-  /// ✅ NEW: Get feature quality score
+  /// Get feature quality score
   double getQualityScore() {
     int totalPossible = 10;
     int detected = countFeatures();
@@ -174,7 +163,7 @@ class FaceFeatures {
     return (baseScore * 0.7) + (essentialBonus * 0.3);
   }
 
-  /// ✅ NEW: Create summary for debugging
+  /// Create summary for debugging
   String getSummary() {
     List<String> available = [];
     List<String> missing = [];
@@ -192,247 +181,78 @@ class FaceFeatures {
     
     return "Available: [${available.join(',')}] Missing: [${missing.join(',')}] Quality: ${(getQualityScore() * 100).toStringAsFixed(1)}%";
   }
-}
 
-/// ✅ NEW: Enhanced FaceFeatures with additional metadata for better accuracy
-class EnhancedFaceFeatures {
-  // Core facial landmarks (same as FaceFeatures)
-  Points? rightEar;
-  Points? leftEar;
-  Points? rightEye;
-  Points? leftEye;
-  Points? rightCheek;
-  Points? leftCheek;
-  Points? rightMouth;
-  Points? leftMouth;
-  Points? noseBase;
-  Points? bottomMouth;
-
-  // ✅ NEW: Enhanced metadata for better accuracy
-  double? faceQualityScore;
-  int? landmarkCount;
-  double? faceSymmetryScore;
-  Map<String, double>? featureConfidences;
-  Map<String, double>? featureDistances;
-  Map<String, double>? facialProportions;
-  DateTime? captureTimestamp;
-  String? detectionMethod;
-  double? faceSize;
-  Map<String, double>? orientationAngles;
-
-  EnhancedFaceFeatures({
-    // Core landmarks
-    this.rightEar,
-    this.leftEar,
-    this.rightEye,
-    this.leftEye,
-    this.rightCheek,
-    this.leftCheek,
-    this.rightMouth,
-    this.leftMouth,
-    this.noseBase,
-    this.bottomMouth,
+  /// Check if has good feature distribution
+  bool hasGoodDistribution() {
+    int upperFeatures = 0;  // Eyes, ears
+    int middleFeatures = 0; // Nose, cheeks
+    int lowerFeatures = 0;  // Mouth
     
-    // Enhanced metadata
-    this.faceQualityScore,
-    this.landmarkCount,
-    this.faceSymmetryScore,
-    this.featureConfidences,
-    this.featureDistances,
-    this.facialProportions,
-    this.captureTimestamp,
-    this.detectionMethod,
-    this.faceSize,
-    this.orientationAngles,
-  });
-
-  factory EnhancedFaceFeatures.fromJson(Map<String, dynamic> json) {
-    return EnhancedFaceFeatures(
-      // Core landmarks
-      rightEar: json["rightEar"] != null ? Points.fromJson(json["rightEar"]) : null,
-      leftEar: json["leftEar"] != null ? Points.fromJson(json["leftEar"]) : null,
-      rightEye: json["rightEye"] != null ? Points.fromJson(json["rightEye"]) : null,
-      leftEye: json["leftEye"] != null ? Points.fromJson(json["leftEye"]) : null,
-      rightCheek: json["rightCheek"] != null ? Points.fromJson(json["rightCheek"]) : null,
-      leftCheek: json["leftCheek"] != null ? Points.fromJson(json["leftCheek"]) : null,
-      rightMouth: json["rightMouth"] != null ? Points.fromJson(json["rightMouth"]) : null,
-      leftMouth: json["leftMouth"] != null ? Points.fromJson(json["leftMouth"]) : null,
-      noseBase: json["noseBase"] != null ? Points.fromJson(json["noseBase"]) : null,
-      bottomMouth: json["bottomMouth"] != null ? Points.fromJson(json["bottomMouth"]) : null,
-      
-      // Enhanced metadata
-      faceQualityScore: json["faceQualityScore"]?.toDouble(),
-      landmarkCount: json["landmarkCount"],
-      faceSymmetryScore: json["faceSymmetryScore"]?.toDouble(),
-      featureConfidences: json["featureConfidences"] != null 
-          ? Map<String, double>.from(json["featureConfidences"].map((k, v) => MapEntry(k, v?.toDouble() ?? 0.0)))
-          : null,
-      featureDistances: json["featureDistances"] != null 
-          ? Map<String, double>.from(json["featureDistances"].map((k, v) => MapEntry(k, v?.toDouble() ?? 0.0)))
-          : null,
-      facialProportions: json["facialProportions"] != null 
-          ? Map<String, double>.from(json["facialProportions"].map((k, v) => MapEntry(k, v?.toDouble() ?? 0.0)))
-          : null,
-      captureTimestamp: json["captureTimestamp"] != null 
-          ? DateTime.parse(json["captureTimestamp"])
-          : null,
-      detectionMethod: json["detectionMethod"],
-      faceSize: json["faceSize"]?.toDouble(),
-      orientationAngles: json["orientationAngles"] != null 
-          ? Map<String, double>.from(json["orientationAngles"].map((k, v) => MapEntry(k, v?.toDouble() ?? 0.0)))
-          : null,
-    );
+    if (leftEye != null) upperFeatures++;
+    if (rightEye != null) upperFeatures++;
+    if (leftEar != null) upperFeatures++;
+    if (rightEar != null) upperFeatures++;
+    
+    if (noseBase != null) middleFeatures++;
+    if (leftCheek != null) middleFeatures++;
+    if (rightCheek != null) middleFeatures++;
+    
+    if (leftMouth != null) lowerFeatures++;
+    if (rightMouth != null) lowerFeatures++;
+    if (bottomMouth != null) lowerFeatures++;
+    
+    // Good distribution means features in at least 2 of 3 regions
+    int regionsWithFeatures = 0;
+    if (upperFeatures > 0) regionsWithFeatures++;
+    if (middleFeatures > 0) regionsWithFeatures++;
+    if (lowerFeatures > 0) regionsWithFeatures++;
+    
+    return regionsWithFeatures >= 2;
   }
 
-  Map<String, dynamic> toJson() {
-    return {
-      // Core landmarks
-      "rightEar": rightEar?.toJson(),
-      "leftEar": leftEar?.toJson(),
-      "rightEye": rightEye?.toJson(),
-      "leftEye": leftEye?.toJson(),
-      "rightCheek": rightCheek?.toJson(),
-      "leftCheek": leftCheek?.toJson(),
-      "rightMouth": rightMouth?.toJson(),
-      "leftMouth": leftMouth?.toJson(),
-      "noseBase": noseBase?.toJson(),
-      "bottomMouth": bottomMouth?.toJson(),
-      
-      // Enhanced metadata
-      "faceQualityScore": faceQualityScore,
-      "landmarkCount": landmarkCount,
-      "faceSymmetryScore": faceSymmetryScore,
-      "featureConfidences": featureConfidences,
-      "featureDistances": featureDistances,
-      "facialProportions": facialProportions,
-      "captureTimestamp": captureTimestamp?.toIso8601String(),
-      "detectionMethod": detectionMethod,
-      "faceSize": faceSize,
-      "orientationAngles": orientationAngles,
-    };
+  /// Get essential feature ratio
+  double getEssentialFeatureRatio() {
+    int essentialCount = 0;
+    int totalEssential = 3;  // Eyes + nose
+    
+    if (leftEye != null) essentialCount++;
+    if (rightEye != null) essentialCount++;
+    if (noseBase != null) essentialCount++;
+    
+    return essentialCount / totalEssential;
   }
 
-  /// ✅ Convert to standard FaceFeatures for backward compatibility
-  FaceFeatures toStandardFaceFeatures() {
-    return FaceFeatures(
-      rightEar: rightEar,
-      leftEar: leftEar,
-      rightEye: rightEye,
-      leftEye: leftEye,
-      rightCheek: rightCheek,
-      leftCheek: leftCheek,
-      rightMouth: rightMouth,
-      leftMouth: leftMouth,
-      noseBase: noseBase,
-      bottomMouth: bottomMouth,
-    );
+  /// Calculate face symmetry score
+  double getSymmetryScore() {
+    if (leftEye == null || rightEye == null || noseBase == null) {
+      return 0.0;
+    }
+    
+    double eyeMidX = (leftEye!.x! + rightEye!.x!) / 2;
+    double noseOffset = (noseBase!.x! - eyeMidX).abs();
+    double eyeDistance = leftEye!.distanceTo(rightEye!);
+    
+    if (eyeDistance == 0) return 0.0;
+    
+    double symmetryRatio = 1.0 - (noseOffset / (eyeDistance / 2));
+    return math.max(0.0, math.min(1.0, symmetryRatio));
   }
 
-  /// ✅ Create enhanced features from standard features
-  static EnhancedFaceFeatures fromStandardFeatures(
-    FaceFeatures features, {
-    double? qualityScore,
-    String? method,
-    double? symmetryScore,
-  }) {
-    return EnhancedFaceFeatures(
-      // Copy core landmarks
-      rightEar: features.rightEar,
-      leftEar: features.leftEar,
-      rightEye: features.rightEye,
-      leftEye: features.leftEye,
-      rightCheek: features.rightCheek,
-      leftCheek: features.leftCheek,
-      rightMouth: features.rightMouth,
-      leftMouth: features.leftMouth,
-      noseBase: features.noseBase,
-      bottomMouth: features.bottomMouth,
-      
-      // Add metadata
-      faceQualityScore: qualityScore ?? features.getQualityScore(),
-      landmarkCount: features.countFeatures(),
-      faceSymmetryScore: symmetryScore,
-      captureTimestamp: DateTime.now(),
-      detectionMethod: method ?? 'standard',
-    );
-  }
-
-  /// ✅ Validate enhanced features for high-accuracy authentication
-  bool isValidForHighAccuracyAuth() {
-    // Must have excellent quality score
-    bool hasHighQuality = faceQualityScore != null && faceQualityScore! >= 0.7;
-    
-    // Must have essential landmarks
-    bool hasEssentials = leftEye != null && rightEye != null && noseBase != null;
-    
-    // Should have good landmark count
-    bool hasGoodLandmarkCount = landmarkCount != null && landmarkCount! >= 6;
-    
-    // Should have reasonable symmetry
-    bool hasGoodSymmetry = faceSymmetryScore == null || faceSymmetryScore! >= 0.6;
-    
-    return hasHighQuality && hasEssentials && hasGoodLandmarkCount && hasGoodSymmetry;
-  }
-
-  /// ✅ Get comprehensive quality metrics
+  /// Get comprehensive quality metrics
   Map<String, dynamic> getQualityMetrics() {
     return {
-      'qualityScore': faceQualityScore ?? 0.0,
-      'landmarkCount': landmarkCount ?? 0,
-      'symmetryScore': faceSymmetryScore ?? 0.0,
+      'qualityScore': getQualityScore(),
+      'landmarkCount': countFeatures(),
+      'symmetryScore': getSymmetryScore(),
       'hasEssentials': leftEye != null && rightEye != null && noseBase != null,
-      'isHighQuality': isValidForHighAccuracyAuth(),
-      'detectionMethod': detectionMethod ?? 'unknown',
-      'captureAge': captureTimestamp != null 
-          ? DateTime.now().difference(captureTimestamp!).inMinutes
-          : null,
+      'isValidForAuth': isValidForAuthentication(),
+      'hasGoodDistribution': hasGoodDistribution(),
+      'essentialRatio': getEssentialFeatureRatio(),
     };
-  }
-
-  /// ✅ Create detailed summary for debugging
-  String getDetailedSummary() {
-    StringBuffer summary = StringBuffer();
-    
-    // Basic info
-    summary.writeln("📊 Enhanced Face Features Summary:");
-    summary.writeln("   Quality Score: ${faceQualityScore?.toStringAsFixed(3) ?? 'N/A'}");
-    summary.writeln("   Landmark Count: ${landmarkCount ?? 'N/A'}/10");
-    summary.writeln("   Symmetry Score: ${faceSymmetryScore?.toStringAsFixed(3) ?? 'N/A'}");
-    summary.writeln("   Detection Method: ${detectionMethod ?? 'N/A'}");
-    summary.writeln("   Face Size: ${faceSize?.toStringAsFixed(1) ?? 'N/A'}");
-    
-    // Landmarks status
-    List<String> available = [];
-    List<String> missing = [];
-    
-    if (leftEye != null) available.add('LE'); else missing.add('LE');
-    if (rightEye != null) available.add('RE'); else missing.add('RE');
-    if (noseBase != null) available.add('N'); else missing.add('N');
-    if (leftMouth != null) available.add('LM'); else missing.add('LM');
-    if (rightMouth != null) available.add('RM'); else missing.add('RM');
-    if (leftCheek != null) available.add('LC'); else missing.add('LC');
-    if (rightCheek != null) available.add('RC'); else missing.add('RC');
-    if (leftEar != null) available.add('LEar'); else missing.add('LEar');
-    if (rightEar != null) available.add('REar'); else missing.add('REar');
-    if (bottomMouth != null) available.add('BM'); else missing.add('BM');
-    
-    summary.writeln("   Available: [${available.join(', ')}]");
-    summary.writeln("   Missing: [${missing.join(', ')}]");
-    
-    // Quality assessment
-    bool isValid = isValidForHighAccuracyAuth();
-    summary.writeln("   ✅ Validation: ${isValid ? 'PASS (High Accuracy Ready)' : 'NEEDS IMPROVEMENT'}");
-    
-    return summary.toString();
-  }
-
-  @override
-  String toString() {
-    return "EnhancedFaceFeatures(quality: ${faceQualityScore?.toStringAsFixed(2)}, landmarks: $landmarkCount, method: $detectionMethod)";
   }
 }
 
-/// ✅ ENHANCED: Points class with validation and utility methods
+/// Production-ready Points class with validation and utility methods
 class Points {
   double? x;
   double? y;
@@ -452,14 +272,14 @@ class Points {
         'y': y
       };
 
-  /// ✅ NEW: Validate point coordinates
+  /// Validate point coordinates
   bool isValid() {
     return x != null && y != null && 
            x! >= 0 && y! >= 0 && 
-           x! < 10000 && y! < 10000;  // Reasonable coordinate bounds
+           x! < 10000 && y! < 10000;
   }
 
-  /// ✅ NEW: Calculate distance to another point
+  /// Calculate distance to another point
   double distanceTo(Points other) {
     if (!isValid() || !other.isValid()) return double.infinity;
     
@@ -468,7 +288,7 @@ class Points {
     return math.sqrt(dx * dx + dy * dy);
   }
 
-  /// ✅ NEW: Get midpoint between this and another point
+  /// Get midpoint between this and another point
   Points? midpointTo(Points other) {
     if (!isValid() || !other.isValid()) return null;
     
@@ -478,7 +298,7 @@ class Points {
     );
   }
 
-  /// ✅ NEW: Apply smoothing filter
+  /// Apply smoothing filter
   Points smoothed() {
     if (!isValid()) return this;
     
@@ -504,7 +324,7 @@ class Points {
   int get hashCode => x.hashCode ^ y.hashCode;
 }
 
-/// ✅ NEW: Utility class for face feature analysis
+/// Utility class for face feature analysis
 class FaceFeatureAnalyzer {
   /// Calculate similarity between two feature sets
   static double calculateSimilarity(FaceFeatures features1, FaceFeatures features2) {
@@ -516,11 +336,11 @@ class FaceFeatureAnalyzer {
     int total = 0;
     
     // Compare each landmark with tolerance
-    matches += _compareFeature(features1.leftEye, features2.leftEye, 35.0) ? 1 : 0; total++;
-    matches += _compareFeature(features1.rightEye, features2.rightEye, 35.0) ? 1 : 0; total++;
-    matches += _compareFeature(features1.noseBase, features2.noseBase, 40.0) ? 1 : 0; total++;
-    matches += _compareFeature(features1.leftMouth, features2.leftMouth, 50.0) ? 1 : 0; total++;
-    matches += _compareFeature(features1.rightMouth, features2.rightMouth, 50.0) ? 1 : 0; total++;
+    matches += _compareFeature(features1.leftEye, features2.leftEye, 40.0) ? 1 : 0; total++;
+    matches += _compareFeature(features1.rightEye, features2.rightEye, 40.0) ? 1 : 0; total++;
+    matches += _compareFeature(features1.noseBase, features2.noseBase, 45.0) ? 1 : 0; total++;
+    matches += _compareFeature(features1.leftMouth, features2.leftMouth, 55.0) ? 1 : 0; total++;
+    matches += _compareFeature(features1.rightMouth, features2.rightMouth, 55.0) ? 1 : 0; total++;
     
     return total > 0 ? (matches / total) * 100 : 0.0;
   }
@@ -559,5 +379,67 @@ class FaceFeatureAnalyzer {
     }
     
     return recommendations;
+  }
+
+  /// Compare features with detailed analysis
+  static Map<String, dynamic> compareFeatures(FaceFeatures stored, FaceFeatures current) {
+    double similarity = calculateSimilarity(stored, current);
+    
+    Map<String, bool> featureMatches = {
+      'leftEye': _compareFeature(stored.leftEye, current.leftEye, 40.0),
+      'rightEye': _compareFeature(stored.rightEye, current.rightEye, 40.0),
+      'noseBase': _compareFeature(stored.noseBase, current.noseBase, 45.0),
+      'leftMouth': _compareFeature(stored.leftMouth, current.leftMouth, 55.0),
+      'rightMouth': _compareFeature(stored.rightMouth, current.rightMouth, 55.0),
+    };
+    
+    int matchCount = featureMatches.values.where((match) => match).length;
+    int totalCount = featureMatches.length;
+    
+    return {
+      'similarity': similarity,
+      'matchCount': matchCount,
+      'totalCount': totalCount,
+      'featureMatches': featureMatches,
+      'isAcceptable': similarity >= 60.0,
+      'qualityStored': stored.getQualityScore(),
+      'qualityCurrent': current.getQualityScore(),
+    };
+  }
+
+  /// Validate features for production use
+  static bool validateForProduction(FaceFeatures features) {
+    // Must have essential features
+    if (!features.isValidForAuthentication()) {
+      return false;
+    }
+    
+    // Quality must be reasonable
+    if (features.getQualityScore() < 0.4) {
+      return false;
+    }
+    
+    // Must have good distribution
+    if (!features.hasGoodDistribution()) {
+      return false;
+    }
+    
+    return true;
+  }
+
+  /// Get detailed analysis for debugging
+  static Map<String, dynamic> getDetailedAnalysis(FaceFeatures features) {
+    return {
+      'summary': features.getSummary(),
+      'qualityMetrics': features.getQualityMetrics(),
+      'recommendations': getQualityRecommendations(features),
+      'isProductionReady': validateForProduction(features),
+      'validationChecks': {
+        'hasEssentials': features.isValidForAuthentication(),
+        'qualityThreshold': features.getQualityScore() >= 0.4,
+        'goodDistribution': features.hasGoodDistribution(),
+        'symmetryScore': features.getSymmetryScore(),
+      }
+    };
   }
 }

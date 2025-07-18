@@ -1,4 +1,4 @@
-// lib/register_face/register_face_view.dart - COMPLETE ENHANCED iOS IMPLEMENTATION
+// lib/register_face/register_face_view.dart - Production Ready
 
 import 'dart:convert';
 import 'dart:typed_data';
@@ -54,7 +54,7 @@ class _RegisterFaceViewState extends State<RegisterFaceView> {
   File? _imageFile;
   final ImagePicker _imagePicker = ImagePicker();
 
-  // ================ ENHANCED DEBUG STATE ================
+  // ================ DEBUG STATE ================
   List<String> _debugLogs = [];
   Map<String, dynamic> _registrationDebugData = {};
   bool _showDebugInfo = false;
@@ -63,7 +63,7 @@ class _RegisterFaceViewState extends State<RegisterFaceView> {
   @override
   void initState() {
     super.initState();
-    print("🚀 ENHANCED iOS RegisterFaceView initialized for employee: ${widget.employeeId}");
+    print("🚀 RegisterFaceView initialized for employee: ${widget.employeeId}");
     _addDebugLog("🚀 Registration view initialized");
     _checkConnectivity();
   }
@@ -79,7 +79,7 @@ class _RegisterFaceViewState extends State<RegisterFaceView> {
     String timestampedMessage = "${DateTime.now().toIso8601String().substring(11, 19)} - $message";
     setState(() {
       _debugLogs.add(timestampedMessage);
-      if (_debugLogs.length > 50) _debugLogs.removeAt(0); // Keep only last 50 logs
+      if (_debugLogs.length > 50) _debugLogs.removeAt(0);
     });
     print("REG_DEBUG: $timestampedMessage");
   }
@@ -108,7 +108,7 @@ class _RegisterFaceViewState extends State<RegisterFaceView> {
       appBar: AppBar(
         centerTitle: true,
         backgroundColor: appBarColor,
-        title: const Text("🚀 Enhanced Face Registration"),
+        title: const Text("🔐 Face Registration"),
         elevation: 0,
         actions: [
           // Debug toggle
@@ -221,7 +221,7 @@ class _RegisterFaceViewState extends State<RegisterFaceView> {
               const Icon(Icons.bug_report, color: Colors.yellow, size: 16),
               const SizedBox(width: 8),
               const Text(
-                "Enhanced Registration Debug",
+                "Registration Debug Panel",
                 style: TextStyle(color: Colors.yellow, fontSize: 14, fontWeight: FontWeight.bold),
               ),
               const Spacer(),
@@ -392,7 +392,7 @@ class _RegisterFaceViewState extends State<RegisterFaceView> {
           ),
         ),
         Text(
-          _isRegistering ? "Processing..." : "🚀 Click here to Capture (Enhanced)",
+          _isRegistering ? "Processing..." : "📸 Click here to Capture",
           style: TextStyle(
             fontSize: 14,
             color: primaryWhite.withOpacity(0.6),
@@ -410,7 +410,7 @@ class _RegisterFaceViewState extends State<RegisterFaceView> {
       
       Color statusColor = Colors.green;
       IconData statusIcon = Icons.check_circle;
-      String statusText = "✅ Enhanced face detection successful!";
+      String statusText = "✅ Face detection successful!";
       
       if (qualityScore < 0.4) {
         statusColor = Colors.red;
@@ -454,7 +454,7 @@ class _RegisterFaceViewState extends State<RegisterFaceView> {
             ),
             const SizedBox(height: 8),
             Text(
-              "📊 Enhanced Quality: ${(qualityScore * 100).toStringAsFixed(1)}% • Features: $featuresDetected/10",
+              "📊 Quality: ${(qualityScore * 100).toStringAsFixed(1)}% • Features: $featuresDetected/10",
               style: TextStyle(
                 color: statusColor.withOpacity(0.8),
                 fontSize: 12,
@@ -463,7 +463,7 @@ class _RegisterFaceViewState extends State<RegisterFaceView> {
             if (validateFaceFeatures(_faceFeatures!)) ...[
               const SizedBox(height: 4),
               Text(
-                "✅ Ready for enhanced registration (${_isOfflineMode ? 'Offline Mode' : 'Online Mode'})",
+                "✅ Ready for registration (${_isOfflineMode ? 'Offline Mode' : 'Online Mode'})",
                 style: TextStyle(
                   color: Colors.green,
                   fontSize: 12,
@@ -503,7 +503,7 @@ class _RegisterFaceViewState extends State<RegisterFaceView> {
                 const SizedBox(width: 8),
                 Expanded(
                   child: Text(
-                    "❌ Enhanced face detection failed",
+                    "❌ Face detection failed",
                     style: TextStyle(
                       color: Colors.red,
                       fontSize: 14,
@@ -523,9 +523,9 @@ class _RegisterFaceViewState extends State<RegisterFaceView> {
             ),
             const SizedBox(height: 4),
             GestureDetector(
-              onTap: _showEnhancedFaceDetectionTips,
+              onTap: _showFaceDetectionTips,
               child: Text(
-                "💡 Tap here for enhanced iOS face detection tips",
+                "💡 Tap here for face detection tips",
                 style: TextStyle(
                   color: Colors.blue,
                   fontSize: 12,
@@ -552,7 +552,7 @@ class _RegisterFaceViewState extends State<RegisterFaceView> {
                 const SizedBox(width: 8),
                 Expanded(
                   child: Text(
-                    "📸 Take an enhanced photo of your face to continue",
+                    "📸 Take a photo of your face to continue",
                     style: TextStyle(
                       color: Colors.blue,
                       fontSize: 14,
@@ -565,7 +565,7 @@ class _RegisterFaceViewState extends State<RegisterFaceView> {
             if (_isOfflineMode) ...[
               const SizedBox(height: 8),
               Text(
-                "⚠️ Enhanced iOS Offline Mode: Face will be saved locally and synced when online",
+                "⚠️ Offline Mode: Face will be saved locally and synced when online",
                 style: TextStyle(
                   color: Colors.orange,
                   fontSize: 11,
@@ -589,8 +589,8 @@ class _RegisterFaceViewState extends State<RegisterFaceView> {
             SizedBox(height: 0.015.sh),
             Text(
               _isOfflineMode 
-                  ? "🚀 Enhanced offline registration..." 
-                  : "🚀 Enhanced face registration...",
+                  ? "🔐 Offline registration..." 
+                  : "🔐 Face registration...",
               style: const TextStyle(
                 color: Colors.white,
                 fontSize: 16,
@@ -614,7 +614,7 @@ class _RegisterFaceViewState extends State<RegisterFaceView> {
 
     return Column(
       children: [
-        // Advanced test buttons (if advanced options enabled)
+        // Test buttons (if advanced options enabled)
         if (_showAdvancedOptions && _image != null) ...[
           Row(
             children: [
@@ -650,15 +650,15 @@ class _RegisterFaceViewState extends State<RegisterFaceView> {
         if (_image != null && _faceFeatures != null)
           CustomButton(
             text: _isOfflineMode 
-                ? "🚀 Enhanced Offline Register" 
-                : "🚀 Enhanced Face Register",
+                ? "🔐 Register Face (Offline)" 
+                : "🔐 Register Face",
             onTap: _registerFace,
           ),
         
         // Retake Button
         if (_image != null && _faceFeatures == null)
           CustomButton(
-            text: "🔄 Retake Photo (Enhanced)",
+            text: "🔄 Retake Photo",
             onTap: () {
               setState(() {
                 _image = null;
@@ -706,7 +706,7 @@ class _RegisterFaceViewState extends State<RegisterFaceView> {
 
   // ================ IMAGE CAPTURE ================
   Future<void> _getImage() async {
-    _addDebugLog("📸 Starting enhanced iOS image capture...");
+    _addDebugLog("📸 Starting image capture...");
     
     setState(() {
       _imageFile = null;
@@ -736,7 +736,7 @@ class _RegisterFaceViewState extends State<RegisterFaceView> {
 
   Future<void> _setPickedFile(XFile pickedFile) async {
     final path = pickedFile.path;
-    _addDebugLog("📸 Processing enhanced iOS image from: $path");
+    _addDebugLog("📸 Processing image from: $path");
     
     setState(() {
       _imageFile = File(path);
@@ -755,7 +755,7 @@ class _RegisterFaceViewState extends State<RegisterFaceView> {
       // Create InputImage for face detection
       InputImage inputImage = InputImage.fromFilePath(path);
       
-      // Show loading dialog with enhanced info
+      // Show loading dialog
       showDialog(
         context: context,
         barrierDismissible: false,
@@ -767,12 +767,12 @@ class _RegisterFaceViewState extends State<RegisterFaceView> {
               const CircularProgressIndicator(color: accentColor),
               const SizedBox(height: 16),
               const Text(
-                "🚀 Enhanced Face Detection",
+                "🔍 Face Detection",
                 style: TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold),
               ),
               const SizedBox(height: 8),
               Text(
-                "Processing with advanced iOS algorithms...",
+                "Processing with ML algorithms...",
                 style: TextStyle(color: Colors.white70, fontSize: 14),
                 textAlign: TextAlign.center,
               ),
@@ -794,27 +794,27 @@ class _RegisterFaceViewState extends State<RegisterFaceView> {
     }
   }
 
-  // ================ ENHANCED FACE DETECTION ================
+  // ================ FACE DETECTION ================
   Future<void> _processFaceDetection(InputImage inputImage) async {
-    _addDebugLog("🔍 Starting enhanced iOS face detection...");
+    _addDebugLog("🔍 Starting face detection...");
     
     try {
-      // Use enhanced face detection
+      // Use face detection
       _faceFeatures = await extractFaceFeatures(inputImage, _faceDetector);
       
       if (_faceFeatures != null) {
-        _addDebugLog("✅ Enhanced iOS Face detected and features extracted successfully!");
+        _addDebugLog("✅ Face detected and features extracted successfully!");
         
         // Validate features quality
         if (validateFaceFeatures(_faceFeatures!)) {
-          _addDebugLog("✅ Face features are sufficient for enhanced registration");
+          _addDebugLog("✅ Face features are sufficient for registration");
         } else {
           _addDebugLog("⚠️ Face features detected but may need improvement");
         }
         
         // Get quality score
         double qualityScore = getFaceFeatureQuality(_faceFeatures!);
-        _addDebugLog("📊 Enhanced iOS Face quality score: ${(qualityScore * 100).toStringAsFixed(1)}%");
+        _addDebugLog("📊 Face quality score: ${(qualityScore * 100).toStringAsFixed(1)}%");
         
         // Store debug data
         _registrationDebugData['lastFaceDetection'] = {
@@ -823,30 +823,28 @@ class _RegisterFaceViewState extends State<RegisterFaceView> {
           'featuresCount': _countDetectedLandmarks(_faceFeatures!),
           'isValid': validateFaceFeatures(_faceFeatures!),
           'timestamp': DateTime.now().toIso8601String(),
-          'method': 'enhanced_ios',
         };
         
       } else {
-        _addDebugLog("❌ No face detected with enhanced detection");
+        _addDebugLog("❌ No face detected");
         _registrationDebugData['lastFaceDetection'] = {
           'successful': false,
           'timestamp': DateTime.now().toIso8601String(),
-          'method': 'enhanced_ios',
         };
-        _showEnhancedFaceDetectionTips();
+        _showFaceDetectionTips();
       }
       
       setState(() {});
       
     } catch (e) {
-      _addDebugLog("❌ Error in enhanced face detection: $e");
+      _addDebugLog("❌ Error in face detection: $e");
       setState(() {
         _faceFeatures = null;
       });
     }
   }
 
-  // ================ ENHANCED FACE REGISTRATION ================
+  // ================ FACE REGISTRATION ================
   Future<void> _registerFace() async {
     if (_image == null || _faceFeatures == null) {
       CustomSnackBar.errorSnackBar("Please capture your face first");
@@ -858,10 +856,10 @@ class _RegisterFaceViewState extends State<RegisterFaceView> {
     });
 
     try {
-      _addDebugLog("🚀 Starting ENHANCED iOS face registration process...");
-      _addDebugLog("📶 Registration mode: ${_isOfflineMode ? 'Enhanced Offline' : 'Enhanced Online'}");
+      _addDebugLog("🔐 Starting face registration process...");
+      _addDebugLog("📶 Registration mode: ${_isOfflineMode ? 'Offline' : 'Online'}");
       
-      // ✅ STEP 1: Validate face quality before registration
+      // Validate face quality before registration
       if (!_validateFaceQuality()) {
         setState(() {
           _isRegistering = false;
@@ -875,41 +873,41 @@ class _RegisterFaceViewState extends State<RegisterFaceView> {
         cleanedImage = cleanedImage.split(',')[1];
       }
 
-      // ✅ STEP 2: Enhanced local storage with multiple backup methods
-      await _enhancedLocalStorage(cleanedImage);
-      _addDebugLog("✅ Enhanced local storage completed");
+      // Save locally with multiple backup methods
+      await _saveLocalData(cleanedImage);
+      _addDebugLog("✅ Local storage completed");
 
-      // ✅ STEP 3: Save to cloud if online with retry mechanism
+      // Save to cloud if online with retry mechanism
       if (!_isOfflineMode) {
         bool cloudSuccess = await _saveToCloudWithRetry(cleanedImage);
         if (!cloudSuccess) {
           _addDebugLog("⚠️ Cloud save failed, but local save succeeded");
         }
       } else {
-        _addDebugLog("📱 Enhanced offline mode: Marking for cloud sync when online");
+        _addDebugLog("📱 Offline mode: Marking for cloud sync when online");
         await _markForCloudSync();
       }
 
-      // ✅ STEP 4: Validate the saved data
+      // Validate the saved data
       bool validationPassed = await _validateSavedData();
       if (!validationPassed) {
-        throw Exception("Enhanced data validation failed after registration");
+        throw Exception("Data validation failed after registration");
       }
 
-      // ✅ STEP 5: Mark registration as complete
+      // Mark registration as complete
       await _markRegistrationComplete();
 
       setState(() {
         _isRegistering = false;
       });
 
-      _addDebugLog("✅ ENHANCED iOS Face registration completed successfully!");
+      _addDebugLog("✅ Face registration completed successfully!");
       
-      // Show enhanced success message
+      // Show success message
       CustomSnackBar.successSnackBar(
         _isOfflineMode 
-          ? "🚀 Enhanced face registered locally! Will sync when online." 
-          : "🚀 Enhanced face registered successfully!"
+          ? "🔐 Face registered locally! Will sync when online." 
+          : "🔐 Face registered successfully!"
       );
 
       // Wait a moment then navigate
@@ -933,12 +931,12 @@ class _RegisterFaceViewState extends State<RegisterFaceView> {
         _isRegistering = false;
       });
       
-      _addDebugLog("❌ Error in enhanced registration: $e");
-      CustomSnackBar.errorSnackBar("Enhanced registration failed. Please try again.");
+      _addDebugLog("❌ Error in registration: $e");
+      CustomSnackBar.errorSnackBar("Registration failed. Please try again.");
     }
   }
 
-  // ✅ ENHANCED: Validate face quality before registration
+  // Validate face quality before registration
   bool _validateFaceQuality() {
     if (_faceFeatures == null) {
       CustomSnackBar.errorSnackBar("No face features detected");
@@ -971,100 +969,85 @@ class _RegisterFaceViewState extends State<RegisterFaceView> {
     return true;
   }
 
-  // ✅ ENHANCED: Local storage with multiple backup methods
-  Future<void> _enhancedLocalStorage(String cleanedImage) async {
+  // Local storage with multiple backup methods
+  Future<void> _saveLocalData(String cleanedImage) async {
     try {
       final prefs = await SharedPreferences.getInstance();
       
-      _addDebugLog("💾 ENHANCED: Saving iOS face data with multiple backup methods...");
+      _addDebugLog("💾 Saving face data with multiple backup methods...");
       
-      // ✅ Primary storage locations with enhanced keys
+      // Primary storage locations
       await prefs.setString('employee_image_${widget.employeeId}', cleanedImage);
       await prefs.setString('secure_face_image_${widget.employeeId}', cleanedImage);
-      await prefs.setString('enhanced_face_image_${widget.employeeId}', cleanedImage);
       
-      // ✅ Face features with enhanced storage
+      // Face features storage
       String featuresJson = jsonEncode(_faceFeatures!.toJson());
       await prefs.setString('employee_face_features_${widget.employeeId}', featuresJson);
       await prefs.setString('secure_face_features_${widget.employeeId}', featuresJson);
-      await prefs.setString('secure_enhanced_face_features_${widget.employeeId}', featuresJson);
-      await prefs.setString('enhanced_face_features_backup_${widget.employeeId}', featuresJson);
       
-      // ✅ Registration flags with enhanced timestamps
+      // Registration flags
       DateTime now = DateTime.now();
       await prefs.setBool('face_registered_${widget.employeeId}', true);
-      await prefs.setBool('enhanced_face_registered_${widget.employeeId}', true);
-      await prefs.setBool('face_registration_complete_${widget.employeeId}', true);
       await prefs.setString('face_registration_date_${widget.employeeId}', now.toIso8601String());
-      await prefs.setString('face_registration_platform_${widget.employeeId}', 'iOS_Enhanced');
-      await prefs.setInt('face_registration_timestamp_${widget.employeeId}', now.millisecondsSinceEpoch);
+      await prefs.setString('face_registration_platform_${widget.employeeId}', 'Production');
       
-      // ✅ Enhanced employee data with comprehensive face info
-      Map<String, dynamic> enhancedEmployeeData = {
+      // Employee data
+      Map<String, dynamic> employeeData = {
         'id': widget.employeeId,
         'pin': widget.employeePin,
         'faceRegistered': true,
-        'enhancedFaceRegistered': true,
         'registrationDate': now.toIso8601String(),
-        'platform': 'iOS_Enhanced',
+        'platform': 'Production',
         'faceFeatures': _faceFeatures!.toJson(),
         'image': cleanedImage,
         'faceQualityScore': getFaceFeatureQuality(_faceFeatures!),
-        'registrationMethod': 'enhanced_ios_v2',
+        'registrationMethod': 'production_v1',
         'featuresCount': _countDetectedLandmarks(_faceFeatures!),
         'debugLogs': _debugLogs,
         'registrationDebugData': _registrationDebugData,
       };
       
-      await prefs.setString('user_data_${widget.employeeId}', jsonEncode(enhancedEmployeeData));
-      await prefs.setString('enhanced_user_data_${widget.employeeId}', jsonEncode(enhancedEmployeeData));
-      await prefs.setString('secure_user_data_${widget.employeeId}', jsonEncode(enhancedEmployeeData));
+      await prefs.setString('user_data_${widget.employeeId}', jsonEncode(employeeData));
       
-      _addDebugLog("💾 Enhanced local storage completed successfully");
-      
-      // ✅ Debug: Verify all saves
-      await _debugVerifyLocalStorage();
+      _addDebugLog("💾 Local storage completed successfully");
       
     } catch (e) {
-      _addDebugLog("❌ Error in enhanced local storage: $e");
+      _addDebugLog("❌ Error in local storage: $e");
       throw e;
     }
   }
 
-  // ✅ ENHANCED: Save to cloud with retry mechanism
+  // Save to cloud with retry mechanism
   Future<bool> _saveToCloudWithRetry(String cleanedImage) async {
-    _addDebugLog("🌐 Attempting enhanced cloud save with retry...");
+    _addDebugLog("🌐 Attempting cloud save with retry...");
     
     for (int attempt = 1; attempt <= 3; attempt++) {
       try {
-        _addDebugLog("🌐 Enhanced cloud save attempt $attempt/3...");
+        _addDebugLog("🌐 Cloud save attempt $attempt/3...");
         
-        Map<String, dynamic> enhancedCloudData = {
+        Map<String, dynamic> cloudData = {
           'image': cleanedImage,
           'faceFeatures': _faceFeatures!.toJson(),
-          'enhancedFaceFeatures': _faceFeatures!.toJson(),
           'faceRegistered': true,
-          'enhancedFaceRegistered': true,
           'registeredOn': FieldValue.serverTimestamp(),
-          'platform': 'iOS_Enhanced',
-          'registrationMethod': 'enhanced_ios_v2',
+          'platform': 'Production',
+          'registrationMethod': 'production_v1',
           'faceQualityScore': getFaceFeatureQuality(_faceFeatures!),
           'featuresCount': _countDetectedLandmarks(_faceFeatures!),
-          'devicePlatform': 'iOS',
+          'devicePlatform': Platform.operatingSystem,
           'lastUpdated': FieldValue.serverTimestamp(),
-          'enhancedVersion': '2.0',
         };
         
         await FirebaseFirestore.instance
             .collection('employees')
             .doc(widget.employeeId)
-            .update(enhancedCloudData);
+            .update(cloudData);
         
-        _addDebugLog("✅ Enhanced cloud save successful on attempt $attempt");
+        _addDebugLog("✅ Cloud save successful on attempt $attempt");
         return true;
         
       } catch (e) {
-        _addDebugLog("❌ Enhanced cloud save attempt $attempt failed: $e");
+        _addDebugLog("❌ Cloud save attempt $attempt failed: $e");
         
         if (attempt < 3) {
           _addDebugLog("🔄 Retrying in ${attempt * 2} seconds...");
@@ -1073,71 +1056,66 @@ class _RegisterFaceViewState extends State<RegisterFaceView> {
       }
     }
     
-    _addDebugLog("❌ All enhanced cloud save attempts failed");
+    _addDebugLog("❌ All cloud save attempts failed");
     return false;
   }
 
-  // ✅ ENHANCED: Mark for cloud sync when in offline mode
+  // Mark for cloud sync when in offline mode
   Future<void> _markForCloudSync() async {
     try {
       final prefs = await SharedPreferences.getInstance();
       await prefs.setBool('pending_face_registration_${widget.employeeId}', true);
-      await prefs.setBool('pending_enhanced_face_registration_${widget.employeeId}', true);
-      await prefs.setBool('pending_enhanced_v2_registration_${widget.employeeId}', true);
       await prefs.setString('pending_sync_timestamp_${widget.employeeId}', DateTime.now().toIso8601String());
       
-      // Store enhanced sync data
-      Map<String, dynamic> enhancedSyncData = {
+      // Store sync data
+      Map<String, dynamic> syncData = {
         'employeeId': widget.employeeId,
         'image': _image,
         'faceFeatures': _faceFeatures!.toJson(),
-        'platform': 'iOS_Enhanced',
-        'registrationMethod': 'enhanced_ios_v2_offline',
+        'platform': 'Production',
+        'registrationMethod': 'production_offline',
         'pendingSince': DateTime.now().toIso8601String(),
         'qualityScore': getFaceFeatureQuality(_faceFeatures!),
         'featuresCount': _countDetectedLandmarks(_faceFeatures!),
         'debugLogs': _debugLogs,
       };
       
-      await prefs.setString('pending_sync_data_${widget.employeeId}', jsonEncode(enhancedSyncData));
-      await prefs.setString('pending_enhanced_sync_data_${widget.employeeId}', jsonEncode(enhancedSyncData));
+      await prefs.setString('pending_sync_data_${widget.employeeId}', jsonEncode(syncData));
       
-      _addDebugLog("📱 Enhanced data marked for cloud sync when online");
+      _addDebugLog("📱 Data marked for cloud sync when online");
       
     } catch (e) {
-      _addDebugLog("❌ Error marking for enhanced cloud sync: $e");
+      _addDebugLog("❌ Error marking for cloud sync: $e");
     }
   }
 
-  // ✅ ENHANCED: Validate saved data
+  // Validate saved data
   Future<bool> _validateSavedData() async {
     try {
-      _addDebugLog("🔍 Validating enhanced saved registration data...");
+      _addDebugLog("🔍 Validating saved registration data...");
       
       final prefs = await SharedPreferences.getInstance();
       
-      // Check enhanced image data
+      // Check image data
       String? primaryImage = prefs.getString('employee_image_${widget.employeeId}');
       String? secureImage = prefs.getString('secure_face_image_${widget.employeeId}');
-      String? enhancedImage = prefs.getString('enhanced_face_image_${widget.employeeId}');
       
-      if (primaryImage == null && secureImage == null && enhancedImage == null) {
+      if (primaryImage == null && secureImage == null) {
         _addDebugLog("❌ Validation failed: No saved images found");
         return false;
       }
       
-      // Check enhanced face features
+      // Check face features
       String? primaryFeatures = prefs.getString('employee_face_features_${widget.employeeId}');
       String? secureFeatures = prefs.getString('secure_face_features_${widget.employeeId}');
-      String? enhancedFeatures = prefs.getString('secure_enhanced_face_features_${widget.employeeId}');
       
-      if (primaryFeatures == null && secureFeatures == null && enhancedFeatures == null) {
+      if (primaryFeatures == null && secureFeatures == null) {
         _addDebugLog("❌ Validation failed: No saved features found");
         return false;
       }
       
       // Try to parse features
-      String? featuresJson = enhancedFeatures ?? secureFeatures ?? primaryFeatures;
+      String? featuresJson = secureFeatures ?? primaryFeatures;
       if (featuresJson != null) {
         try {
           Map<String, dynamic> featuresMap = jsonDecode(featuresJson);
@@ -1157,69 +1135,20 @@ class _RegisterFaceViewState extends State<RegisterFaceView> {
         }
       }
       
-      // Check enhanced registration flags
+      // Check registration flags
       bool isRegistered = prefs.getBool('face_registered_${widget.employeeId}') ?? false;
-      bool isEnhancedRegistered = prefs.getBool('enhanced_face_registered_${widget.employeeId}') ?? false;
       
-      if (!isRegistered && !isEnhancedRegistered) {
+      if (!isRegistered) {
         _addDebugLog("❌ Validation failed: No registration flags set");
         return false;
       }
       
-      _addDebugLog("✅ Enhanced data validation passed");
-      _addDebugLog("   - Images available: ${[primaryImage != null, secureImage != null, enhancedImage != null].where((x) => x).length}/3");
-      _addDebugLog("   - Features available: ${[primaryFeatures != null, secureFeatures != null, enhancedFeatures != null].where((x) => x).length}/3");
-      _addDebugLog("   - Registration flags: Standard=$isRegistered, Enhanced=$isEnhancedRegistered");
-      
+      _addDebugLog("✅ Data validation passed");
       return true;
       
     } catch (e) {
-      _addDebugLog("❌ Error during enhanced validation: $e");
+      _addDebugLog("❌ Error during validation: $e");
       return false;
-    }
-  }
-
-  // ✅ ENHANCED: Debug verification of local storage
-  Future<void> _debugVerifyLocalStorage() async {
-    try {
-      final prefs = await SharedPreferences.getInstance();
-      
-      _addDebugLog("🔍 Enhanced DEBUG: Verifying local storage...");
-      
-      // Check all enhanced storage locations
-      Map<String, bool> enhancedStorageCheck = {
-        'employee_image': prefs.getString('employee_image_${widget.employeeId}') != null,
-        'secure_face_image': prefs.getString('secure_face_image_${widget.employeeId}') != null,
-        'enhanced_face_image': prefs.getString('enhanced_face_image_${widget.employeeId}') != null,
-        'employee_face_features': prefs.getString('employee_face_features_${widget.employeeId}') != null,
-        'secure_face_features': prefs.getString('secure_face_features_${widget.employeeId}') != null,
-        'secure_enhanced_face_features': prefs.getString('secure_enhanced_face_features_${widget.employeeId}') != null,
-        'enhanced_face_features_backup': prefs.getString('enhanced_face_features_backup_${widget.employeeId}') != null,
-        'face_registered': prefs.getBool('face_registered_${widget.employeeId}') ?? false,
-        'enhanced_face_registered': prefs.getBool('enhanced_face_registered_${widget.employeeId}') ?? false,
-        'face_registration_complete': prefs.getBool('face_registration_complete_${widget.employeeId}') ?? false,
-        'user_data': prefs.getString('user_data_${widget.employeeId}') != null,
-        'enhanced_user_data': prefs.getString('enhanced_user_data_${widget.employeeId}') != null,
-        'secure_user_data': prefs.getString('secure_user_data_${widget.employeeId}') != null,
-      };
-      
-      _addDebugLog("📊 Enhanced storage verification results:");
-      enhancedStorageCheck.forEach((key, value) {
-        _addDebugLog("   ${value ? '✅' : '❌'} $key");
-      });
-      
-      // Count successful saves
-      int successCount = enhancedStorageCheck.values.where((v) => v).length;
-      _addDebugLog("📈 Enhanced storage success rate: $successCount/${enhancedStorageCheck.length}");
-      
-      if (successCount < 8) {
-        _addDebugLog("⚠️ WARNING: Some enhanced storage operations may have failed");
-      } else {
-        _addDebugLog("🎉 Enhanced storage verification successful!");
-      }
-      
-    } catch (e) {
-      _addDebugLog("❌ Error in enhanced debug verification: $e");
     }
   }
 
@@ -1227,25 +1156,24 @@ class _RegisterFaceViewState extends State<RegisterFaceView> {
     try {
       final prefs = await SharedPreferences.getInstance();
       await prefs.setBool('registration_complete_${widget.employeeId}', true);
-      await prefs.setBool('enhanced_registration_complete_${widget.employeeId}', true);
       await prefs.setBool('is_authenticated', true);
       await prefs.setString('authenticated_user_id', widget.employeeId);
       await prefs.setInt('authentication_timestamp', DateTime.now().millisecondsSinceEpoch);
       
-      _addDebugLog("✅ Enhanced iOS Registration marked as complete");
+      _addDebugLog("✅ Registration marked as complete");
     } catch (e) {
-      _addDebugLog("❌ Error marking enhanced registration complete: $e");
+      _addDebugLog("❌ Error marking registration complete: $e");
     }
   }
 
-  // ================ ADVANCED TEST METHODS ================
+  // ================ TEST METHODS ================
   Future<void> _testMultipleFaceDetection() async {
     if (_imageFile == null) {
       CustomSnackBar.errorSnackBar("No image to test");
       return;
     }
     
-    _addDebugLog("🧪 Testing multiple iOS face detection methods...");
+    _addDebugLog("🧪 Testing multiple face detection methods...");
     
     showDialog(
       context: context,
@@ -1263,7 +1191,7 @@ class _RegisterFaceViewState extends State<RegisterFaceView> {
             ),
             const SizedBox(height: 8),
             Text(
-              "Running comprehensive iOS tests...",
+              "Running comprehensive tests...",
               style: TextStyle(color: Colors.white70),
             ),
           ],
@@ -1290,7 +1218,7 @@ class _RegisterFaceViewState extends State<RegisterFaceView> {
       List<Face> faces2 = await detector2.processImage(inputImage);
       _addDebugLog("🧪 Test 2 (default): ${faces2.length} faces");
       
-      // Test 3: Enhanced settings
+      // Test 3: Accurate settings
       final detector3 = FaceDetector(
         options: FaceDetectorOptions(
           performanceMode: FaceDetectorMode.accurate,
@@ -1299,7 +1227,7 @@ class _RegisterFaceViewState extends State<RegisterFaceView> {
         ),
       );
       List<Face> faces3 = await detector3.processImage(inputImage);
-      _addDebugLog("🧪 Test 3 (enhanced): ${faces3.length} faces");
+      _addDebugLog("🧪 Test 3 (accurate): ${faces3.length} faces");
       
       // Cleanup
       detector1.close();
@@ -1317,8 +1245,8 @@ class _RegisterFaceViewState extends State<RegisterFaceView> {
           content: Text(
             "Ultra-lenient: ${faces1.length} faces\n"
             "Default: ${faces2.length} faces\n"
-            "Enhanced: ${faces3.length} faces\n\n"
-            "${faces1.isNotEmpty || faces2.isNotEmpty || faces3.isNotEmpty ? '✅ Face detection working on iOS!' : '❌ No faces detected with any method'}",
+            "Accurate: ${faces3.length} faces\n\n"
+            "${faces1.isNotEmpty || faces2.isNotEmpty || faces3.isNotEmpty ? '✅ Face detection working!' : '❌ No faces detected with any method'}",
             style: const TextStyle(color: Colors.white),
           ),
           actions: [
@@ -1443,8 +1371,8 @@ class _RegisterFaceViewState extends State<RegisterFaceView> {
     CustomSnackBar.successSnackBar("Debug data copied to clipboard");
   }
 
-  // ================ ENHANCED FACE DETECTION TIPS ================
-  void _showEnhancedFaceDetectionTips() {
+  // ================ FACE DETECTION TIPS ================
+  void _showFaceDetectionTips() {
     if (mounted) {
       showDialog(
         context: context,
@@ -1458,7 +1386,7 @@ class _RegisterFaceViewState extends State<RegisterFaceView> {
               Icon(Icons.lightbulb, color: Colors.orange),
               SizedBox(width: 8),
               Text(
-                "🚀 Enhanced iOS Face Detection Tips",
+                "💡 Face Detection Tips",
                 style: TextStyle(color: Colors.white, fontSize: 16),
               ),
             ],
@@ -1468,7 +1396,7 @@ class _RegisterFaceViewState extends State<RegisterFaceView> {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text(
-                "For optimal enhanced iOS face detection:",
+                "For optimal face detection:",
                 style: TextStyle(color: Colors.white, fontWeight: FontWeight.w600),
               ),
               SizedBox(height: 12),
@@ -1482,7 +1410,7 @@ class _RegisterFaceViewState extends State<RegisterFaceView> {
               Text("• Avoid shadows on face", style: TextStyle(color: Colors.white)),
               SizedBox(height: 8),
               Text(
-                "✅ Enhanced iOS ML Kit provides superior face recognition!",
+                "✅ ML Kit provides excellent face recognition!",
                 style: TextStyle(color: Colors.green, fontSize: 12, fontWeight: FontWeight.bold),
               ),
             ],

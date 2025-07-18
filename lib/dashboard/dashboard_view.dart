@@ -8,6 +8,8 @@ import 'package:cloud_functions/cloud_functions.dart';
 import 'package:geodesy/geodesy.dart';
 import 'package:flutter/material.dart';
 import 'package:face_auth/services/overtime_approver_service.dart';
+import 'package:face_auth/authenticate_face/authentication_success_screen.dart';
+
 import 'package:flutter/foundation.dart';
 import 'package:face_auth/services/overtime_approver_service.dart';
 import 'package:flutter/foundation.dart';
@@ -3027,174 +3029,174 @@ class _DashboardViewState extends State<DashboardView>
   }
 
   Future<void> _handleCheckInOut() async {
-    if (_isAuthenticating) {
-      return;
-    }
-
-    await _checkGeofenceStatus();
-
-    if (!_isCheckedIn) {
-      setState(() {
-        _isAuthenticating = true;
-      });
-
-      showDialog(
-        context: context,
-        barrierDismissible: false,
-        builder: (context) {
-          return WillPopScope(
-            onWillPop: () async => false,
-            child: Dialog(
-              backgroundColor: Colors.transparent,
-              elevation: 0,
-              child: Container(
-                width: double.infinity,
-                height: MediaQuery.of(context).size.height * 0.8,
-                child: AuthenticateFaceView(
-                  employeeId: widget.employeeId,
-                  onAuthenticationComplete: (bool success) async {
-                    setState(() {
-                      _isAuthenticating = false;
-                    });
-
-                    Navigator.of(context).pop();
-
-                    if (success) {
-                      Position? currentPosition = await GeofenceUtil.getCurrentPosition();
-
-                      await CheckInOutHandler.handleOffLocationAction(
-                        context: context,
-                        employeeId: widget.employeeId,
-                        employeeName: _userData?['name'] ?? 'Employee',
-                        isWithinGeofence: _isWithinGeofence,
-                        currentPosition: currentPosition,
-                        isCheckIn: true,
-                        onRegularAction: () async {
-                          bool checkInSuccess = await _attendanceRepository.recordCheckIn(
-                            employeeId: widget.employeeId,
-                            checkInTime: DateTime.now(),
-                            locationId: _nearestLocation?.id ?? 'default',
-                            locationName: _nearestLocation?.name ?? 'Unknown',
-                            locationLat: currentPosition?.latitude ?? _nearestLocation!.latitude,
-                            locationLng: currentPosition?.longitude ?? _nearestLocation!.longitude,
-                          );
-
-                          if (checkInSuccess) {
-                            setState(() {
-                              _isCheckedIn = true;
-                              _checkInTime = DateTime.now();
-
-                              if (_connectivityService.currentStatus == ConnectionStatus.offline) {
-                                _needsSync = true;
-                              }
-                            });
-
-                            CustomSnackBar.successSnackBar("Checked in successfully at $_currentTime");
-
-                            _fetchTodaysActivity();
-                          } else {
-                            CustomSnackBar.errorSnackBar("Failed to record check-in. Please try again.");
-                          }
-                        },
-                      );
-                    } else {
-                      CustomSnackBar.errorSnackBar("Face authentication failed. Check-in canceled.");
-                    }
-                  },
-                ),
-              ),
-            ),
-          );
-        },
-      ).then((_) {
-        if (_isAuthenticating) {
-          setState(() {
-            _isAuthenticating = false;
-          });
-        }
-      });
-    } else {
-      setState(() {
-        _isAuthenticating = true;
-      });
-
-      Position? currentPosition = await GeofenceUtil.getCurrentPosition();
-
-      showDialog(
-        context: context,
-        barrierDismissible: false,
-        builder: (BuildContext context) {
-          return WillPopScope(
-            onWillPop: () async => false,
-            child: Dialog(
-              backgroundColor: Colors.transparent,
-              elevation: 0,
-              child: Container(
-                width: double.infinity,
-                height: MediaQuery.of(context).size.height * 0.8,
-                child: AuthenticateFaceView(
-                  employeeId: widget.employeeId,
-                  onAuthenticationComplete: (bool success) async {
-                    setState(() {
-                      _isAuthenticating = false;
-                    });
-
-                    Navigator.of(context).pop();
-
-                    if (success) {
-                      Position? currentPosition = await GeofenceUtil.getCurrentPosition();
-
-                      await CheckInOutHandler.handleOffLocationAction(
-                        context: context,
-                        employeeId: widget.employeeId,
-                        employeeName: _userData?['name'] ?? 'Employee',
-                        isWithinGeofence: _isWithinGeofence,
-                        currentPosition: currentPosition,
-                        isCheckIn: false,
-                        onRegularAction: () async {
-                          bool checkOutSuccess = await _attendanceRepository.recordCheckOut(
-                            employeeId: widget.employeeId,
-                            checkOutTime: DateTime.now(),
-                          );
-
-                          if (checkOutSuccess) {
-                            setState(() {
-                              _isCheckedIn = false;
-                              _checkInTime = null;
-
-                              if (_connectivityService.currentStatus == ConnectionStatus.offline) {
-                                _needsSync = true;
-                              }
-                            });
-
-                            CustomSnackBar.successSnackBar("Checked out successfully at $_currentTime");
-
-                            await _fetchAttendanceStatus();
-                            await _fetchTodaysActivity();
-                          } else {
-                            CustomSnackBar.errorSnackBar("Failed to record check-out. Please try again.");
-                          }
-                        },
-                      );
-                    } else {
-                      CustomSnackBar.errorSnackBar("Face authentication failed. Check-out canceled.");
-                    }
-                  },
-                ),
-              ),
-            ),
-          );
-        },
-      ).then((_) {
-        if (_isAuthenticating) {
-          setState(() {
-            _isAuthenticating = false;
-          });
-        }
-      });
-    }
+  if (_isAuthenticating || !mounted) {
+    return;
   }
 
+  await _checkGeofenceStatus();
+
+  if (!_isCheckedIn) {
+    // Check In Flow
+    if (!mounted) return;
+    setState(() {
+      _isAuthenticating = true;
+    });
+
+    // Navigate to full screen authentication
+    final result = await Navigator.of(context).push<bool>(
+      MaterialPageRoute(
+        builder: (context) => AuthenticateFaceView(
+          employeeId: widget.employeeId,
+          actionType: 'check_in',
+          onAuthenticationComplete: (bool success) {
+            // Don't pop here - let the authentication screen handle its own navigation
+            if (success) {
+              // Handle success in the then() block below
+            }
+          },
+        ),
+      ),
+    );
+
+    // Handle result after navigation completes
+    if (!mounted) return;
+    
+    setState(() {
+      _isAuthenticating = false;
+    });
+
+    if (result == true) {
+      // Authentication was successful
+      Position? currentPosition = await GeofenceUtil.getCurrentPosition();
+
+      await CheckInOutHandler.handleOffLocationAction(
+        context: context,
+        employeeId: widget.employeeId,
+        employeeName: _userData?['name'] ?? 'Employee',
+        isWithinGeofence: _isWithinGeofence,
+        currentPosition: currentPosition,
+        isCheckIn: true,
+        onRegularAction: () async {
+          bool checkInSuccess = await _attendanceRepository.recordCheckIn(
+            employeeId: widget.employeeId,
+            checkInTime: DateTime.now(),
+            locationId: _nearestLocation?.id ?? 'default',
+            locationName: _nearestLocation?.name ?? 'Unknown',
+            locationLat: currentPosition?.latitude ?? _nearestLocation!.latitude,
+            locationLng: currentPosition?.longitude ?? _nearestLocation!.longitude,
+          );
+
+          if (checkInSuccess && mounted) {
+            setState(() {
+              _isCheckedIn = true;
+              _checkInTime = DateTime.now();
+
+              if (_connectivityService.currentStatus == ConnectionStatus.offline) {
+                _needsSync = true;
+              }
+            });
+
+            // Show success screen
+            Navigator.of(context).push(
+              MaterialPageRoute(
+                builder: (context) => AuthenticationSuccessScreen(
+                  employeeName: _userData?['name'] ?? 'Employee',
+                  employeeId: widget.employeeId,
+                  actionType: 'check_in',
+                  similarityScore: '95.0',
+                ),
+              ),
+            );
+
+            CustomSnackBar.successSnackBar("Checked in successfully at $_currentTime");
+            _fetchTodaysActivity();
+          } else if (mounted) {
+            CustomSnackBar.errorSnackBar("Failed to record check-in. Please try again.");
+          }
+        },
+      );
+    }
+  } else {
+    // Check Out Flow
+    if (!mounted) return;
+    setState(() {
+      _isAuthenticating = true;
+    });
+
+    // Navigate to full screen authentication
+    final result = await Navigator.of(context).push<bool>(
+      MaterialPageRoute(
+        builder: (context) => AuthenticateFaceView(
+          employeeId: widget.employeeId,
+          actionType: 'check_out',
+          onAuthenticationComplete: (bool success) {
+            // Don't pop here - let the authentication screen handle its own navigation
+            if (success) {
+              // Handle success in the then() block below
+            }
+          },
+        ),
+      ),
+    );
+
+    // Handle result after navigation completes
+    if (!mounted) return;
+    
+    setState(() {
+      _isAuthenticating = false;
+    });
+
+    if (result == true) {
+      // Authentication was successful
+      Position? currentPosition = await GeofenceUtil.getCurrentPosition();
+
+      await CheckInOutHandler.handleOffLocationAction(
+        context: context,
+        employeeId: widget.employeeId,
+        employeeName: _userData?['name'] ?? 'Employee',
+        isWithinGeofence: _isWithinGeofence,
+        currentPosition: currentPosition,
+        isCheckIn: false,
+        onRegularAction: () async {
+          bool checkOutSuccess = await _attendanceRepository.recordCheckOut(
+            employeeId: widget.employeeId,
+            checkOutTime: DateTime.now(),
+          );
+
+          if (checkOutSuccess && mounted) {
+            setState(() {
+              _isCheckedIn = false;
+              _checkInTime = null;
+
+              if (_connectivityService.currentStatus == ConnectionStatus.offline) {
+                _needsSync = true;
+              }
+            });
+
+            // Show success screen
+            Navigator.of(context).push(
+              MaterialPageRoute(
+                builder: (context) => AuthenticationSuccessScreen(
+                  employeeName: _userData?['name'] ?? 'Employee',
+                  employeeId: widget.employeeId,
+                  actionType: 'check_out',
+                  similarityScore: '95.0',
+                ),
+              ),
+            );
+
+            CustomSnackBar.successSnackBar("Checked out successfully at $_currentTime");
+
+            await _fetchAttendanceStatus();
+            await _fetchTodaysActivity();
+          } else if (mounted) {
+            CustomSnackBar.errorSnackBar("Failed to record check-out. Please try again.");
+          }
+        },
+      );
+    }
+  }
+}
   Future<void> _refreshDashboard() async {
     await _fetchUserData();
     await _fetchAttendanceStatus();

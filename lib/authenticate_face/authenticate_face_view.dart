@@ -1,4 +1,4 @@
-// lib/authenticate_face/authenticate_face_view.dart - Production Ready
+// lib/authenticate_face/authenticate_face_view.dart - Full Screen Fixed Version
 
 import 'dart:convert';
 import 'dart:developer';
@@ -45,7 +45,7 @@ class AuthenticateFaceView extends StatefulWidget {
 }
 
 class _AuthenticateFaceViewState extends State<AuthenticateFaceView> {
-  // ================ CORE SERVICES ================
+  // Core Services
   final AudioPlayer _audioPlayer = AudioPlayer();
   final FaceDetector _faceDetector = FaceDetector(
     options: FaceDetectorOptions(
@@ -54,7 +54,7 @@ class _AuthenticateFaceViewState extends State<AuthenticateFaceView> {
     ),
   );
 
-  // ================ AUTHENTICATION STATE ================
+  // Authentication State
   FaceFeatures? _faceFeatures;
   var image1 = regula.MatchFacesImage();
   var image2 = regula.MatchFacesImage();
@@ -69,16 +69,10 @@ class _AuthenticateFaceViewState extends State<AuthenticateFaceView> {
   bool _isOfflineMode = false;
   bool _hasStoredFace = false;
 
-  // ================ DEBUG STATE ================
-  List<String> _debugLogs = [];
-  Map<String, dynamic> _authenticationDebugData = {};
-  bool _showDebugInfo = false;
-
   @override
   void initState() {
     super.initState();
-    print("🚀 AuthenticateFaceView initialized for employee: ${widget.employeeId}");
-    _addDebugLog("🚀 Authentication view initialized");
+    print("Authentication view initialized for employee: ${widget.employeeId}");
     _checkConnectivity();
     _fetchEmployeeData();
     _checkStoredImage();
@@ -92,33 +86,21 @@ class _AuthenticateFaceViewState extends State<AuthenticateFaceView> {
     super.dispose();
   }
 
-  // ================ DEBUG LOGGING ================
-  void _addDebugLog(String message) {
-    String timestampedMessage = "${DateTime.now().toIso8601String().substring(11, 19)} - $message";
-    setState(() {
-      _debugLogs.add(timestampedMessage);
-      if (_debugLogs.length > 50) _debugLogs.removeAt(0);
-    });
-    print("AUTH_DEBUG: $timestampedMessage");
-  }
-
-  // ================ CONNECTIVITY CHECK ================
+  // Connectivity Check
   Future<void> _checkConnectivity() async {
     try {
       var connectivityResult = await (Connectivity().checkConnectivity());
       setState(() {
         _isOfflineMode = connectivityResult == ConnectivityResult.none;
       });
-      _addDebugLog("📶 Connectivity status: ${_isOfflineMode ? 'Offline' : 'Online'}");
     } catch (e) {
       setState(() {
         _isOfflineMode = true;
       });
-      _addDebugLog("⚠️ Connectivity check failed, assuming offline: $e");
     }
   }
 
-  // ================ STORED FACE CHECK ================
+  // Stored Face Check
   Future<void> _checkStoredImage() async {
     try {
       if (widget.employeeId == null) return;
@@ -138,18 +120,14 @@ class _AuthenticateFaceViewState extends State<AuthenticateFaceView> {
                         (secureFeatures != null && secureFeatures.isNotEmpty) ||
                         faceRegistered;
       });
-
-      _addDebugLog("📱 Stored face check for ${widget.employeeId}: $_hasStoredFace");
-
     } catch (e) {
-      _addDebugLog("❌ Error checking stored image: $e");
       setState(() {
         _hasStoredFace = false;
       });
     }
   }
 
-  // ================ AUDIO FEEDBACK ================
+  // Audio Feedback
   AudioPlayer get _playScanningAudio => _audioPlayer
     ..setReleaseMode(ReleaseMode.loop)
     ..play(AssetSource("scan_beep.wav"));
@@ -164,273 +142,268 @@ class _AuthenticateFaceViewState extends State<AuthenticateFaceView> {
     ..setReleaseMode(ReleaseMode.release)
     ..play(AssetSource("failed.mp3"));
 
-  // ================ UI BUILD ================
   @override
   Widget build(BuildContext context) {
     CustomSnackBar.context = context;
 
     return Scaffold(
-      extendBodyBehindAppBar: true,
-      appBar: AppBar(
-        centerTitle: true,
-        backgroundColor: appBarColor,
-        title: Text(widget.isRegistrationValidation 
-            ? "Verify Your Face" 
-            : "🔐 Face Authentication"),
-        elevation: 0,
-        actions: [
-          IconButton(
-            icon: Icon(
-              _showDebugInfo ? Icons.bug_report : Icons.bug_report_outlined,
-              color: _showDebugInfo ? Colors.yellow : Colors.white,
-            ),
-            onPressed: () {
-              setState(() {
-                _showDebugInfo = !_showDebugInfo;
-              });
-            },
-          ),
-          Container(
-            margin: const EdgeInsets.only(right: 16),
-            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-            decoration: BoxDecoration(
-              color: _isOfflineMode ? Colors.orange : Colors.green,
-              borderRadius: BorderRadius.circular(12),
-            ),
-            child: Text(
-              _isOfflineMode ? "Offline" : "Online",
-              style: const TextStyle(color: Colors.white, fontSize: 10),
-            ),
-          ),
-        ],
+      backgroundColor: const Color(0xFF0A0E1A),
+    appBar: AppBar(
+  backgroundColor: Colors.transparent,
+  elevation: 0,
+  leading: IconButton(
+    icon: const Icon(Icons.arrow_back, color: Colors.white),
+    onPressed: () {
+      if (widget.onAuthenticationComplete != null) {
+        widget.onAuthenticationComplete!(false);
+      }
+      Navigator.of(context).pop(false); // Return false when manually closed
+    },
+  ),
+  title: Text(
+    widget.isRegistrationValidation 
+        ? "Verify Your Face" 
+        : "Face Authentication",
+    style: const TextStyle(
+      color: Colors.white,
+      fontSize: 20,
+      fontWeight: FontWeight.bold,
+    ),
+  ),
+  centerTitle: true,
+  actions: [
+    Container(
+      margin: const EdgeInsets.only(right: 16),
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+      decoration: BoxDecoration(
+        color: _isOfflineMode ? Colors.orange : Colors.green,
+        borderRadius: BorderRadius.circular(12),
       ),
+      child: Text(
+        _isOfflineMode ? "Offline" : "Online",
+        style: const TextStyle(color: Colors.white, fontSize: 12),
+      ),
+    ),
+  ],
+),
       body: Container(
+        width: double.infinity,
+        height: double.infinity,
         decoration: const BoxDecoration(
           gradient: LinearGradient(
             begin: Alignment.topCenter,
             end: Alignment.bottomCenter,
             colors: [
-              scaffoldTopGradientClr,
-              scaffoldBottomGradientClr,
+              Color(0xFF0A0E1A),
+              Color(0xFF1E293B),
             ],
           ),
         ),
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.end,
-          children: [
-            Container(
-              height: MediaQuery.of(context).size.height * 0.82,
-              width: double.infinity,
-              padding: const EdgeInsets.fromLTRB(20, 25, 20, 20),
-              decoration: BoxDecoration(
-                color: overlayContainerClr,
-                borderRadius: BorderRadius.only(
-                  topLeft: Radius.circular(30),
-                  topRight: Radius.circular(30),
+        child: SafeArea(
+          child: Column(
+            children: [
+              // Status Indicator
+              _buildStatusIndicator(),
+              
+              const SizedBox(height: 20),
+              
+              // Camera View
+              Expanded(
+                child: Container(
+                  margin: const EdgeInsets.symmetric(horizontal: 20),
+                  decoration: BoxDecoration(
+                    borderRadius: BorderRadius.circular(20),
+                    border: Border.all(
+                      color: _canAuthenticate 
+                          ? Colors.green 
+                          : Colors.white.withOpacity(0.3),
+                      width: 3,
+                    ),
+                  ),
+                  child: ClipRRect(
+                    borderRadius: BorderRadius.circular(17),
+                    child: Stack(
+                      children: [
+                        CameraView(
+                          onImage: (image) {
+                            _setImage(image);
+                          },
+                          onInputImage: (inputImage) async {
+                            await _processInputImage(inputImage);
+                          },
+                        ),
+                        if (isMatching)
+                          Container(
+                            color: Colors.black.withOpacity(0.8),
+                            child: const Center(
+                              child: Column(
+                                mainAxisAlignment: MainAxisAlignment.center,
+                                children: [
+                                  CircularProgressIndicator(
+                                    color: Colors.white,
+                                    strokeWidth: 4,
+                                  ),
+                                  SizedBox(height: 24),
+                                  Text(
+                                    "Verifying face...",
+                                    style: TextStyle(
+                                      color: Colors.white,
+                                      fontSize: 18,
+                                      fontWeight: FontWeight.w600,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ),
+                      ],
+                    ),
+                  ),
                 ),
               ),
-              child: Column(
-                children: [
-                  _buildStatusIndicator(),
-                  if (_showDebugInfo) _buildDebugPanel(),
-                  Expanded(
-                    child: Container(
-                      decoration: BoxDecoration(
-                        borderRadius: BorderRadius.circular(20),
-                        border: Border.all(
-                          color: _canAuthenticate 
-                              ? Colors.green 
-                              : Colors.white.withOpacity(0.3),
-                          width: 2,
-                        ),
-                      ),
-                      child: ClipRRect(
-                        borderRadius: BorderRadius.circular(18),
-                        child: Stack(
-                          children: [
-                            CameraView(
-                              onImage: (image) {
-                                _setImage(image);
-                              },
-                              onInputImage: (inputImage) async {
-                                await _processInputImage(inputImage);
-                              },
+              
+              const SizedBox(height: 30),
+              
+              // Action Button or Status Message
+              Container(
+                margin: const EdgeInsets.symmetric(horizontal: 20),
+                child: _canAuthenticate && !isMatching
+                    ? SizedBox(
+                        width: double.infinity,
+                        height: 56,
+                        child: ElevatedButton(
+                          onPressed: _authenticate,
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: const Color(0xFF4CAF50),
+                            foregroundColor: Colors.white,
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(16),
                             ),
-                            if (isMatching)
-                              Container(
-                                color: Colors.black.withOpacity(0.7),
-                                child: const Center(
-                                  child: Column(
-                                    mainAxisAlignment: MainAxisAlignment.center,
-                                    children: [
-                                      CircularProgressIndicator(
-                                        color: accentColor,
-                                      ),
-                                      SizedBox(height: 16),
-                                      Text(
-                                        "🔐 Verifying face...",
-                                        style: TextStyle(
-                                          color: Colors.white,
-                                          fontSize: 16,
-                                        ),
-                                      ),
-                                    ],
-                                  ),
+                            elevation: 8,
+                          ),
+                          child: Row(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              const Icon(Icons.face, size: 24),
+                              const SizedBox(width: 12),
+                              Text(
+                                widget.isRegistrationValidation 
+                                    ? "Verify Face" 
+                                    : "Authenticate",
+                                style: const TextStyle(
+                                  fontSize: 18,
+                                  fontWeight: FontWeight.bold,
                                 ),
                               ),
+                            ],
+                          ),
+                        ),
+                      )
+                    : Container(
+                        padding: const EdgeInsets.all(24),
+                        decoration: BoxDecoration(
+                          color: Colors.white.withOpacity(0.1),
+                          borderRadius: BorderRadius.circular(16),
+                          border: Border.all(
+                            color: Colors.white.withOpacity(0.2),
+                          ),
+                        ),
+                        child: Column(
+                          children: [
+                            Icon(
+                              _getStatusIcon(),
+                              color: _getStatusColor(),
+                              size: 32,
+                            ),
+                            const SizedBox(height: 12),
+                            Text(
+                              _getStatusText(),
+                              style: TextStyle(
+                                color: _getStatusColor(),
+                                fontSize: 16,
+                                fontWeight: FontWeight.w600,
+                              ),
+                              textAlign: TextAlign.center,
+                            ),
                           ],
                         ),
                       ),
-                    ),
-                  ),
-                  const SizedBox(height: 20),
-                  if (_canAuthenticate && !isMatching)
-                    CustomButton(
-                      text: widget.isRegistrationValidation 
-                          ? "Verify Face" 
-                          : "🔐 Authenticate",
-                      onTap: _authenticate,
-                    ),
-                  if (!_canAuthenticate && !isMatching)
-                    Container(
-                      padding: const EdgeInsets.all(20),
-                      child: Column(
-                        children: [
-                          Text(
-                            "Position your face clearly in the camera",
-                            style: const TextStyle(
-                              color: Colors.white70,
-                              fontSize: 14,
-                            ),
-                            textAlign: TextAlign.center,
-                          ),
-                          if (_isOfflineMode && !_hasStoredFace)
-                            Padding(
-                              padding: const EdgeInsets.only(top: 8),
-                              child: Text(
-                                "⚠️ Offline mode: No stored face data found",
-                                style: TextStyle(
-                                  color: Colors.orange,
-                                  fontSize: 12,
-                                ),
-                                textAlign: TextAlign.center,
-                              ),
-                            ),
-                        ],
-                      ),
-                    ),
-                ],
               ),
-            ),
-          ],
+              
+              const SizedBox(height: 30),
+            ],
+          ),
         ),
       ),
     );
   }
 
-  // ================ STATUS INDICATOR ================
   Widget _buildStatusIndicator() {
     return Container(
-      padding: const EdgeInsets.all(16),
-      margin: const EdgeInsets.only(bottom: 20),
+      margin: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
+      padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
-        color: _getStatusColor().withOpacity(0.1),
-        borderRadius: BorderRadius.circular(12),
+        color: Colors.white.withOpacity(0.1),
+        borderRadius: BorderRadius.circular(16),
         border: Border.all(
-          color: _getStatusColor().withOpacity(0.3),
-          width: 1,
+          color: Colors.white.withOpacity(0.2),
         ),
       ),
       child: Row(
         children: [
-          Icon(
-            _getStatusIcon(),
-            color: _getStatusColor(),
-            size: 20,
+          Container(
+            padding: const EdgeInsets.all(8),
+            decoration: BoxDecoration(
+              color: _getStatusColor().withOpacity(0.2),
+              borderRadius: BorderRadius.circular(8),
+            ),
+            child: Icon(
+              _getStatusIcon(),
+              color: _getStatusColor(),
+              size: 20,
+            ),
           ),
-          const SizedBox(width: 12),
+          const SizedBox(width: 16),
           Expanded(
-            child: Text(
-              _getStatusText(),
-              style: TextStyle(
-                color: _getStatusColor(),
-                fontSize: 14,
-                fontWeight: FontWeight.w500,
-              ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  "Authentication Status",
+                  style: TextStyle(
+                    color: Colors.white.withOpacity(0.7),
+                    fontSize: 12,
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  _getStatusText(),
+                  style: TextStyle(
+                    color: _getStatusColor(),
+                    fontSize: 16,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ],
             ),
           ),
           if (_hasStoredFace)
-            Icon(
-              Icons.storage,
-              color: Colors.green,
-              size: 16,
-            ),
-          if (_showDebugInfo)
-            Icon(
-              Icons.bug_report,
-              color: Colors.yellow,
-              size: 16,
-            ),
-        ],
-      ),
-    );
-  }
-
-  // ================ DEBUG PANEL ================
-  Widget _buildDebugPanel() {
-    return Container(
-      margin: const EdgeInsets.only(bottom: 16),
-      padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        color: Colors.black.withOpacity(0.3),
-        borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: Colors.yellow.withOpacity(0.3)),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              const Icon(Icons.bug_report, color: Colors.yellow, size: 16),
-              const SizedBox(width: 8),
-              const Text(
-                "🔐 Authentication Debug Panel",
-                style: TextStyle(color: Colors.yellow, fontSize: 14, fontWeight: FontWeight.bold),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+              decoration: BoxDecoration(
+                color: Colors.green.withOpacity(0.2),
+                borderRadius: BorderRadius.circular(8),
               ),
-              const Spacer(),
-              TextButton(
-                onPressed: () {
-                  setState(() {
-                    _debugLogs.clear();
-                    _authenticationDebugData.clear();
-                  });
-                },
-                child: const Text("Clear", style: TextStyle(color: Colors.orange, fontSize: 12)),
+              child: const Text(
+                "Ready",
+                style: TextStyle(
+                  color: Colors.green,
+                  fontSize: 10,
+                  fontWeight: FontWeight.bold,
+                ),
               ),
-            ],
-          ),
-          const SizedBox(height: 8),
-          Container(
-            height: 100,
-            decoration: BoxDecoration(
-              color: Colors.black.withOpacity(0.2),
-              borderRadius: BorderRadius.circular(4),
             ),
-            child: ListView.builder(
-              padding: const EdgeInsets.all(4),
-              itemCount: _debugLogs.length,
-              itemBuilder: (context, index) {
-                return Text(
-                  _debugLogs[index],
-                  style: const TextStyle(
-                    color: Colors.white,
-                    fontSize: 10,
-                    fontFamily: 'monospace',
-                  ),
-                );
-              },
-            ),
-          ),
         ],
       ),
     );
@@ -438,15 +411,15 @@ class _AuthenticateFaceViewState extends State<AuthenticateFaceView> {
 
   String _getStatusText() {
     if (_hasAuthenticated) {
-      return "✅ Authentication successful!";
+      return "Authentication successful!";
     } else if (isMatching) {
-      return "🔐 Verification in progress...";
+      return "Verification in progress...";
     } else if (_canAuthenticate) {
-      return "🔐 Ready for authentication";
+      return "Ready for authentication";
     } else if (_isOfflineMode && !_hasStoredFace) {
-      return "📱 Offline mode: No stored face data";
+      return "Offline mode: No stored face data";
     } else {
-      return "📸 Position your face in the camera";
+      return "Position your face in the camera";
     }
   }
 
@@ -478,7 +451,7 @@ class _AuthenticateFaceViewState extends State<AuthenticateFaceView> {
     }
   }
 
-  // ================ IMAGE PROCESSING ================
+  // Image Processing
   Future<void> _setImage(Uint8List imageToAuthenticate) async {
     image2.bitmap = base64Encode(imageToAuthenticate);
     image2.imageType = regula.ImageType.PRINTED;
@@ -486,14 +459,11 @@ class _AuthenticateFaceViewState extends State<AuthenticateFaceView> {
     setState(() {
       _canAuthenticate = true;
     });
-    _addDebugLog("📸 Image captured and set for authentication");
   }
 
   Future<void> _processInputImage(InputImage inputImage) async {
     try {
       setState(() => isMatching = true);
-      
-      _addDebugLog("🔍 Processing input image for face detection...");
       
       _faceFeatures = await extractFaceFeatures(inputImage, _faceDetector);
       
@@ -501,37 +471,19 @@ class _AuthenticateFaceViewState extends State<AuthenticateFaceView> {
         bool isValid = validateFaceFeatures(_faceFeatures!);
         double qualityScore = getFaceFeatureQuality(_faceFeatures!);
         
-        _addDebugLog("✅ Face detected with quality score: ${(qualityScore * 100).toStringAsFixed(1)}%");
-        _addDebugLog("📊 Face features are ${isValid ? 'valid' : 'needs improvement'} for authentication");
-        
-        _authenticationDebugData['lastFaceDetection'] = {
-          'detected': true,
-          'qualityScore': qualityScore,
-          'isValid': isValid,
-          'timestamp': DateTime.now().toIso8601String(),
-          'featuresCount': _countDetectedLandmarks(_faceFeatures!),
-        };
-      } else {
-        _addDebugLog("❌ No face detected during authentication");
-        _authenticationDebugData['lastFaceDetection'] = {
-          'detected': false,
-          'timestamp': DateTime.now().toIso8601String(),
-        };
+        print("Face detected with quality score: ${(qualityScore * 100).toStringAsFixed(1)}%");
       }
       
       setState(() => isMatching = false);
     } catch (e) {
       setState(() => isMatching = false);
-      _addDebugLog("❌ Error processing input image: $e");
       debugPrint("Error processing input image: $e");
     }
   }
 
-  // ================ EMPLOYEE DATA FETCHING ================
+  // Employee Data Fetching
   Future<void> _fetchEmployeeData() async {
     if (widget.employeeId == null) return;
-
-    _addDebugLog("📊 Fetching employee data for: ${widget.employeeId}");
 
     try {
       SharedPreferences prefs = await SharedPreferences.getInstance();
@@ -542,13 +494,10 @@ class _AuthenticateFaceViewState extends State<AuthenticateFaceView> {
         setState(() {
           employeeData = data;
         });
-        _addDebugLog("✅ Employee data loaded from local storage");
       }
 
       if (!_isOfflineMode) {
         try {
-          _addDebugLog("🌐 Attempting to fetch fresh data from Firestore...");
-          
           DocumentSnapshot doc = await FirebaseFirestore.instance
               .collection('employees')
               .doc(widget.employeeId)
@@ -557,32 +506,24 @@ class _AuthenticateFaceViewState extends State<AuthenticateFaceView> {
 
           if (doc.exists) {
             Map<String, dynamic> data = doc.data() as Map<String, dynamic>;
-            
             await prefs.setString('user_data_${widget.employeeId}', jsonEncode(data));
             
             setState(() {
               employeeData = data;
             });
-            _addDebugLog("✅ Employee data updated from Firestore");
-          } else {
-            _addDebugLog("⚠️ Employee document not found in Firestore");
           }
         } catch (e) {
-          _addDebugLog("⚠️ Firestore fetch failed, using local data: $e");
+          print("Firestore fetch failed, using local data: $e");
         }
-      } else {
-        _addDebugLog("📱 Offline mode: Using local employee data only");
       }
     } catch (e) {
-      _addDebugLog("❌ Error fetching employee data: $e");
+      print("Error fetching employee data: $e");
     }
   }
 
-  // ================ AUTHENTICATION LOGIC ================
+  // Authentication Logic
   Future<void> _authenticate() async {
     if (!_canAuthenticate || isMatching) return;
-
-    _addDebugLog("🔐 Starting authentication process...");
 
     setState(() {
       isMatching = true;
@@ -594,7 +535,6 @@ class _AuthenticateFaceViewState extends State<AuthenticateFaceView> {
     try {
       await _matchFaceWithStored();
     } catch (e) {
-      _addDebugLog("❌ Authentication error: $e");
       debugPrint("Authentication error: $e");
       setState(() {
         isMatching = false;
@@ -607,44 +547,35 @@ class _AuthenticateFaceViewState extends State<AuthenticateFaceView> {
     }
   }
 
-  // ================ CORE FACE MATCHING LOGIC ================
+  // Core Face Matching Logic
   Future<void> _matchFaceWithStored() async {
     try {
-      _addDebugLog("🔍 Face matching started...");
-      
       String? storedImage;
 
       if (employeeData != null && employeeData!['image'] != null) {
         storedImage = employeeData!['image'];
-        _addDebugLog("📱 Using face image from employee data");
       } else {
         SharedPreferences prefs = await SharedPreferences.getInstance();
         storedImage = prefs.getString('secure_face_image_${widget.employeeId}') ??
                      prefs.getString('employee_image_${widget.employeeId}');
-        _addDebugLog("📱 Using face image from local storage");
       }
 
       if (storedImage == null) {
-        _addDebugLog("❌ No stored face image found - checking cloud recovery...");
         await _attemptCloudRecovery();
         return;
       }
 
       if (storedImage.contains('data:image') && storedImage.contains(',')) {
         storedImage = storedImage.split(',')[1];
-        _addDebugLog("🧹 Cleaned stored image data URL format");
       }
 
       if (_isOfflineMode) {
-        _addDebugLog("📱 Offline mode - using local matching");
         await _performOfflineAuthentication(storedImage);
       } else {
-        _addDebugLog("🌐 Online mode - using Regula SDK matching");
         await _performOnlineAuthentication(storedImage);
       }
 
     } catch (e) {
-      _addDebugLog("❌ Error in face matching: $e");
       setState(() {
         isMatching = false;
       });
@@ -656,11 +587,9 @@ class _AuthenticateFaceViewState extends State<AuthenticateFaceView> {
     }
   }
 
-  // ================ ONLINE AUTHENTICATION ================
+  // Online Authentication
   Future<void> _performOnlineAuthentication(String storedImage) async {
     try {
-      _addDebugLog("🌐 Performing online authentication with Regula SDK...");
-      
       image1.bitmap = storedImage;
       image1.imageType = regula.ImageType.PRINTED;
 
@@ -683,120 +612,69 @@ class _AuthenticateFaceViewState extends State<AuthenticateFaceView> {
             : "0.0";
       });
 
-      _addDebugLog("📊 Online similarity: $_similarity%");
-
       if (_similarity != "0.0" && double.parse(_similarity) > 80.0) {
-        _addDebugLog("✅ Online authentication SUCCESS!");
         _handleSuccessfulAuthentication();
       } else {
-        _addDebugLog("❌ Online authentication FAILED - similarity too low");
         _handleFailedAuthentication("Face doesn't match. Please try again.");
       }
     } catch (e) {
-      _addDebugLog("❌ Online authentication failed, falling back to offline: $e");
       await _performOfflineAuthentication(storedImage);
     }
   }
 
-  // ================ OFFLINE AUTHENTICATION ================
+  // Offline Authentication
   Future<void> _performOfflineAuthentication(String storedImage) async {
     try {
-      _addDebugLog("📱 Performing offline authentication...");
-      
       if (_faceFeatures == null) {
-        _addDebugLog("❌ No current face features detected");
         _handleFailedAuthentication("No face detected. Please try again with better lighting.");
         return;
       }
 
-      // Get stored features
       FaceFeatures? storedFeatures = await _getStoredFaceFeatures();
       
       if (storedFeatures == null) {
-        _addDebugLog("❌ No stored face features found - attempting cloud recovery");
         await _attemptCloudRecovery();
         return;
       }
 
-      _addDebugLog("✅ Successfully retrieved stored face features");
-
-      // Compare face features
       double matchPercentage = await _compareFaceFeatures(storedFeatures, _faceFeatures!);
       
       setState(() {
         _similarity = matchPercentage.toStringAsFixed(2);
       });
 
-      _addDebugLog("📊 Offline similarity: $_similarity%");
-      
-      // Set threshold for offline authentication
       double threshold = 60.0;
-      _addDebugLog("🎯 Authentication threshold: ${threshold.toStringAsFixed(1)}%");
-
-      _authenticationDebugData['lastAuthentication'] = {
-        'method': 'offline_local',
-        'similarity': matchPercentage,
-        'threshold': threshold,
-        'successful': matchPercentage >= threshold,
-        'timestamp': DateTime.now().toIso8601String(),
-      };
 
       if (matchPercentage >= threshold) {
-        _addDebugLog("✅ OFFLINE AUTHENTICATION SUCCESSFUL!");
         _handleSuccessfulAuthentication();
       } else {
-        _addDebugLog("❌ Offline authentication failed");
-        _addDebugLog("🔍 DEBUG: stored features summary: ${_getFeaturesDebugInfo(storedFeatures)}");
-        _addDebugLog("🔍 DEBUG: current features summary: ${_getFeaturesDebugInfo(_faceFeatures!)}");
         _handleFailedAuthentication("Face match too low (${matchPercentage.toStringAsFixed(1)}% vs ${threshold.toStringAsFixed(1)}%).");
       }
     } catch (e) {
-      _addDebugLog("❌ Offline authentication error: $e");
       _handleFailedAuthentication("Error during face matching: $e");
     }
   }
 
-  // ================ FACE COMPARISON ================
+  // Face Comparison
   Future<double> _compareFaceFeatures(FaceFeatures stored, FaceFeatures current) async {
-    _addDebugLog("🔍 Starting face comparison...");
-    
-    // Landmark comparison
     double landmarkScore = _compareLandmarks(stored, current);
-    _addDebugLog("📊 Landmark score: ${landmarkScore.toStringAsFixed(1)}%");
-    
-    // Distance comparison
     double distanceScore = _compareDistances(stored, current);
-    _addDebugLog("📊 Distance score: ${distanceScore.toStringAsFixed(1)}%");
     
-    // Use the higher of the two scores
     double finalScore = max(landmarkScore, distanceScore);
     
-    // Apply minimum quality boost
     if (finalScore > 30.0 && finalScore < 60.0) {
-      finalScore = finalScore * 1.15; // 15% boost for borderline cases
-      _addDebugLog("🆙 Applied 15% boost for borderline case");
+      finalScore = finalScore * 1.15;
     }
     
-    finalScore = min(finalScore, 100.0); // Cap at 100%
-    
-    _addDebugLog("🎯 FINAL SCORE: ${finalScore.toStringAsFixed(2)}%");
-    _addDebugLog("   - Landmark: ${landmarkScore.toStringAsFixed(1)}%");
-    _addDebugLog("   - Distance: ${distanceScore.toStringAsFixed(1)}%");
-    _addDebugLog("   - Final: ${finalScore.toStringAsFixed(1)}%");
+    finalScore = min(finalScore, 100.0);
     
     return finalScore;
   }
 
-  // Compare landmarks
   double _compareLandmarks(FaceFeatures stored, FaceFeatures current) {
-    _addDebugLog("🔍 Landmark comparison...");
-    
     int matchCount = 0;
     int totalTests = 0;
-    List<String> matchedFeatures = [];
-    List<String> failedFeatures = [];
 
-    // Set reasonable tolerances
     Map<String, double> tolerances = {
       'leftEye': 50.0,
       'rightEye': 50.0,
@@ -807,56 +685,34 @@ class _AuthenticateFaceViewState extends State<AuthenticateFaceView> {
       'rightCheek': 80.0,
     };
 
-    // Eye comparison
     if (_comparePoints(stored.leftEye, current.leftEye, 'leftEye', tolerances['leftEye']!)) {
       matchCount++;
-      matchedFeatures.add('leftEye');
-    } else {
-      failedFeatures.add('leftEye');
     }
     totalTests++;
 
     if (_comparePoints(stored.rightEye, current.rightEye, 'rightEye', tolerances['rightEye']!)) {
       matchCount++;
-      matchedFeatures.add('rightEye');
-    } else {
-      failedFeatures.add('rightEye');
     }
     totalTests++;
 
-    // Nose comparison
     if (_comparePoints(stored.noseBase, current.noseBase, 'noseBase', tolerances['noseBase']!)) {
       matchCount++;
-      matchedFeatures.add('noseBase');
-    } else {
-      failedFeatures.add('noseBase');
     }
     totalTests++;
 
-    // Mouth comparison
     if (_comparePoints(stored.leftMouth, current.leftMouth, 'leftMouth', tolerances['leftMouth']!)) {
       matchCount++;
-      matchedFeatures.add('leftMouth');
-    } else {
-      failedFeatures.add('leftMouth');
     }
     totalTests++;
 
     if (_comparePoints(stored.rightMouth, current.rightMouth, 'rightMouth', tolerances['rightMouth']!)) {
       matchCount++;
-      matchedFeatures.add('rightMouth');
-    } else {
-      failedFeatures.add('rightMouth');
     }
     totalTests++;
 
-    // Additional features (if available)
     if (stored.leftCheek != null && current.leftCheek != null) {
       if (_comparePoints(stored.leftCheek, current.leftCheek, 'leftCheek', tolerances['leftCheek']!)) {
         matchCount++;
-        matchedFeatures.add('leftCheek');
-      } else {
-        failedFeatures.add('leftCheek');
       }
       totalTests++;
     }
@@ -864,26 +720,16 @@ class _AuthenticateFaceViewState extends State<AuthenticateFaceView> {
     if (stored.rightCheek != null && current.rightCheek != null) {
       if (_comparePoints(stored.rightCheek, current.rightCheek, 'rightCheek', tolerances['rightCheek']!)) {
         matchCount++;
-        matchedFeatures.add('rightCheek');
-      } else {
-        failedFeatures.add('rightCheek');
       }
       totalTests++;
     }
 
     double percentage = totalTests > 0 ? (matchCount / totalTests) * 100 : 0.0;
-    
-    _addDebugLog("📊 Landmark result: $matchCount/$totalTests matches = ${percentage.toStringAsFixed(1)}%");
-    _addDebugLog("✅ Matched: ${matchedFeatures.join(', ')}");
-    _addDebugLog("❌ Failed: ${failedFeatures.join(', ')}");
-    
     return percentage;
   }
 
-  // Point comparison
   bool _comparePoints(Points? p1, Points? p2, String featureName, double tolerance) {
     if (p1 == null || p2 == null || p1.x == null || p2.x == null || p1.y == null || p2.y == null) {
-      _addDebugLog("⚠️ $featureName: Missing coordinate data");
       return false;
     }
 
@@ -892,24 +738,15 @@ class _AuthenticateFaceViewState extends State<AuthenticateFaceView> {
             (p1.y! - p2.y!) * (p1.y! - p2.y!)
     );
 
-    bool matches = distance <= tolerance;
-    
-    _addDebugLog("📍 $featureName: distance=${distance.toStringAsFixed(1)} (tolerance=$tolerance) -> ${matches ? 'MATCH' : 'FAIL'}");
-
-    return matches;
+    return distance <= tolerance;
   }
 
-  // Distance comparison (backup algorithm)
   double _compareDistances(FaceFeatures stored, FaceFeatures current) {
-    _addDebugLog("🔍 Distance-based comparison...");
-    
     Map<String, double> storedDistances = _calculateFeatureDistances(stored);
     Map<String, double> currentDistances = _calculateFeatureDistances(current);
     
     int matchCount = 0;
     int totalDistances = 0;
-    
-    // Set tolerance
     double tolerance = 30.0;
     
     for (String distanceKey in storedDistances.keys) {
@@ -922,9 +759,6 @@ class _AuthenticateFaceViewState extends State<AuthenticateFaceView> {
           
           if (percentDiff <= tolerance) {
             matchCount++;
-            _addDebugLog("✅ Distance $distanceKey: ${percentDiff.toStringAsFixed(1)}% diff (MATCH)");
-          } else {
-            _addDebugLog("❌ Distance $distanceKey: ${percentDiff.toStringAsFixed(1)}% diff (FAIL)");
           }
           totalDistances++;
         }
@@ -932,17 +766,13 @@ class _AuthenticateFaceViewState extends State<AuthenticateFaceView> {
     }
     
     double percentage = totalDistances > 0 ? (matchCount / totalDistances) * 100 : 0.0;
-    _addDebugLog("📊 Distance comparison: $matchCount/$totalDistances = ${percentage.toStringAsFixed(1)}%");
-    
     return percentage;
   }
 
-  // Get stored face features
   Future<FaceFeatures?> _getStoredFaceFeatures() async {
     try {
       SharedPreferences prefs = await SharedPreferences.getInstance();
       
-      // Try multiple storage locations
       List<String> storageKeys = [
         'secure_face_features_${widget.employeeId}',
         'employee_face_features_${widget.employeeId}',
@@ -956,53 +786,41 @@ class _AuthenticateFaceViewState extends State<AuthenticateFaceView> {
             Map<String, dynamic> storedFeaturesMap = json.decode(storedFeaturesJson);
             FaceFeatures features = FaceFeatures.fromJson(storedFeaturesMap);
             
-            // Basic validation
             if (features.leftEye != null || features.rightEye != null || features.noseBase != null) {
-              _addDebugLog("✅ Found valid features at: $key");
               return features;
-            } else {
-              _addDebugLog("⚠️ Invalid features found at: $key, trying next...");
             }
           } catch (e) {
-            _addDebugLog("⚠️ Error parsing features from $key: $e");
             continue;
           }
         }
       }
       
-      // Try from employee data as last resort
       if (employeeData != null && employeeData!.containsKey('faceFeatures')) {
         try {
           Map<String, dynamic> featuresMap = employeeData!['faceFeatures'];
           FaceFeatures features = FaceFeatures.fromJson(featuresMap);
           
           if (features.leftEye != null || features.rightEye != null || features.noseBase != null) {
-            _addDebugLog("✅ Found valid features in employee data");
             return features;
           }
         } catch (e) {
-          _addDebugLog("⚠️ Error parsing features from employee data: $e");
+          print("Error parsing features from employee data: $e");
         }
       }
       
-      _addDebugLog("❌ No valid stored face features found anywhere");
       return null;
       
     } catch (e) {
-      _addDebugLog("❌ Error in features retrieval: $e");
       return null;
     }
   }
 
-  // ================ CLOUD RECOVERY ================
+  // Cloud Recovery
   Future<void> _attemptCloudRecovery() async {
     if (_isOfflineMode) {
-      _addDebugLog("❌ Cannot attempt cloud recovery in offline mode");
       _handleFailedAuthentication("No stored face data available and device is offline.");
       return;
     }
-
-    _addDebugLog("🌐 Attempting cloud recovery for face data...");
 
     try {
       DocumentSnapshot doc = await FirebaseFirestore.instance
@@ -1028,8 +846,6 @@ class _AuthenticateFaceViewState extends State<AuthenticateFaceView> {
           
           await prefs.setBool('face_registered_${widget.employeeId}', true);
           
-          _addDebugLog("✅ Face data recovered from cloud and saved locally");
-          
           setState(() {
             employeeData = data;
             _hasStoredFace = true;
@@ -1040,212 +856,183 @@ class _AuthenticateFaceViewState extends State<AuthenticateFaceView> {
         }
       }
       
-      _addDebugLog("❌ No face data found in cloud");
       _handleFailedAuthentication("No registered face found. Please register first.");
       
     } catch (e) {
-      _addDebugLog("❌ Cloud recovery failed: $e");
       _handleFailedAuthentication("No stored face data available.");
     }
   }
 
-  // ================ SUCCESS/FAILURE HANDLERS ================
+  // Success/Failure Handlers
   void _handleSuccessfulAuthentication() {
-    _playSuccessAudio;
+  _playSuccessAudio;
 
-    setState(() {
-      isMatching = false;
-      _hasAuthenticated = true;
-    });
+  setState(() {
+    isMatching = false;
+    _hasAuthenticated = true;
+  });
 
-    _addDebugLog("✅ Authentication successful!");
-
-    if (widget.isRegistrationValidation) {
-      Future.delayed(const Duration(seconds: 1), () {
-        if (mounted) {
-          Navigator.of(context).pushReplacement(
-            MaterialPageRoute(
-              builder: (context) => DashboardView(
-                employeeId: widget.employeeId!,
-              ),
+  if (widget.isRegistrationValidation) {
+    Future.delayed(const Duration(seconds: 1), () {
+      if (mounted) {
+        Navigator.of(context).pushReplacement(
+          MaterialPageRoute(
+            builder: (context) => DashboardView(
+              employeeId: widget.employeeId!,
             ),
-          );
-        }
-      });
-    } else {
-      _showSuccessDialog();
-    }
-
+          ),
+        );
+      }
+    });
+  } else {
+    // Call the callback first
     if (widget.onAuthenticationComplete != null) {
       widget.onAuthenticationComplete!(true);
     }
+    
+    // Then close the screen and return success result
+    Future.delayed(const Duration(milliseconds: 500), () {
+      if (mounted) {
+        Navigator.of(context).pop(true); // Return true for success
+      }
+    });
   }
+}
 
   void _handleFailedAuthentication(String message) {
-    setState(() {
-      isMatching = false;
-    });
-    _playFailedAudio;
-    _addDebugLog("❌ Authentication failed: $message");
-    _showFailureDialog(
-      title: "Authentication Failed",
-      description: message,
-    );
-
-    if (widget.onAuthenticationComplete != null) {
-      widget.onAuthenticationComplete!(false);
-    }
+  setState(() {
+    isMatching = false;
+  });
+  _playFailedAudio;
+  
+  // Call the callback first
+  if (widget.onAuthenticationComplete != null) {
+    widget.onAuthenticationComplete!(false);
   }
+  
+  _showFailureDialog(
+    title: "Authentication Failed",
+    description: message,
+  );
+}
 
-  // ================ DIALOGS ================
+  // Dialogs
   void _showSuccessDialog() {
-    showDialog(
-      context: context,
-      barrierDismissible: false,
-      builder: (context) => AlertDialog(
-        backgroundColor: const Color(0xFF2E2E2E),
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(16),
-        ),
-        title: const Row(
-          children: [
-            Icon(Icons.check_circle, color: Colors.green, size: 28),
-            SizedBox(width: 8),
-            Text(
-              "🔐 Authentication Success!",
-              style: TextStyle(color: Colors.white, fontSize: 16),
-            ),
-          ],
-        ),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              "Welcome ${employeeData?['name'] ?? 'User'}!",
-              style: const TextStyle(
-                color: Colors.white,
-                fontSize: 16,
-                fontWeight: FontWeight.w500,
-              ),
-            ),
-            const SizedBox(height: 8),
-            Text(
-              "Match: $_similarity%",
-              style: const TextStyle(color: Colors.white70, fontSize: 14),
-            ),
-            Text(
-              "Mode: ${_isOfflineMode ? 'Offline' : 'Online'}",
-              style: const TextStyle(color: Colors.white70, fontSize: 14),
-            ),
-          ],
-        ),
-        actions: [
-          ElevatedButton(
-            onPressed: () {
-              Navigator.of(context).pop();
-              Navigator.of(context).pushReplacement(
-                MaterialPageRoute(
-                  builder: (context) => DashboardView(
-                    employeeId: widget.employeeId!,
-                  ),
-                ),
-              );
-            },
-            style: ElevatedButton.styleFrom(
-              backgroundColor: Colors.green,
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(8),
-              ),
-            ),
-            child: const Text(
-              "Continue",
-              style: TextStyle(color: Colors.white),
-            ),
+  showDialog(
+    context: context,
+    barrierDismissible: false,
+    builder: (context) => AlertDialog(
+      backgroundColor: const Color(0xFF1E293B),
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(16),
+      ),
+      title: const Row(
+        children: [
+          Icon(Icons.check_circle, color: Colors.green, size: 28),
+          SizedBox(width: 8),
+          Text(
+            "Authentication Success!",
+            style: TextStyle(color: Colors.white, fontSize: 16),
           ),
         ],
       ),
-    );
-  }
+      content: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            "Welcome ${employeeData?['name'] ?? 'User'}!",
+            style: const TextStyle(
+              color: Colors.white,
+              fontSize: 16,
+              fontWeight: FontWeight.w500,
+            ),
+          ),
+          const SizedBox(height: 8),
+          Text(
+            "Match: $_similarity%",
+            style: const TextStyle(color: Colors.white70, fontSize: 14),
+          ),
+          Text(
+            "Mode: ${_isOfflineMode ? 'Offline' : 'Online'}",
+            style: const TextStyle(color: Colors.white70, fontSize: 14),
+          ),
+        ],
+      ),
+      actions: [
+        ElevatedButton(
+          onPressed: () {
+            Navigator.of(context).pop(); // Close dialog
+            Navigator.of(context).pop(true); // Close authentication screen with success
+          },
+          style: ElevatedButton.styleFrom(
+            backgroundColor: Colors.green,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(8),
+            ),
+          ),
+          child: const Text(
+            "Continue",
+            style: TextStyle(color: Colors.white),
+          ),
+        ),
+      ],
+    ),
+  );
+}
 
   void _showFailureDialog({
-    required String title,
-    required String description,
-  }) {
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        backgroundColor: const Color(0xFF2E2E2E),
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(16),
-        ),
-        title: Text(
-          title,
-          style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
-        ),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              description,
-              style: const TextStyle(color: Colors.white),
-            ),
-            if (_showDebugInfo) ...[
-              const SizedBox(height: 12),
-              const Text(
-                "Recent Debug Logs:",
-                style: TextStyle(color: Colors.yellow, fontSize: 12, fontWeight: FontWeight.bold),
-              ),
-              Container(
-                height: 80,
-                child: ListView.builder(
-                  itemCount: min(_debugLogs.length, 5),
-                  itemBuilder: (context, index) {
-                    int logIndex = _debugLogs.length - 5 + index;
-                    if (logIndex < 0) logIndex = index;
-                    return Text(
-                      _debugLogs[logIndex],
-                      style: const TextStyle(color: Colors.white70, fontSize: 9, fontFamily: 'monospace'),
-                    );
-                  },
-                ),
-              ),
-            ],
-          ],
-        ),
-        actions: [
-          if (_showDebugInfo)
-            TextButton(
-              onPressed: () {
-                Clipboard.setData(ClipboardData(text: _debugLogs.join('\n')));
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(content: Text("Debug logs copied to clipboard")),
-                );
-              },
-              child: const Text("Copy Logs", style: TextStyle(color: Colors.orange)),
-            ),
-          ElevatedButton(
-            onPressed: () {
-              Navigator.of(context).pop();
-            },
-            style: ElevatedButton.styleFrom(
-              backgroundColor: accentColor,
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(8),
-              ),
-            ),
-            child: const Text(
-              "Try Again",
-              style: TextStyle(color: Colors.white),
+  required String title,
+  required String description,
+}) {
+  showDialog(
+    context: context,
+    builder: (context) => AlertDialog(
+      backgroundColor: const Color(0xFF1E293B),
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(16),
+      ),
+      title: Text(
+        title,
+        style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+      ),
+      content: Text(
+        description,
+        style: const TextStyle(color: Colors.white),
+      ),
+      actions: [
+        ElevatedButton(
+          onPressed: () {
+            Navigator.of(context).pop(); // Close dialog
+            // Don't close the authentication screen - let user try again
+          },
+          style: ElevatedButton.styleFrom(
+            backgroundColor: Colors.blue,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(8),
             ),
           ),
-        ],
-      ),
-    );
-  }
+          child: const Text(
+            "Try Again",
+            style: TextStyle(color: Colors.white),
+          ),
+        ),
+        TextButton(
+          onPressed: () {
+            Navigator.of(context).pop(); // Close dialog
+            Navigator.of(context).pop(false); // Close authentication screen with failure
+          },
+          child: const Text(
+            "Cancel",
+            style: TextStyle(color: Colors.grey),
+          ),
+        ),
+      ],
+    ),
+  );
+}
 
-  // ================ HELPER FUNCTIONS ================
+  // Helper Functions
   Map<String, double> _calculateFeatureDistances(FaceFeatures features) {
     Map<String, double> distances = {};
     
@@ -1274,19 +1061,6 @@ class _AuthenticateFaceViewState extends State<AuthenticateFaceView> {
   double _pointDistance(Points p1, Points p2) {
     if (p1.x == null || p1.y == null || p2.x == null || p2.y == null) return 0.0;
     return sqrt((p1.x! - p2.x!) * (p1.x! - p2.x!) + (p1.y! - p2.y!) * (p1.y! - p2.y!));
-  }
-
-  String _getFeaturesDebugInfo(FaceFeatures features) {
-    List<String> available = [];
-    List<String> missing = [];
-    
-    if (features.leftEye != null) available.add('leftEye'); else missing.add('leftEye');
-    if (features.rightEye != null) available.add('rightEye'); else missing.add('rightEye');
-    if (features.noseBase != null) available.add('noseBase'); else missing.add('noseBase');
-    if (features.leftMouth != null) available.add('leftMouth'); else missing.add('leftMouth');
-    if (features.rightMouth != null) available.add('rightMouth'); else missing.add('rightMouth');
-    
-    return "Available: [${available.join(', ')}] Missing: [${missing.join(', ')}]";
   }
 
   int _countDetectedLandmarks(FaceFeatures features) {

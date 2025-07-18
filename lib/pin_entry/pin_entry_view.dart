@@ -1,9 +1,9 @@
-// lib/pin_entry/pin_entry_view.dart - FIXED TO ROUTE TO SimpleDashboardView
+// lib/pin_entry/pin_entry_view.dart - UPDATED TO USE MAIN DASHBOARD
 
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:face_auth/common/utils/custom_snackbar.dart';
 import 'package:face_auth/constants/theme.dart';
-import 'package:face_auth/dashboard/simple_dashboard_view.dart'; // ✅ FIXED: Use SimpleDashboardView
+import 'package:face_auth/dashboard/dashboard_view.dart'; // ✅ CHANGED: Use main DashboardView
 import 'package:face_auth/pin_entry/user_profile_view.dart';
 import 'package:face_auth/model/user_model.dart';
 import 'package:flutter/material.dart';
@@ -195,10 +195,10 @@ class _PinEntryViewState extends State<PinEntryView>
 
       if (mounted) {
         if (isRegistered) {
-          // ✅ FIXED: User is fully registered, go to SimpleDashboardView
+          // ✅ CHANGED: User is fully registered, go to main DashboardView
           Navigator.of(context).pushReplacement(
             MaterialPageRoute(
-              builder: (context) => SimpleDashboardView(employeeId: employeeId),
+              builder: (context) => DashboardView(employeeId: employeeId), // ✅ CHANGED
             ),
           );
         } else {
@@ -325,7 +325,7 @@ class _PinEntryViewState extends State<PinEntryView>
 
               // Title
               const Text(
-                "📱 iOS Employee Authentication",
+                "🚀 Employee Authentication Pro",
                 style: TextStyle(
                   color: Colors.white,
                   fontSize: 24,
@@ -502,7 +502,7 @@ class _PinEntryViewState extends State<PinEntryView>
                 const Padding(
                   padding: EdgeInsets.only(bottom: 40),
                   child: Text(
-                    "✅ Routes to SimpleDashboardView for comprehensive debug info",
+                    "✅ Routes to Full Featured Dashboard with Attendance, Leave & Overtime Management",
                     style: TextStyle(
                       color: Colors.green,
                       fontSize: 12,

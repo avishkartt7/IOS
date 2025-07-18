@@ -2,11 +2,29 @@ import 'package:face_auth/constants/theme.dart';
 import 'package:flutter/material.dart';
 
 class CustomSnackBar {
-  static late BuildContext context;
+  // Keep the static context for backwards compatibility
+  static BuildContext? context;
 
-  static void errorSnackBar(String message) {
-    if (context.mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
+  // Method overloading for errorSnackBar - supports both formats
+  static void errorSnackBar(dynamic contextOrMessage, [String? message]) {
+    BuildContext? targetContext;
+    String targetMessage;
+
+    // Determine if first parameter is context or message
+    if (contextOrMessage is BuildContext) {
+      // Format: errorSnackBar(context, message)
+      targetContext = contextOrMessage;
+      targetMessage = message ?? '';
+    } else if (contextOrMessage is String) {
+      // Format: errorSnackBar(message) - use static context
+      targetContext = context;
+      targetMessage = contextOrMessage;
+    } else {
+      return; // Invalid parameters
+    }
+
+    if (targetContext != null && targetContext.mounted) {
+      ScaffoldMessenger.of(targetContext).showSnackBar(
         SnackBar(
           content: Row(
             children: [
@@ -18,7 +36,7 @@ class CustomSnackBar {
               const SizedBox(width: 12),
               Expanded(
                 child: Text(
-                  message,
+                  targetMessage,
                   style: const TextStyle(
                     color: Colors.white,
                     fontSize: 14,
@@ -40,9 +58,26 @@ class CustomSnackBar {
     }
   }
 
-  static void successSnackBar(String message) {
-    if (context.mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
+  // Method overloading for successSnackBar - supports both formats
+  static void successSnackBar(dynamic contextOrMessage, [String? message]) {
+    BuildContext? targetContext;
+    String targetMessage;
+
+    // Determine if first parameter is context or message
+    if (contextOrMessage is BuildContext) {
+      // Format: successSnackBar(context, message)
+      targetContext = contextOrMessage;
+      targetMessage = message ?? '';
+    } else if (contextOrMessage is String) {
+      // Format: successSnackBar(message) - use static context
+      targetContext = context;
+      targetMessage = contextOrMessage;
+    } else {
+      return; // Invalid parameters
+    }
+
+    if (targetContext != null && targetContext.mounted) {
+      ScaffoldMessenger.of(targetContext).showSnackBar(
         SnackBar(
           content: Row(
             children: [
@@ -54,7 +89,7 @@ class CustomSnackBar {
               const SizedBox(width: 12),
               Expanded(
                 child: Text(
-                  message,
+                  targetMessage,
                   style: const TextStyle(
                     color: Colors.white,
                     fontSize: 14,
@@ -76,21 +111,38 @@ class CustomSnackBar {
     }
   }
 
-  static void warningSnackBar(String message) {
-    if (context.mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
+  // Method overloading for warningSnackBar - supports both formats
+  static void warningSnackBar(dynamic contextOrMessage, [String? message]) {
+    BuildContext? targetContext;
+    String targetMessage;
+
+    // Determine if first parameter is context or message
+    if (contextOrMessage is BuildContext) {
+      // Format: warningSnackBar(context, message)
+      targetContext = contextOrMessage;
+      targetMessage = message ?? '';
+    } else if (contextOrMessage is String) {
+      // Format: warningSnackBar(message) - use static context
+      targetContext = context;
+      targetMessage = contextOrMessage;
+    } else {
+      return; // Invalid parameters
+    }
+
+    if (targetContext != null && targetContext.mounted) {
+      ScaffoldMessenger.of(targetContext).showSnackBar(
         SnackBar(
           content: Row(
             children: [
               const Icon(
-                Icons.warning_amber_outlined, // Fixed: was Icons.warning_outline
+                Icons.warning_amber_outlined,
                 color: Colors.white,
                 size: 20,
               ),
               const SizedBox(width: 12),
               Expanded(
                 child: Text(
-                  message,
+                  targetMessage,
                   style: const TextStyle(
                     color: Colors.white,
                     fontSize: 14,
@@ -112,9 +164,26 @@ class CustomSnackBar {
     }
   }
 
-  static void infoSnackBar(String message) {
-    if (context.mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
+  // Method overloading for infoSnackBar - supports both formats
+  static void infoSnackBar(dynamic contextOrMessage, [String? message]) {
+    BuildContext? targetContext;
+    String targetMessage;
+
+    // Determine if first parameter is context or message
+    if (contextOrMessage is BuildContext) {
+      // Format: infoSnackBar(context, message)
+      targetContext = contextOrMessage;
+      targetMessage = message ?? '';
+    } else if (contextOrMessage is String) {
+      // Format: infoSnackBar(message) - use static context
+      targetContext = context;
+      targetMessage = contextOrMessage;
+    } else {
+      return; // Invalid parameters
+    }
+
+    if (targetContext != null && targetContext.mounted) {
+      ScaffoldMessenger.of(targetContext).showSnackBar(
         SnackBar(
           content: Row(
             children: [
@@ -126,7 +195,7 @@ class CustomSnackBar {
               const SizedBox(width: 12),
               Expanded(
                 child: Text(
-                  message,
+                  targetMessage,
                   style: const TextStyle(
                     color: Colors.white,
                     fontSize: 14,
@@ -148,14 +217,19 @@ class CustomSnackBar {
     }
   }
 
+  // Flexible customSnackBar - supports both formats
   static void customSnackBar({
+    BuildContext? context,
     required String message,
     required Color backgroundColor,
     required IconData icon,
     Duration duration = const Duration(seconds: 3),
   }) {
-    if (context.mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
+    // Use provided context or fall back to static context
+    BuildContext? targetContext = context ?? CustomSnackBar.context;
+
+    if (targetContext != null && targetContext.mounted) {
+      ScaffoldMessenger.of(targetContext).showSnackBar(
         SnackBar(
           content: Row(
             children: [
@@ -187,5 +261,10 @@ class CustomSnackBar {
         ),
       );
     }
+  }
+
+  // Helper method to set static context (optional, for convenience)
+  static void setContext(BuildContext ctx) {
+    context = ctx;
   }
 }

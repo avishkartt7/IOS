@@ -1,13 +1,14 @@
-// lib/main.dart - iOS ENHANCED VERSION WITH OFFLINE SUPPORT
+// lib/main.dart - UPDATED FOR FULL DASHBOARD
 
 import 'package:flutter/material.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:face_auth/constants/theme.dart';
 import 'package:face_auth/pin_entry/pin_entry_view.dart';
-import 'package:face_auth/dashboard/simple_dashboard_view.dart';
+import 'package:face_auth/dashboard/dashboard_view.dart'; // ✅ CHANGED: Use full DashboardView
 import 'package:face_auth/common/utils/custom_snackbar.dart';
 import 'package:face_auth/common/utils/screen_size_util.dart';
+import 'package:face_auth/services/service_locator.dart'; // ✅ ADDED: Service locator
 import 'package:connectivity_plus/connectivity_plus.dart';
 import 'dart:convert';
 import 'dart:io';
@@ -15,9 +16,18 @@ import 'dart:io';
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   
-  print("🚀 Starting iOS Face Authentication App...");
+  print("🚀 Starting Full Featured Face Authentication App...");
   
-  // Firebase initialization with error handling
+  // ✅ STEP 1: Initialize Service Locator FIRST
+  try {
+    await setupServiceLocator();
+    print("✅ Service Locator initialized successfully");
+  } catch (e) {
+    print("❌ Service Locator initialization failed: $e");
+    // Continue anyway - some features may not work but basic app will run
+  }
+  
+  // ✅ STEP 2: Firebase initialization with error handling
   try {
     await Firebase.initializeApp();
     print("✅ Firebase initialized successfully");
@@ -45,7 +55,7 @@ class _FaceAuthAppState extends State<FaceAuthApp> {
   @override
   void initState() {
     super.initState();
-    print("📱 iOS FaceAuthApp initialized");
+    print("📱 Full Featured FaceAuthApp initialized");
     _initializeApp();
   }
 
@@ -72,7 +82,7 @@ class _FaceAuthAppState extends State<FaceAuthApp> {
       setState(() {
         _isOfflineMode = connectivityResult == ConnectivityResult.none;
       });
-      print("📶 iOS App connectivity: ${_isOfflineMode ? 'Offline' : 'Online'}");
+      print("📶 App connectivity: ${_isOfflineMode ? 'Offline' : 'Online'}");
     } catch (e) {
       print("⚠️ Connectivity check failed: $e");
       setState(() {
@@ -83,7 +93,7 @@ class _FaceAuthAppState extends State<FaceAuthApp> {
 
   Future<void> _checkAuthenticationStatus() async {
     try {
-      print("🔍 Checking iOS authentication status...");
+      print("🔍 Checking authentication status...");
       
       SharedPreferences prefs = await SharedPreferences.getInstance();
       
@@ -110,7 +120,7 @@ class _FaceAuthAppState extends State<FaceAuthApp> {
           print("📅 Days since authentication: $daysSinceAuth");
           
           if (daysSinceAuth < 30) { // Authentication valid for 30 days
-            print("✅ Valid authentication found - proceeding to dashboard");
+            print("✅ Valid authentication found - proceeding to full dashboard");
             setState(() {
               _authenticatedUserId = userId;
               _isLoading = false;
@@ -163,7 +173,7 @@ class _FaceAuthAppState extends State<FaceAuthApp> {
   Widget build(BuildContext context) {
     return MaterialApp(
       debugShowCheckedModeBanner: false,
-      title: 'iOS Face Authentication',
+      title: 'Face Authentication - Full Featured',
       theme: ThemeData(
         colorScheme: ColorScheme.fromSwatch(accentColor: accentColor),
         inputDecorationTheme: InputDecorationTheme(
@@ -186,9 +196,9 @@ class _FaceAuthAppState extends State<FaceAuthApp> {
         ),
       ),
       home: _isLoading 
-        ? iOSSplashScreen(isOfflineMode: _isOfflineMode)
+        ? FullFeaturedSplashScreen(isOfflineMode: _isOfflineMode)
         : _authenticatedUserId != null 
-          ? SimpleDashboardView(employeeId: _authenticatedUserId!)
+          ? DashboardView(employeeId: _authenticatedUserId!) // ✅ CHANGED: Use DashboardView
           : const PinEntryView(),
       builder: (context, child) {
         // Initialize screen size utility
@@ -200,10 +210,10 @@ class _FaceAuthAppState extends State<FaceAuthApp> {
   }
 }
 
-class iOSSplashScreen extends StatelessWidget {
+class FullFeaturedSplashScreen extends StatelessWidget {
   final bool isOfflineMode;
   
-  const iOSSplashScreen({
+  const FullFeaturedSplashScreen({
     Key? key,
     required this.isOfflineMode,
   }) : super(key: key);
@@ -264,7 +274,7 @@ class iOSSplashScreen extends StatelessWidget {
                 
                 // App title
                 const Text(
-                  "📱 iOS Face Authentication",
+                  "🚀 Face Authentication Pro",
                   style: TextStyle(
                     color: Colors.white,
                     fontSize: 24,
@@ -276,7 +286,7 @@ class iOSSplashScreen extends StatelessWidget {
                 
                 // Status text
                 Text(
-                  isOfflineMode ? "📱 Initializing (Offline Mode)..." : "🌐 Initializing...",
+                  isOfflineMode ? "📱 Initializing (Offline Mode)..." : "🌐 Initializing Full Features...",
                   style: TextStyle(
                     color: Colors.white.withOpacity(0.8),
                     fontSize: 16,
@@ -334,9 +344,13 @@ class iOSSplashScreen extends StatelessWidget {
                   child: Column(
                     children: [
                       _buildFeatureRow("🔐", "Face Recognition", true),
+                      _buildFeatureRow("📊", "Attendance Tracking", true),
+                      _buildFeatureRow("🏖️", "Leave Management", true),
+                      _buildFeatureRow("⏰", "Overtime Requests", true),
+                      _buildFeatureRow("📍", "Geofencing", true),
                       _buildFeatureRow("📱", "Offline Support", true),
                       _buildFeatureRow("☁️", "Cloud Sync", !isOfflineMode),
-                      _buildFeatureRow("🔄", "Auto Recovery", true),
+                      _buildFeatureRow("🔔", "Push Notifications", !isOfflineMode),
                     ],
                   ),
                 ),

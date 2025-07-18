@@ -1,4 +1,4 @@
-// lib/pin_entry/app_password_entry_view.dart - FIXED VERSION
+// lib/pin_entry/app_password_entry_view.dart - UPDATED TO USE MAIN DASHBOARD
 
 import 'dart:convert';
 import 'package:flutter/material.dart';
@@ -6,7 +6,7 @@ import 'package:flutter_svg/flutter_svg.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:face_auth/common/utils/custom_snackbar.dart';
 import 'package:face_auth/constants/theme.dart';
-import 'package:face_auth/dashboard/simple_dashboard_view.dart'; // ✅ CHANGED: Use SimpleDashboardView
+import 'package:face_auth/dashboard/dashboard_view.dart'; // ✅ CHANGED: Use main DashboardView
 import 'package:shared_preferences/shared_preferences.dart';
 
 class AppPasswordEntryView extends StatefulWidget {
@@ -68,7 +68,7 @@ class _AppPasswordEntryViewState extends State<AppPasswordEntryView> {
       setState(() => _isLoading = false);
 
       if (querySnapshot.docs.isEmpty) {
-        CustomSnackBar.errorSnackBar("Invalid app password. Please try again."); // ✅ FIXED: Removed context parameter
+        CustomSnackBar.errorSnackBar("Invalid app password. Please try again.");
         _clearPassword();
         return;
       }
@@ -92,13 +92,13 @@ class _AppPasswordEntryViewState extends State<AppPasswordEntryView> {
       if (mounted) {
         Navigator.of(context).pushReplacement(
           MaterialPageRoute(
-            builder: (context) => SimpleDashboardView(employeeId: employeeId), // ✅ FIXED: Use SimpleDashboardView
+            builder: (context) => DashboardView(employeeId: employeeId), // ✅ CHANGED: Use main DashboardView
           ),
         );
       }
     } catch (e) {
       setState(() => _isLoading = false);
-      CustomSnackBar.errorSnackBar("Error verifying password: $e"); // ✅ FIXED: Removed context parameter
+      CustomSnackBar.errorSnackBar("Error verifying password: $e");
     }
   }
 
@@ -168,7 +168,7 @@ class _AppPasswordEntryViewState extends State<AppPasswordEntryView> {
                       ],
                     ),
                     child: const Text(
-                      "📱 Enter App Password",
+                      "🔐 Enter App Password",
                       style: TextStyle(
                         color: Colors.white,
                         fontSize: 28,
@@ -222,7 +222,7 @@ class _AppPasswordEntryViewState extends State<AppPasswordEntryView> {
 
                   const SizedBox(height: 20),
                   
-                  // iOS indicator
+                  // Feature indicator
                   Container(
                     padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
                     decoration: BoxDecoration(
@@ -231,7 +231,7 @@ class _AppPasswordEntryViewState extends State<AppPasswordEntryView> {
                       border: Border.all(color: Colors.blue.withOpacity(0.3)),
                     ),
                     child: const Text(
-                      "📱 iOS Face Authentication",
+                      "🚀 Full Featured Dashboard Access",
                       style: TextStyle(
                         color: Colors.blue,
                         fontSize: 12,
@@ -268,36 +268,6 @@ class _AppPasswordEntryViewState extends State<AppPasswordEntryView> {
         color: Colors.white,
       ),
     );
-    
-    // If you have the SVG, you can use this instead:
-    /*
-    try {
-      return SvgPicture.asset(
-        'assets/images/authentication.svg',
-        height: 200,
-      );
-    } catch (e) {
-      // Fallback to icon if SVG not found
-      return Container(
-        width: 200,
-        height: 200,
-        decoration: BoxDecoration(
-          gradient: LinearGradient(
-            colors: [
-              Colors.blue.withOpacity(0.3),
-              Colors.purple.withOpacity(0.3),
-            ],
-          ),
-          shape: BoxShape.circle,
-        ),
-        child: const Icon(
-          Icons.security,
-          size: 100,
-          color: Colors.white,
-        ),
-      );
-    }
-    */
   }
 
   Widget _buildPasswordField(int index) {
@@ -376,7 +346,7 @@ class _AppPasswordEntryViewState extends State<AppPasswordEntryView> {
           ),
         ),
         child: const Text(
-          "🔐 Verify",
+          "🚀 Access Dashboard",
           style: TextStyle(
             fontSize: 18,
             fontWeight: FontWeight.bold,

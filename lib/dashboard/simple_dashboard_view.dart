@@ -10,6 +10,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:intl/intl.dart';
 import 'package:connectivity_plus/connectivity_plus.dart';
 import 'package:flutter/services.dart';
+import 'package:face_auth/debug/debug_dashboard_view.dart';
 
 class SimpleDashboardView extends StatefulWidget {
   final String employeeId;
@@ -576,7 +577,8 @@ class _SimpleDashboardViewState extends State<SimpleDashboardView> {
         ),
         
         const SizedBox(height: 12),
-        
+        // Add this button to your action buttons section
+
         // Debug Toggle Button
         SizedBox(
           width: double.infinity,

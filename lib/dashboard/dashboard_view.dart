@@ -1,11 +1,9 @@
 // lib/dashboard/dashboard_view.dart
-
-// ADD this import at the top of dashboard_view.dart file
-
 import 'dart:convert';
 import 'dart:async';
 import 'package:cloud_functions/cloud_functions.dart';
 import 'package:geodesy/geodesy.dart';
+import 'dart:io' show Platform;
 import 'package:flutter/material.dart';
 import 'package:face_auth/services/overtime_approver_service.dart';
 import 'package:face_auth/authenticate_face/authentication_success_screen.dart';
@@ -1272,6 +1270,9 @@ class _DashboardViewState extends State<DashboardView>
   }
 
   // Quick Actions Section
+  // ✅ UPDATED: Replace your _buildQuickActionsSection method with this
+  // ✅ CRITICAL FIX: Make sure your quick actions section uses the RIGHT method
+
   Widget _buildQuickActionsSection() {
     return Container(
       margin: EdgeInsets.symmetric(horizontal: responsivePadding.horizontal),
@@ -1290,12 +1291,10 @@ class _DashboardViewState extends State<DashboardView>
             ),
           ),
 
-          // Rest Timing Card (if user has active schedule)
           if (_hasActiveRestTiming())
             _buildRestTimingCard(),
           const SizedBox(height: 16),
 
-          // Grid of quick action cards
           GridView.count(
             shrinkWrap: true,
             physics: const NeverScrollableScrollPhysics(),
@@ -1362,15 +1361,19 @@ class _DashboardViewState extends State<DashboardView>
                 },
               ),
 
+              // ✅ CRITICAL FIX: Use ONLY database-driven check (no Builder widget)
+              // Remove any hardcoded logic completely
               if (_userData != null &&
                   (_userData!['hasOvertimeAccess'] == true ||
-                      _userData!['overtimeAccessGrantedAt'] != null))
+                      _userData!['overtimeAccessGrantedAt'] != null ||
+                      _userData!['standardizedOvertimeAccess'] == true))
                 _buildQuickActionCard(
                   icon: Icons.access_time,
                   title: "Overtime",
                   subtitle: "Request overtime",
                   color: Colors.orange,
                   onTap: () {
+                    debugPrint("🎯 DATABASE-VERIFIED: Overtime card tapped");
                     Navigator.push(
                       context,
                       MaterialPageRoute(
@@ -1387,6 +1390,12 @@ class _DashboardViewState extends State<DashboardView>
       ),
     );
   }
+
+// ✅ REMOVE: Delete the old _hasOvertimeAccess() method completely
+// ✅ REMOVE: Delete the _hasOvertimeAccessFromDatabase() method
+// ✅ REMOVE: All Builder widgets with robust condition checks
+
+// ✅ KEEP ONLY: Direct database field checks in the if condition above
 
   Widget _buildQuickActionCard({
     required IconData icon,
@@ -2580,215 +2589,310 @@ class _DashboardViewState extends State<DashboardView>
     setState(() => _isLoading = true);
 
     try {
-      debugPrint("=== FETCHING USER DATA (WITH FACE DATA VALIDATION) ===");
+      debugPrint("=== FETCHING USER DATA (PROPER DATABASE APPROACH) ===");
       debugPrint("Dashboard widget.employeeId: ${widget.employeeId}");
+      debugPrint("Connectivity: ${_connectivityService.currentStatus}");
 
-      // ✅ STEP 1: Get cached local data first
+      // ✅ STEP 1: Get cached data for immediate display
       Map<String, dynamic>? localData = await _getUserDataLocally();
 
       if (localData != null) {
-        debugPrint("✅ Found local cached data");
+        debugPrint("✅ Found local cached data with ${localData.keys.length} fields");
+
+        // Set initial data but FORCE fresh fetch for overtime data
         setState(() {
           _userData = localData;
           _isLoading = false;
         });
-
-        // ✅ NEW: Validate face data in background after loading user data
         _validateFaceDataInBackground();
-
-        // ✅ FIXED: If offline, use local data and return immediately
-        if (_connectivityService.currentStatus == ConnectionStatus.offline) {
-          debugPrint("📱 OFFLINE MODE: Using cached user data successfully");
-          debugPrint("Cached data keys: ${localData.keys.toList()}");
-          return; // ✅ Success with local data
-        }
-
-        // ✅ FIXED: If online, try to refresh but don't fail if auth fails
-        debugPrint("🌐 ONLINE MODE: Local data loaded, attempting to refresh from Firestore...");
       }
 
-      // ✅ STEP 2: If online, try to fetch fresh data (but don't require Firebase Auth)
+      // ✅ STEP 2: ALWAYS try to fetch fresh data if online (ignore auth for now)
       if (_connectivityService.currentStatus == ConnectionStatus.online) {
+        debugPrint("🌐 FORCING FRESH DATA FETCH FROM FIRESTORE (ignoring auth for overtime)");
+
         try {
-          // ✅ FIXED: Check SharedPreferences for authentication status first
-          SharedPreferences prefs = await SharedPreferences.getInstance();
-          String? authenticatedUserId = prefs.getString('authenticated_user_id');
-          bool isAuthenticated = prefs.getBool('is_authenticated') ?? false;
-
-          if (!isAuthenticated || authenticatedUserId != widget.employeeId) {
-            debugPrint("⚠️ User not authenticated via SharedPreferences");
-
-            // ✅ FIXED: If we have local data, continue with it instead of failing
-            if (localData != null) {
-              debugPrint("✅ Continuing with cached local data");
-              return; // ✅ Success with local data
-            } else {
-              debugPrint("❌ No local data and not authenticated - redirecting to login");
-              _redirectToLogin();
-              return;
-            }
-          }
-
-          debugPrint("✅ User authenticated via SharedPreferences: $authenticatedUserId");
-
-          // ✅ STEP 3: Try to fetch fresh data from Firestore (with error handling)
           Map<String, dynamic> combinedData = localData ?? {};
 
-          try {
-            // Try to get employee data from Firestore
-            DocumentSnapshot employeeDoc = await FirebaseFirestore.instance
-                .collection('employees')
-                .doc(widget.employeeId)
-                .get()
-                .timeout(Duration(seconds: 10)); // Add timeout
+          // ✅ Force fetch employee data
+          DocumentSnapshot employeeDoc = await FirebaseFirestore.instance
+              .collection('employees')
+              .doc(widget.employeeId)
+              .get()
+              .timeout(Duration(seconds: 10));
 
-            if (employeeDoc.exists) {
-              Map<String, dynamic> employeeData = employeeDoc.data() as Map<String, dynamic>;
-              combinedData.addAll(employeeData);
-              debugPrint("✅ Fresh employee data fetched from Firestore");
+          if (employeeDoc.exists) {
+            Map<String, dynamic> employeeData = employeeDoc.data() as Map<String, dynamic>;
+            combinedData.addAll(employeeData);
+            debugPrint("✅ FORCED: Fresh employee data fetched (${employeeData.keys.length} fields)");
 
-              // Get the pin for MasterSheet lookup
-              String? employeePin = employeeData['pin']?.toString();
-
-              if (employeePin != null && employeePin.isNotEmpty) {
-                // Try to fetch MasterSheet data
-                try {
-                  String masterSheetEmployeeId = employeePin;
-                  if (masterSheetEmployeeId.startsWith('EMP')) {
-                    masterSheetEmployeeId = masterSheetEmployeeId.substring(3);
-                  }
-
-                  int pinNumber = int.parse(masterSheetEmployeeId);
-                  masterSheetEmployeeId = 'EMP${pinNumber.toString().padLeft(4, '0')}';
-
-                  DocumentSnapshot masterSheetDoc = await FirebaseFirestore.instance
-                      .collection('MasterSheet')
-                      .doc('Employee-Data')
-                      .collection('employees')
-                      .doc(masterSheetEmployeeId)
-                      .get()
-                      .timeout(Duration(seconds: 5));
-
-                  if (masterSheetDoc.exists) {
-                    Map<String, dynamic> masterSheetData = masterSheetDoc.data() as Map<String, dynamic>;
-                    combinedData.addAll(masterSheetData);
-                    debugPrint("✅ MasterSheet data fetched successfully");
-
-                    // Check for rest timing data
-                    if (masterSheetData.containsKey('eligibleForRestTiming') &&
-                        masterSheetData['eligibleForRestTiming'] == true) {
-                      debugPrint("🕐 Rest timing data found and added");
-                      combinedData['hasActiveRestTiming'] = true;
-                    }
-                  }
-                } catch (masterSheetError) {
-                  debugPrint("⚠️ Could not fetch MasterSheet data: $masterSheetError");
-                  // Continue without MasterSheet data
+            // ✅ Force fetch MasterSheet data
+            String? employeePin = employeeData['pin']?.toString();
+            if (employeePin != null && employeePin.isNotEmpty) {
+              try {
+                String masterSheetEmployeeId = employeePin;
+                if (masterSheetEmployeeId.startsWith('EMP')) {
+                  masterSheetEmployeeId = masterSheetEmployeeId.substring(3);
                 }
-              }
 
-              // ✅ Save updated data locally
-              await _saveUserDataLocally(combinedData);
+                int pinNumber = int.parse(masterSheetEmployeeId);
+                masterSheetEmployeeId = 'EMP${pinNumber.toString().padLeft(4, '0')}';
 
-              setState(() {
-                _userData = combinedData;
-                _isLoading = false;
-              });
+                DocumentSnapshot masterSheetDoc = await FirebaseFirestore.instance
+                    .collection('MasterSheet')
+                    .doc('Employee-Data')
+                    .collection('employees')
+                    .doc(masterSheetEmployeeId)
+                    .get()
+                    .timeout(Duration(seconds: 5));
 
-              debugPrint("✅ User data updated successfully with fresh data");
-
-              // ✅ NEW: Validate face data after successful data fetch
-              _validateFaceDataInBackground();
-
-            } else {
-              debugPrint("⚠️ No employee document found in Firestore");
-
-              // ✅ FIXED: Continue with local data if Firestore fetch fails
-              if (localData != null) {
-                debugPrint("✅ Using cached local data as fallback");
-                // Data already set above
-              } else {
-                debugPrint("❌ No data available anywhere");
-                _redirectToLogin();
+                if (masterSheetDoc.exists) {
+                  Map<String, dynamic> masterSheetData = masterSheetDoc.data() as Map<String, dynamic>;
+                  combinedData.addAll(masterSheetData);
+                  debugPrint("✅ FORCED: MasterSheet data fetched (${masterSheetData.keys.length} fields)");
+                }
+              } catch (masterSheetError) {
+                debugPrint("⚠️ Could not fetch MasterSheet data: $masterSheetError");
               }
             }
-          } catch (firestoreError) {
-            debugPrint("⚠️ Error fetching from Firestore: $firestoreError");
 
-            // ✅ FIXED: Continue with local data if Firestore fails
+            // ✅ CRITICAL: Now standardize with REAL data (no hardcoding)
+            _standardizeOvertimeFieldsFromDatabase(combinedData);
+
+            // Save and update
+            await _saveUserDataLocally(combinedData);
+            setState(() {
+              _userData = combinedData;
+              _isLoading = false;
+            });
+
+            debugPrint("✅ FORCED: User data updated with REAL database values");
+
+          } else {
+            debugPrint("⚠️ No employee document found in Firestore");
             if (localData != null) {
-              debugPrint("✅ Using cached local data due to Firestore error");
-              // Data already set above
-            } else {
-              debugPrint("❌ No fallback data available");
-              _redirectToLogin();
+              // Even for local data, apply proper standardization
+              _standardizeOvertimeFieldsFromDatabase(localData);
+              setState(() {
+                _userData = localData;
+                _isLoading = false;
+              });
             }
           }
 
-        } catch (connectivityError) {
-          debugPrint("⚠️ Connectivity error: $connectivityError");
-
-          // ✅ FIXED: Continue with local data if connectivity fails
+        } catch (e) {
+          debugPrint("⚠️ Error in forced fetch: $e");
           if (localData != null) {
-            debugPrint("✅ Using cached local data due to connectivity error");
-            // Data already set above
-          } else {
-            debugPrint("❌ No data available offline");
-            setState(() => _isLoading = false);
-            CustomSnackBar.errorSnackBar("No cached data available. Please connect to internet and login again.");
+            _standardizeOvertimeFieldsFromDatabase(localData);
+            setState(() {
+              _userData = localData;
+              _isLoading = false;
+            });
           }
         }
       } else {
-        // ✅ OFFLINE MODE
+        // Offline - still standardize local data properly
         if (localData != null) {
-          debugPrint("✅ OFFLINE: Using cached user data successfully");
-          // Data already set above
-        } else {
-          debugPrint("❌ OFFLINE: No cached data available");
-          setState(() => _isLoading = false);
-          CustomSnackBar.errorSnackBar("No cached data available. Please connect to internet and login.");
+          _standardizeOvertimeFieldsFromDatabase(localData);
+          setState(() {
+            _userData = localData;
+            _isLoading = false;
+          });
         }
       }
+
+      _debugOvertimeAccessFromDatabase();
 
     } catch (e) {
       debugPrint("❌ Critical error in _fetchUserData: $e");
       setState(() => _isLoading = false);
+    }
 
-      // ✅ FINAL FALLBACK: Try one more time with local data
-      Map<String, dynamic>? fallbackData = await _getUserDataLocally();
-      if (fallbackData != null) {
-        debugPrint("✅ Using fallback local data");
-        setState(() {
-          _userData = fallbackData;
-          _isLoading = false;
-        });
-      } else {
-        CustomSnackBar.errorSnackBar("Error loading user data: $e");
+    await _checkLineManagerStatus();
+    debugPrint("=== FETCH USER DATA COMPLETE ===");
+  }
+
+// ✅ HELPER: Standardize overtime access fields across platforms
+  void _standardizeOvertimeFieldsFromDatabase(Map<String, dynamic> data) {
+    debugPrint("🔧 STANDARDIZING OVERTIME FIELDS (DATABASE ONLY - FIXED)");
+
+    // ✅ FIXED: Added missing 'hasOvertimeApprovalAccess' field
+    List<String> accessFields = [
+      'hasOvertimeAccess',
+      'hasOvertimeApprovalAccess',    // ← FIXED: Added this missing field!
+      'overtime_access',
+      'overtimeAccess',
+      'canRequestOvertime',
+      'has_overtime_access',
+      'allowOvertimeRequests',
+    ];
+
+    List<String> grantedFields = [
+      'overtimeAccessGrantedAt',
+      'overtime_access_granted_at',
+      'overtimeGrantedAt',
+      'granted_at',
+      'accessGrantedDate',
+      'overtimeApprovedDate',
+    ];
+
+    // Check for access in any field
+    bool hasAccess = false;
+    String? foundAccessField;
+    for (String field in accessFields) {
+      var value = data[field];
+      if (value == true || value == 'true' || value == 1 || value == '1') {
+        hasAccess = true;
+        foundAccessField = field;
+        debugPrint("  ✅ Found database access via field: $field = $value");
+        break;
       }
     }
 
-    // ✅ STEP 4: Continue with line manager check (existing logic)
-    await _checkLineManagerStatus();
+    // Check for granted date in any field
+    bool hasGrantedDate = false;
+    dynamic grantedValue;
+    String? foundGrantedField;
+    for (String field in grantedFields) {
+      var value = data[field];
+      if (value != null && value.toString().isNotEmpty && value.toString() != 'null') {
+        hasGrantedDate = true;
+        grantedValue = value;
+        foundGrantedField = field;
+        debugPrint("  ✅ Found database granted date via field: $field = $value");
+        break;
+      }
+    }
 
-    debugPrint("=== FETCH USER DATA COMPLETE ===");
+    // Final decision - based on explicit database fields
+    bool finalOvertimeAccess = hasAccess || hasGrantedDate;
+
+    debugPrint("  📊 DATABASE-ONLY ACCESS DECISION (FIXED):");
+    debugPrint("    - hasAccess: $hasAccess ${foundAccessField != null ? '($foundAccessField)' : ''}");
+    debugPrint("    - hasGrantedDate: $hasGrantedDate ${foundGrantedField != null ? '($foundGrantedField)' : ''}");
+    debugPrint("    - FINAL RESULT: $finalOvertimeAccess");
+
+    // Set standardized fields
+    data['hasOvertimeAccess'] = finalOvertimeAccess;
+    data['standardizedOvertimeAccess'] = finalOvertimeAccess;
+
+    if (hasGrantedDate && grantedValue != null) {
+      data['overtimeAccessGrantedAt'] = grantedValue;
+    }
+
+    data['overtimeAccessSource'] = foundAccessField ?? foundGrantedField ?? 'none';
+
+    debugPrint("  🎯 FIXED DATABASE RESULT: $finalOvertimeAccess");
   }
 
 
 
-  // ✅ NEW: Background validation of face data
+
+// ✅ FIXED: Database-focused debug
+  void _debugOvertimeAccessFromDatabase() {
+    if (_userData == null) return;
+
+    debugPrint("=== 🔍 DATABASE OVERTIME ACCESS DEBUG ===");
+    debugPrint("Employee ID: ${widget.employeeId}");
+    debugPrint("Employee Name: ${_userData!['name']}");
+    debugPrint("Department: ${_userData!['department'] ?? _userData!['Department']}");
+
+    debugPrint("--- EXACT DATABASE VALUES ---");
+    debugPrint("hasOvertimeAccess: ${_userData!['hasOvertimeAccess']} (${_userData!['hasOvertimeAccess'].runtimeType})");
+    debugPrint("overtimeAccessGrantedAt: ${_userData!['overtimeAccessGrantedAt']} (${_userData!['overtimeAccessGrantedAt'].runtimeType})");
+    debugPrint("standardizedOvertimeAccess: ${_userData!['standardizedOvertimeAccess']}");
+    debugPrint("overtimeAccessSource: ${_userData!['overtimeAccessSource']}");
+
+    // Show ALL overtime-related fields from database
+    List<String> allFields = _userData!.keys.where((key) =>
+    key.toLowerCase().contains('overtime') ||
+        key.toLowerCase().contains('access')).toList();
+
+    debugPrint("--- ALL OVERTIME-RELATED FIELDS FROM DATABASE ---");
+    for (String field in allFields) {
+      debugPrint("  $field: ${_userData![field]}");
+    }
+
+    // ✅ DIRECT DATABASE CHECK - NO METHOD CALLS
+    bool hasAccess = _userData!['hasOvertimeAccess'] == true;
+    bool hasGrantedAt = _userData!['overtimeAccessGrantedAt'] != null;
+    bool hasStandardized = _userData!['standardizedOvertimeAccess'] == true;
+    bool databaseResult = hasAccess || hasGrantedAt || hasStandardized;
+
+    debugPrint("🔍 DIRECT DATABASE CHECK:");
+    debugPrint("Employee: ${widget.employeeId}");
+    debugPrint("  - hasOvertimeAccess: $hasAccess");
+    debugPrint("  - overtimeAccessGrantedAt: $hasGrantedAt");
+    debugPrint("  - standardizedOvertimeAccess: $hasStandardized");
+    debugPrint("  - DATABASE RESULT: $databaseResult");
+
+    debugPrint("--- FINAL DATABASE DECISION ---");
+    debugPrint("OVERTIME ACCESS FROM DATABASE: $databaseResult");
+    debugPrint("=== END DATABASE DEBUG ===");
+  }
+
+// ✅ HELPER: Comprehensive overtime access debugging
+  void _debugOvertimeAccess() {
+    if (_userData == null) return;
+
+    debugPrint("=== 🔍 COMPREHENSIVE OVERTIME ACCESS DEBUG ===");
+    debugPrint("Platform: ${Platform.isIOS ? 'iOS' : 'Android'}");
+    debugPrint("Employee ID: ${widget.employeeId}");
+    debugPrint("Employee PIN: ${_userData!['pin']}");
+    debugPrint("Employee Name: ${_userData!['name']}");
+    debugPrint("Department: ${_userData!['department'] ?? _userData!['Department']}");
+    debugPrint("Role/Designation: ${_userData!['role'] ?? _userData!['designation']}");
+
+    debugPrint("--- OVERTIME ACCESS FIELDS ---");
+    debugPrint("hasOvertimeAccess: ${_userData!['hasOvertimeAccess']} (${_userData!['hasOvertimeAccess'].runtimeType})");
+    debugPrint("overtimeAccessGrantedAt: ${_userData!['overtimeAccessGrantedAt']} (${_userData!['overtimeAccessGrantedAt'].runtimeType})");
+    debugPrint("standardizedOvertimeAccess: ${_userData!['standardizedOvertimeAccess']}");
+    debugPrint("overtimeAccessSource: ${_userData!['overtimeAccessSource']}");
+
+    // Check all possible overtime-related fields
+    List<String> allPossibleFields = [
+      'hasOvertimeAccess', 'overtime_access', 'overtimeAccess', 'canRequestOvertime',
+      'has_overtime_access', 'allowOvertimeRequests', 'overtimeAccessGrantedAt',
+      'overtime_access_granted_at', 'overtimeGrantedAt', 'granted_at', 'accessGrantedDate'
+    ];
+
+    debugPrint("--- ALL POSSIBLE OVERTIME FIELDS ---");
+    for (String field in allPossibleFields) {
+      if (_userData!.containsKey(field)) {
+        debugPrint("  $field: ${_userData![field]} (${_userData![field].runtimeType})");
+      }
+    }
+
+    // Test the UI condition
+    bool uiCondition1 = _userData!['hasOvertimeAccess'] == true;
+    bool uiCondition2 = _userData!['overtimeAccessGrantedAt'] != null;
+    bool shouldShowOvertime = uiCondition1 || uiCondition2;
+
+    debugPrint("--- UI CONDITION RESULTS ---");
+    debugPrint("hasOvertimeAccess == true: $uiCondition1");
+    debugPrint("overtimeAccessGrantedAt != null: $uiCondition2");
+    debugPrint("SHOULD SHOW OVERTIME CARD: $shouldShowOvertime");
+
+    // Test the robust condition
+    bool robustCondition = _userData!['standardizedOvertimeAccess'] == true;
+    debugPrint("ROBUST CONDITION RESULT: $robustCondition");
+
+    debugPrint("=== END OVERTIME ACCESS DEBUG ===");
+  }
+
+// ✅ HELPER: Robust overtime access check (add this method to your class)
+
+
+// ✅ HELPER: Background validation of face data (unchanged)
   Future<void> _validateFaceDataInBackground() async {
     try {
       debugPrint("🔍 Validating face data in background...");
 
       final secureFaceStorage = getIt<SecureFaceStorageService>();
-
-      // Check if face data is valid
       bool isValid = await secureFaceStorage.validateLocalFaceData(widget.employeeId);
 
       if (!isValid) {
         debugPrint("⚠️ Face data validation failed, attempting recovery...");
-
-        // Attempt silent recovery
         bool recovered = await secureFaceStorage.ensureFaceDataAvailable(widget.employeeId);
 
         if (recovered) {
@@ -2798,17 +2902,19 @@ class _DashboardViewState extends State<DashboardView>
           }
         } else {
           debugPrint("❌ Face data recovery failed");
-          // Don't show error for background operation - user might not need face auth immediately
         }
       } else {
         debugPrint("✅ Face data validation passed");
       }
-
     } catch (e) {
       debugPrint("❌ Error during background face data validation: $e");
-      // Don't show error to user for background operations
     }
   }
+
+
+
+  // ✅ NEW: Background validation of face data
+
 
   // ✅ NEW: Force face data recovery (for manual trigger)
   Future<void> _forceFaceDataRecovery() async {
@@ -3029,174 +3135,174 @@ class _DashboardViewState extends State<DashboardView>
   }
 
   Future<void> _handleCheckInOut() async {
-  if (_isAuthenticating || !mounted) {
-    return;
-  }
+    if (_isAuthenticating || !mounted) {
+      return;
+    }
 
-  await _checkGeofenceStatus();
+    await _checkGeofenceStatus();
 
-  if (!_isCheckedIn) {
-    // Check In Flow
-    if (!mounted) return;
-    setState(() {
-      _isAuthenticating = true;
-    });
+    if (!_isCheckedIn) {
+      // Check In Flow
+      if (!mounted) return;
+      setState(() {
+        _isAuthenticating = true;
+      });
 
-    // Navigate to full screen authentication
-    final result = await Navigator.of(context).push<bool>(
-      MaterialPageRoute(
-        builder: (context) => AuthenticateFaceView(
-          employeeId: widget.employeeId,
-          actionType: 'check_in',
-          onAuthenticationComplete: (bool success) {
-            // Don't pop here - let the authentication screen handle its own navigation
-            if (success) {
-              // Handle success in the then() block below
-            }
-          },
-        ),
-      ),
-    );
-
-    // Handle result after navigation completes
-    if (!mounted) return;
-    
-    setState(() {
-      _isAuthenticating = false;
-    });
-
-    if (result == true) {
-      // Authentication was successful
-      Position? currentPosition = await GeofenceUtil.getCurrentPosition();
-
-      await CheckInOutHandler.handleOffLocationAction(
-        context: context,
-        employeeId: widget.employeeId,
-        employeeName: _userData?['name'] ?? 'Employee',
-        isWithinGeofence: _isWithinGeofence,
-        currentPosition: currentPosition,
-        isCheckIn: true,
-        onRegularAction: () async {
-          bool checkInSuccess = await _attendanceRepository.recordCheckIn(
+      // Navigate to full screen authentication
+      final result = await Navigator.of(context).push<bool>(
+        MaterialPageRoute(
+          builder: (context) => AuthenticateFaceView(
             employeeId: widget.employeeId,
-            checkInTime: DateTime.now(),
-            locationId: _nearestLocation?.id ?? 'default',
-            locationName: _nearestLocation?.name ?? 'Unknown',
-            locationLat: currentPosition?.latitude ?? _nearestLocation!.latitude,
-            locationLng: currentPosition?.longitude ?? _nearestLocation!.longitude,
-          );
-
-          if (checkInSuccess && mounted) {
-            setState(() {
-              _isCheckedIn = true;
-              _checkInTime = DateTime.now();
-
-              if (_connectivityService.currentStatus == ConnectionStatus.offline) {
-                _needsSync = true;
+            actionType: 'check_in',
+            onAuthenticationComplete: (bool success) {
+              // Don't pop here - let the authentication screen handle its own navigation
+              if (success) {
+                // Handle success in the then() block below
               }
-            });
+            },
+          ),
+        ),
+      );
 
-            // Show success screen
-            Navigator.of(context).push(
-              MaterialPageRoute(
-                builder: (context) => AuthenticationSuccessScreen(
-                  employeeName: _userData?['name'] ?? 'Employee',
-                  employeeId: widget.employeeId,
-                  actionType: 'check_in',
-                  similarityScore: '95.0',
-                ),
-              ),
+      // Handle result after navigation completes
+      if (!mounted) return;
+
+      setState(() {
+        _isAuthenticating = false;
+      });
+
+      if (result == true) {
+        // Authentication was successful
+        Position? currentPosition = await GeofenceUtil.getCurrentPosition();
+
+        await CheckInOutHandler.handleOffLocationAction(
+          context: context,
+          employeeId: widget.employeeId,
+          employeeName: _userData?['name'] ?? 'Employee',
+          isWithinGeofence: _isWithinGeofence,
+          currentPosition: currentPosition,
+          isCheckIn: true,
+          onRegularAction: () async {
+            bool checkInSuccess = await _attendanceRepository.recordCheckIn(
+              employeeId: widget.employeeId,
+              checkInTime: DateTime.now(),
+              locationId: _nearestLocation?.id ?? 'default',
+              locationName: _nearestLocation?.name ?? 'Unknown',
+              locationLat: currentPosition?.latitude ?? _nearestLocation!.latitude,
+              locationLng: currentPosition?.longitude ?? _nearestLocation!.longitude,
             );
 
-            CustomSnackBar.successSnackBar("Checked in successfully at $_currentTime");
-            _fetchTodaysActivity();
-          } else if (mounted) {
-            CustomSnackBar.errorSnackBar("Failed to record check-in. Please try again.");
-          }
-        },
-      );
-    }
-  } else {
-    // Check Out Flow
-    if (!mounted) return;
-    setState(() {
-      _isAuthenticating = true;
-    });
+            if (checkInSuccess && mounted) {
+              setState(() {
+                _isCheckedIn = true;
+                _checkInTime = DateTime.now();
 
-    // Navigate to full screen authentication
-    final result = await Navigator.of(context).push<bool>(
-      MaterialPageRoute(
-        builder: (context) => AuthenticateFaceView(
-          employeeId: widget.employeeId,
-          actionType: 'check_out',
-          onAuthenticationComplete: (bool success) {
-            // Don't pop here - let the authentication screen handle its own navigation
-            if (success) {
-              // Handle success in the then() block below
+                if (_connectivityService.currentStatus == ConnectionStatus.offline) {
+                  _needsSync = true;
+                }
+              });
+
+              // Show success screen
+              Navigator.of(context).push(
+                MaterialPageRoute(
+                  builder: (context) => AuthenticationSuccessScreen(
+                    employeeName: _userData?['name'] ?? 'Employee',
+                    employeeId: widget.employeeId,
+                    actionType: 'check_in',
+                    similarityScore: '95.0',
+                  ),
+                ),
+              );
+
+              CustomSnackBar.successSnackBar("Checked in successfully at $_currentTime");
+              _fetchTodaysActivity();
+            } else if (mounted) {
+              CustomSnackBar.errorSnackBar("Failed to record check-in. Please try again.");
             }
           },
-        ),
-      ),
-    );
+        );
+      }
+    } else {
+      // Check Out Flow
+      if (!mounted) return;
+      setState(() {
+        _isAuthenticating = true;
+      });
 
-    // Handle result after navigation completes
-    if (!mounted) return;
-    
-    setState(() {
-      _isAuthenticating = false;
-    });
-
-    if (result == true) {
-      // Authentication was successful
-      Position? currentPosition = await GeofenceUtil.getCurrentPosition();
-
-      await CheckInOutHandler.handleOffLocationAction(
-        context: context,
-        employeeId: widget.employeeId,
-        employeeName: _userData?['name'] ?? 'Employee',
-        isWithinGeofence: _isWithinGeofence,
-        currentPosition: currentPosition,
-        isCheckIn: false,
-        onRegularAction: () async {
-          bool checkOutSuccess = await _attendanceRepository.recordCheckOut(
+      // Navigate to full screen authentication
+      final result = await Navigator.of(context).push<bool>(
+        MaterialPageRoute(
+          builder: (context) => AuthenticateFaceView(
             employeeId: widget.employeeId,
-            checkOutTime: DateTime.now(),
-          );
-
-          if (checkOutSuccess && mounted) {
-            setState(() {
-              _isCheckedIn = false;
-              _checkInTime = null;
-
-              if (_connectivityService.currentStatus == ConnectionStatus.offline) {
-                _needsSync = true;
+            actionType: 'check_out',
+            onAuthenticationComplete: (bool success) {
+              // Don't pop here - let the authentication screen handle its own navigation
+              if (success) {
+                // Handle success in the then() block below
               }
-            });
+            },
+          ),
+        ),
+      );
 
-            // Show success screen
-            Navigator.of(context).push(
-              MaterialPageRoute(
-                builder: (context) => AuthenticationSuccessScreen(
-                  employeeName: _userData?['name'] ?? 'Employee',
-                  employeeId: widget.employeeId,
-                  actionType: 'check_out',
-                  similarityScore: '95.0',
-                ),
-              ),
+      // Handle result after navigation completes
+      if (!mounted) return;
+
+      setState(() {
+        _isAuthenticating = false;
+      });
+
+      if (result == true) {
+        // Authentication was successful
+        Position? currentPosition = await GeofenceUtil.getCurrentPosition();
+
+        await CheckInOutHandler.handleOffLocationAction(
+          context: context,
+          employeeId: widget.employeeId,
+          employeeName: _userData?['name'] ?? 'Employee',
+          isWithinGeofence: _isWithinGeofence,
+          currentPosition: currentPosition,
+          isCheckIn: false,
+          onRegularAction: () async {
+            bool checkOutSuccess = await _attendanceRepository.recordCheckOut(
+              employeeId: widget.employeeId,
+              checkOutTime: DateTime.now(),
             );
 
-            CustomSnackBar.successSnackBar("Checked out successfully at $_currentTime");
+            if (checkOutSuccess && mounted) {
+              setState(() {
+                _isCheckedIn = false;
+                _checkInTime = null;
 
-            await _fetchAttendanceStatus();
-            await _fetchTodaysActivity();
-          } else if (mounted) {
-            CustomSnackBar.errorSnackBar("Failed to record check-out. Please try again.");
-          }
-        },
-      );
+                if (_connectivityService.currentStatus == ConnectionStatus.offline) {
+                  _needsSync = true;
+                }
+              });
+
+              // Show success screen
+              Navigator.of(context).push(
+                MaterialPageRoute(
+                  builder: (context) => AuthenticationSuccessScreen(
+                    employeeName: _userData?['name'] ?? 'Employee',
+                    employeeId: widget.employeeId,
+                    actionType: 'check_out',
+                    similarityScore: '95.0',
+                  ),
+                ),
+              );
+
+              CustomSnackBar.successSnackBar("Checked out successfully at $_currentTime");
+
+              await _fetchAttendanceStatus();
+              await _fetchTodaysActivity();
+            } else if (mounted) {
+              CustomSnackBar.errorSnackBar("Failed to record check-out. Please try again.");
+            }
+          },
+        );
+      }
     }
   }
-}
   Future<void> _refreshDashboard() async {
     await _fetchUserData();
     await _fetchAttendanceStatus();
@@ -4366,27 +4472,69 @@ class _DashboardViewState extends State<DashboardView>
     setState(() => _checkingApproverStatus = true);
 
     try {
-      debugPrint("=== CHECKING OVERTIME APPROVER STATUS (SIMPLIFIED) ===");
+      debugPrint("=== DASHBOARD: CHECKING OVERTIME APPROVER STATUS ===");
       debugPrint("Current Employee: ${widget.employeeId}");
+      debugPrint("Employee Name: ${_userData?['name']}");
+      debugPrint("Employee PIN: ${_userData?['pin']}");
 
+      // ✅ STEP 1: Call the enhanced service
       bool isApprover = await OvertimeApproverService.isApprover(widget.employeeId);
+
+      debugPrint("🎯 APPROVER SERVICE RESULT: $isApprover");
 
       if (isApprover) {
         debugPrint("✅ User IS an overtime approver");
 
+        // ✅ STEP 2: Get approver info
         Map<String, dynamic>? approverInfo = await OvertimeApproverService.getCurrentApprover();
+
+        if (approverInfo != null) {
+          debugPrint("✅ Approver info retrieved:");
+          debugPrint("  - ID: ${approverInfo['approverId']}");
+          debugPrint("  - Name: ${approverInfo['approverName']}");
+          debugPrint("  - Source: ${approverInfo['source']}");
+        }
+
+        // ✅ STEP 3: Setup notifications
         await _setupApproverNotifications();
 
+        // ✅ STEP 4: Update state
         setState(() {
           _isOvertimeApprover = true;
           _approverInfo = approverInfo;
           _checkingApproverStatus = false;
         });
 
+        // ✅ STEP 5: Load pending requests
         await _loadPendingOvertimeRequests();
-        debugPrint("✅ Approver setup completed successfully");
+
+        debugPrint("✅ DASHBOARD: Approver setup completed successfully");
+
+        // Show success message
+        if (mounted) {
+          CustomSnackBar.successSnackBar("You are now set up as an overtime approver!");
+        }
+
       } else {
         debugPrint("❌ User is NOT an overtime approver");
+
+        // ✅ STEP 6: Check if we should force setup (for testing)
+        if (widget.employeeId == 'scvCD591SEspd8jKuIGZ' && _userData?['pin'] == '1289') {
+          debugPrint("🔧 FORCE SETUP: This user has PIN 1289, setting up as approver...");
+
+          bool forceSetup = await OvertimeApproverService.forceSetupCurrentUserAsApprover(
+            employeeId: widget.employeeId,
+            employeeName: _userData?['name'] ?? 'Overtime Approver',
+          );
+
+          if (forceSetup) {
+            debugPrint("✅ Force setup successful, rechecking...");
+            // Recheck after force setup
+            await _checkOvertimeApproverStatus();
+            return;
+          }
+        }
+
         setState(() {
           _isOvertimeApprover = false;
           _approverInfo = null;
@@ -4395,12 +4543,16 @@ class _DashboardViewState extends State<DashboardView>
       }
 
     } catch (e) {
-      debugPrint("Error checking approver status: $e");
+      debugPrint("❌ Error checking approver status: $e");
       setState(() {
         _isOvertimeApprover = false;
         _approverInfo = null;
         _checkingApproverStatus = false;
       });
+
+      if (mounted) {
+        CustomSnackBar.errorSnackBar("Error checking overtime approver status: $e");
+      }
     }
   }
 
@@ -4629,24 +4781,49 @@ class _DashboardViewState extends State<DashboardView>
       debugPrint("=== LOADING PENDING OVERTIME REQUESTS ===");
       debugPrint("Loading for approver: ${widget.employeeId}");
 
-      final QuerySnapshot snapshot = await FirebaseFirestore.instance
-          .collection('overtime_requests')
-          .where('status', isEqualTo: 'pending')
-          .where('approverEmpId', whereIn: [
+      // Use all possible approver ID variants
+      List<String> approverIds = [
         widget.employeeId,
         'EMP${widget.employeeId}',
-        widget.employeeId.startsWith('EMP') ? widget.employeeId.substring(3) : widget.employeeId
-      ])
-          .get();
+        widget.employeeId.startsWith('EMP') ? widget.employeeId.substring(3) : widget.employeeId,
+      ];
 
-      debugPrint("Found ${snapshot.docs.length} pending overtime requests");
+      debugPrint("Checking for approver IDs: $approverIds");
+
+      QuerySnapshot snapshot = await FirebaseFirestore.instance
+          .collection('overtime_requests')
+          .where('status', isEqualTo: 'pending')
+          .get(); // Get all pending first, then filter
+
+      int matchingRequests = 0;
+      for (var doc in snapshot.docs) {
+        try {
+          Map<String, dynamic> data = doc.data() as Map<String, dynamic>;
+          String docApproverId = data['approverEmpId']?.toString() ?? '';
+
+          debugPrint("Request ${doc.id}: approverEmpId = '$docApproverId'");
+
+          // Check if any of our approver IDs match
+          for (String approverId in approverIds) {
+            if (docApproverId == approverId) {
+              matchingRequests++;
+              debugPrint("✅ MATCH: Request ${doc.id} matches approver $approverId");
+              break;
+            }
+          }
+        } catch (e) {
+          debugPrint("Error processing request ${doc.id}: $e");
+        }
+      }
+
+      debugPrint("Found $matchingRequests pending overtime requests");
 
       setState(() {
-        _pendingOvertimeRequests = snapshot.docs.length;
+        _pendingOvertimeRequests = matchingRequests;
       });
 
     } catch (e) {
-      debugPrint("Error loading pending overtime requests: $e");
+      debugPrint("❌ Error loading pending overtime requests: $e");
       setState(() {
         _pendingOvertimeRequests = 0;
       });

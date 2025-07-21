@@ -1,11 +1,12 @@
-// lib/dashboard/my_attendance_view.dart - IMPROVED UI/UX VERSION
+// lib/dashboard/my_attendance_view.dart - FINAL FIXED VERSION WITH CROSS-DEVICE SYNC
 
 import 'package:flutter/material.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:intl/intl.dart';
 import 'package:face_auth/constants/theme.dart';
 import 'package:face_auth/common/utils/custom_snackbar.dart';
 import 'package:face_auth/model/overtime_request_model.dart';
+import 'package:face_auth/model/attendance_model.dart';
+import 'package:face_auth/repositories/attendance_repository.dart';
 import 'package:face_auth/services/employee_overtime_service.dart';
 import 'package:face_auth/services/service_locator.dart';
 
@@ -27,11 +28,12 @@ class _MyAttendanceViewState extends State<MyAttendanceView> with TickerProvider
   late TabController _tabController;
   final ScrollController _scrollController = ScrollController();
 
-  // Services
+  // Services and repositories
   late EmployeeOvertimeService _overtimeService;
+  late AttendanceRepository _attendanceRepository;
 
   // Attendance data
-  List<Map<String, dynamic>> _attendanceRecords = [];
+  List<AttendanceRecord> _attendanceRecords = [];
   bool _isLoadingAttendance = true;
   String _selectedMonth = DateFormat('yyyy-MM').format(DateTime.now());
 
@@ -50,11 +52,7 @@ class _MyAttendanceViewState extends State<MyAttendanceView> with TickerProvider
   @override
   void initState() {
     super.initState();
-
-    // Initialize with single tab first, will update after checking overtime access
     _tabController = TabController(length: 1, vsync: this);
-
-    // Start initialization process
     _initializeEverything();
   }
 
@@ -70,18 +68,12 @@ class _MyAttendanceViewState extends State<MyAttendanceView> with TickerProvider
     try {
       debugPrint("🚀 === INITIALIZING ATTENDANCE VIEW FOR ${widget.employeeId} ===");
 
-      // Step 1: Initialize services
       await _initializeServices();
-
-      // Step 2: Check overtime access
       await _checkOvertimeAccess();
-
-      // Step 3: Fetch initial data
       await _fetchInitialData();
 
     } catch (e) {
       debugPrint("❌ Error during initialization: $e");
-      // Fallback to attendance only
       _setupAttendanceOnlyView();
     }
   }
@@ -90,17 +82,20 @@ class _MyAttendanceViewState extends State<MyAttendanceView> with TickerProvider
     try {
       debugPrint("🔧 Initializing services...");
 
-      // Try to get the service from GetIt
-      _overtimeService = getIt<EmployeeOvertimeService>();
-      debugPrint("✅ Successfully got EmployeeOvertimeService from GetIt");
+      _attendanceRepository = getIt<AttendanceRepository>();
+      debugPrint("✅ Successfully got AttendanceRepository from GetIt");
+
+      try {
+        _overtimeService = getIt<EmployeeOvertimeService>();
+        debugPrint("✅ Successfully got EmployeeOvertimeService from GetIt");
+      } catch (e) {
+        debugPrint("❌ Error getting EmployeeOvertimeService from GetIt: $e");
+        _overtimeService = EmployeeOvertimeService();
+      }
 
     } catch (e) {
-      debugPrint("❌ Error getting service from GetIt: $e");
-      debugPrint("🔄 Creating fallback EmployeeOvertimeService instance");
-
-      // Fallback: create new instance
-      _overtimeService = EmployeeOvertimeService();
-      debugPrint("✅ Fallback service created successfully");
+      debugPrint("❌ Error initializing services: $e");
+      rethrow;
     }
   }
 
@@ -108,15 +103,11 @@ class _MyAttendanceViewState extends State<MyAttendanceView> with TickerProvider
     try {
       debugPrint("🔐 Checking overtime access for ${widget.employeeId}...");
 
-      // Check if employee has overtime access
       bool hasAccess = await _overtimeService.hasOvertimeAccess(widget.employeeId);
       debugPrint("📋 Overtime access result: $hasAccess");
 
-      // Update UI based on access
       setState(() {
         _hasOvertimeAccess = hasAccess;
-
-        // Dispose old controller and create new one with correct tab count
         _tabController.dispose();
         _tabController = TabController(length: _hasOvertimeAccess ? 2 : 1, vsync: this);
       });
@@ -130,10 +121,9 @@ class _MyAttendanceViewState extends State<MyAttendanceView> with TickerProvider
   }
 
   Future<void> _fetchInitialData() async {
-    // Always fetch attendance data
-    _fetchAttendanceRecords();
-
-    // Fetch overtime data if user has access
+    // ✅ IMPROVED: Always force refresh on initial load to get latest data
+    await _fetchAttendanceRecords(forceRefresh: true);
+    
     if (_hasOvertimeAccess) {
       debugPrint("📊 Fetching overtime data...");
       _fetchOvertimeData();
@@ -151,122 +141,32 @@ class _MyAttendanceViewState extends State<MyAttendanceView> with TickerProvider
     _fetchAttendanceRecords();
   }
 
-  // ===== ATTENDANCE METHODS =====
-  Future<void> _fetchAttendanceRecords() async {
+  // ===== FIXED ATTENDANCE METHODS FOR CROSS-DEVICE SYNC =====
+  Future<void> _fetchAttendanceRecords({bool forceRefresh = false}) async {
     setState(() => _isLoadingAttendance = true);
 
     try {
-      debugPrint("📅 Fetching attendance records for ${widget.employeeId} in month $_selectedMonth");
+      debugPrint("📅 Fetching attendance records for ${widget.employeeId} in month $_selectedMonth (force: $forceRefresh)");
 
       // Parse the selected month to get start and end dates
       DateTime selectedDate = DateFormat('yyyy-MM').parse(_selectedMonth);
-      DateTime startOfMonth = DateTime(selectedDate.year, selectedDate.month, 1);
-      DateTime endOfMonth = DateTime(selectedDate.year, selectedDate.month + 1, 0);
+      int year = selectedDate.year;
+      int month = selectedDate.month;
 
-      String startDateStr = DateFormat('yyyy-MM-dd').format(startOfMonth);
-      String endDateStr = DateFormat('yyyy-MM-dd').format(endOfMonth);
+      debugPrint("📅 Fetching for year: $year, month: $month");
 
-      debugPrint("📅 Date range: $startDateStr to $endDateStr");
+      // ✅ FIXED: Use repository method with force refresh capability
+      List<AttendanceRecord> existingRecords = await _attendanceRepository.getAttendanceRecordsForMonth(
+        employeeId: widget.employeeId,
+        year: year,
+        month: month,
+        forceRefresh: forceRefresh, // ✅ Use force refresh parameter
+      );
 
-      // Query attendance records for the selected month
-      QuerySnapshot snapshot = await FirebaseFirestore.instance
-          .collection('employees')
-          .doc(widget.employeeId)
-          .collection('attendance')
-          .where('date', isGreaterThanOrEqualTo: startDateStr)
-          .where('date', isLessThanOrEqualTo: endDateStr)
-          .orderBy('date', descending: true)
-          .get();
+      debugPrint("📅 Found ${existingRecords.length} attendance records from repository");
 
-      debugPrint("📅 Found ${snapshot.docs.length} attendance records");
-
-      // Create a map of existing records by date
-      Map<String, Map<String, dynamic>> existingRecords = {};
-
-      for (var doc in snapshot.docs) {
-        Map<String, dynamic> data = doc.data() as Map<String, dynamic>;
-        String date = data['date'] ?? '';
-
-        if (date.isNotEmpty) {
-          // Calculate total hours and overtime hours
-          DateTime? checkIn;
-          DateTime? checkOut;
-
-          if (data['checkIn'] != null) {
-            checkIn = (data['checkIn'] as Timestamp).toDate();
-          }
-
-          if (data['checkOut'] != null) {
-            checkOut = (data['checkOut'] as Timestamp).toDate();
-          }
-
-          // Calculate hours
-          double totalHours = 0.0;
-          double overtimeHours = 0.0;
-
-          if (checkIn != null && checkOut != null) {
-            Duration workDuration = checkOut.difference(checkIn);
-            totalHours = workDuration.inMinutes / 60.0;
-
-            // Standard work day is 8 hours
-            const double standardWorkHours = 8.0;
-
-            if (totalHours > standardWorkHours) {
-              overtimeHours = totalHours - standardWorkHours;
-            }
-          }
-
-          // Add overtime data from Firebase if available
-          if (data.containsKey('overtimeHours')) {
-            overtimeHours = (data['overtimeHours'] ?? 0.0).toDouble();
-          }
-
-          existingRecords[date] = {
-            'date': date,
-            'checkIn': checkIn,
-            'checkOut': checkOut,
-            'location': data['location'] ?? 'Unknown',
-            'workStatus': data['workStatus'] ?? 'Unknown',
-            'totalHours': totalHours,
-            'overtimeHours': overtimeHours,
-            'isWithinGeofence': data['isWithinGeofence'] ?? false,
-            'rawData': data,
-            'hasRecord': true,
-          };
-        }
-      }
-
-      // Generate ALL days of the month
-      List<Map<String, dynamic>> completeRecords = [];
-      DateTime currentDay = startOfMonth;
-
-      while (currentDay.isBefore(endOfMonth) || currentDay.isAtSameMomentAs(endOfMonth)) {
-        String currentDateStr = DateFormat('yyyy-MM-dd').format(currentDay);
-
-        if (existingRecords.containsKey(currentDateStr)) {
-          // Day has attendance record
-          completeRecords.add(existingRecords[currentDateStr]!);
-        } else {
-          // Day is absent - no attendance record
-          completeRecords.add({
-            'date': currentDateStr,
-            'checkIn': null,
-            'checkOut': null,
-            'location': 'No Location',
-            'workStatus': 'Absent',
-            'totalHours': 0.0,
-            'overtimeHours': 0.0,
-            'isWithinGeofence': false,
-            'rawData': {},
-            'hasRecord': false,
-          });
-        }
-
-        currentDay = currentDay.add(const Duration(days: 1));
-      }
-
-      // Sort by date (newest first)
-      completeRecords.sort((a, b) => b['date'].compareTo(a['date']));
+      // Generate complete month view with all days
+      List<AttendanceRecord> completeRecords = await _generateCompleteMonthView(year, month, existingRecords);
 
       setState(() {
         _attendanceRecords = completeRecords;
@@ -287,7 +187,108 @@ class _MyAttendanceViewState extends State<MyAttendanceView> with TickerProvider
     }
   }
 
-  // ===== OVERTIME METHODS =====
+  // ✅ NEW: Generate complete month view with all days
+  Future<List<AttendanceRecord>> _generateCompleteMonthView(int year, int month, List<AttendanceRecord> existingRecords) async {
+    try {
+      // Create a map of existing records by date
+      Map<String, AttendanceRecord> existingRecordsMap = {};
+      for (var record in existingRecords) {
+        existingRecordsMap[record.date] = record;
+      }
+
+      // Generate ALL days of the month
+      List<AttendanceRecord> completeRecords = [];
+      DateTime startOfMonth = DateTime(year, month, 1);
+      DateTime endOfMonth = DateTime(year, month + 1, 0);
+      DateTime currentDay = startOfMonth;
+
+      while (currentDay.isBefore(endOfMonth) || currentDay.isAtSameMomentAs(endOfMonth)) {
+        String currentDateStr = DateFormat('yyyy-MM-dd').format(currentDay);
+
+        if (existingRecordsMap.containsKey(currentDateStr)) {
+          // Day has attendance record
+          completeRecords.add(existingRecordsMap[currentDateStr]!);
+        } else {
+          // Day is absent - create empty attendance record
+          completeRecords.add(AttendanceRecord(
+            date: currentDateStr,
+            checkIn: null,
+            checkOut: null,
+            location: 'No Location',
+            workStatus: 'Absent',
+            totalHours: 0.0,
+            regularHours: 0.0,
+            overtimeHours: 0.0,
+            isWithinGeofence: false,
+            rawData: {'hasRecord': false},
+          ));
+        }
+
+        currentDay = currentDay.add(const Duration(days: 1));
+      }
+
+      // Sort by date (newest first)
+      completeRecords.sort((a, b) => b.date.compareTo(a.date));
+
+      return completeRecords;
+    } catch (e) {
+      debugPrint("❌ Error generating complete month view: $e");
+      return [];
+    }
+  }
+
+  // ✅ NEW: Force refresh with user feedback
+  Future<void> _forceRefreshAttendance() async {
+    try {
+      debugPrint("🔄 Force refreshing attendance data from Firestore...");
+
+      // Show loading state
+      if (mounted) {
+        CustomSnackBar.infoSnackBar("🔄 Syncing latest data from server...");
+      }
+
+      // Force refresh the data
+      await _fetchAttendanceRecords(forceRefresh: true);
+
+      if (mounted) {
+        CustomSnackBar.successSnackBar("✅ Data synced successfully!");
+      }
+    } catch (e) {
+      debugPrint("❌ Error during force refresh: $e");
+      if (mounted) {
+        CustomSnackBar.errorSnackBar("❌ Error syncing data: $e");
+      }
+    }
+  }
+
+  // ✅ NEW: Force refresh today's data specifically (for same-day cross-device sync)
+  Future<void> _forceRefreshToday() async {
+    try {
+      debugPrint("🔄 Force refreshing today's data from Firestore...");
+
+      // Show loading feedback
+      if (mounted) {
+        CustomSnackBar.infoSnackBar("🔄 Getting today's latest data...");
+      }
+
+      // Force refresh today's data
+      await _attendanceRepository.forceRefreshTodayFromFirestore(widget.employeeId);
+
+      // Refresh the current view
+      await _fetchAttendanceRecords(forceRefresh: true);
+
+      if (mounted) {
+        CustomSnackBar.successSnackBar("✅ Today's data updated!");
+      }
+    } catch (e) {
+      debugPrint("❌ Error refreshing today's data: $e");
+      if (mounted) {
+        CustomSnackBar.errorSnackBar("❌ Error updating today's data: $e");
+      }
+    }
+  }
+
+  // ===== OVERTIME METHODS (keeping existing) =====
   Future<void> _fetchOvertimeData() async {
     if (!_hasOvertimeAccess) return;
 
@@ -296,7 +297,6 @@ class _MyAttendanceViewState extends State<MyAttendanceView> with TickerProvider
     try {
       debugPrint("📊 === FETCHING ALL OVERTIME DATA ===");
 
-      // Fetch all overtime data concurrently
       final futures = await Future.wait([
         _overtimeService.getOvertimeHistoryForEmployee(widget.employeeId),
         _overtimeService.getTodayOvertimeForEmployee(widget.employeeId),
@@ -334,12 +334,10 @@ class _MyAttendanceViewState extends State<MyAttendanceView> with TickerProvider
   void _filterOvertimeHistory() {
     List<OvertimeRequest> filtered = _overtimeHistory;
 
-    // Apply status filter
     if (_selectedOvertimeStatus != null) {
       filtered = filtered.where((request) => request.status == _selectedOvertimeStatus).toList();
     }
 
-    // Apply search query
     if (_overtimeSearchQuery.isNotEmpty) {
       String query = _overtimeSearchQuery.toLowerCase();
       filtered = filtered.where((request) {
@@ -377,15 +375,76 @@ class _MyAttendanceViewState extends State<MyAttendanceView> with TickerProvider
         foregroundColor: Colors.white,
         elevation: 0,
         actions: [
-          IconButton(
-            icon: const Icon(Icons.refresh_rounded, size: 22),
-            onPressed: () {
-              _fetchAttendanceRecords();
-              if (_hasOvertimeAccess) {
-                _fetchOvertimeData();
+          // ✅ IMPROVED: Enhanced sync options with better UX
+          PopupMenuButton<String>(
+            icon: const Icon(Icons.sync_rounded, size: 22),
+            tooltip: 'Sync Options',
+            onSelected: (value) async {
+              switch (value) {
+                case 'refresh':
+                  await _fetchAttendanceRecords();
+                  if (_hasOvertimeAccess) {
+                    await _fetchOvertimeData();
+                  }
+                  break;
+                case 'force_refresh':
+                  await _forceRefreshAttendance();
+                  break;
+                case 'refresh_today':
+                  await _forceRefreshToday();
+                  break;
               }
             },
-            tooltip: 'Refresh',
+            itemBuilder: (context) => [
+              const PopupMenuItem(
+                value: 'refresh',
+                child: Row(
+                  children: [
+                    Icon(Icons.refresh_rounded, size: 18, color: Colors.blue),
+                    SizedBox(width: 8),
+                    Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text('Refresh'),
+                        Text('Normal data refresh', style: TextStyle(fontSize: 11, color: Colors.grey)),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+              const PopupMenuItem(
+                value: 'force_refresh',
+                child: Row(
+                  children: [
+                    Icon(Icons.cloud_sync_rounded, size: 18, color: Colors.orange),
+                    SizedBox(width: 8),
+                    Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text('Force Sync'),
+                        Text('Sync from server', style: TextStyle(fontSize: 11, color: Colors.grey)),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+              const PopupMenuItem(
+                value: 'refresh_today',
+                child: Row(
+                  children: [
+                    Icon(Icons.today_rounded, size: 18, color: Colors.green),
+                    SizedBox(width: 8),
+                    Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text('Sync Today'),
+                        Text('Get today\'s latest data', style: TextStyle(fontSize: 11, color: Colors.grey)),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+            ],
           ),
         ],
         bottom: _hasOvertimeAccess
@@ -438,6 +497,36 @@ class _MyAttendanceViewState extends State<MyAttendanceView> with TickerProvider
         // Month selector
         _buildMonthSelector(),
 
+        // ✅ NEW: Enhanced sync status indicator
+        if (_isLoadingAttendance)
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+            decoration: BoxDecoration(
+              color: Colors.blue.shade50,
+              border: Border(bottom: BorderSide(color: Colors.blue.shade100)),
+            ),
+            child: Row(
+              children: [
+                SizedBox(
+                  width: 16,
+                  height: 16,
+                  child: CircularProgressIndicator(strokeWidth: 2, color: Colors.blue.shade600),
+                ),
+                const SizedBox(width: 12),
+                Text(
+                  'Syncing attendance data from server...',
+                  style: TextStyle(
+                    fontSize: 12,
+                    color: Colors.blue.shade700,
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
+                const Spacer(),
+                Icon(Icons.cloud_sync_rounded, size: 16, color: Colors.blue.shade600),
+              ],
+            ),
+          ),
+
         // Summary cards
         if (!_isLoadingAttendance && _attendanceRecords.isNotEmpty)
           _buildSummaryCards(),
@@ -456,18 +545,388 @@ class _MyAttendanceViewState extends State<MyAttendanceView> with TickerProvider
     );
   }
 
-  // ===== OVERTIME TAB =====
+  // ===== KEEPING ALL EXISTING UI METHODS =====
+  Widget _buildSummaryCards() {
+    int totalDaysInMonth = _attendanceRecords.length;
+    double totalWorkHours = 0;
+    double totalOvertimeHours = 0;
+    int absentDays = 0;
+    int presentDays = 0;
+
+    for (var record in _attendanceRecords) {
+      bool hasRecord = record.rawData['hasRecord'] ?? true;
+
+      if (!hasRecord || (!record.hasCheckIn && !record.hasCheckOut)) {
+        absentDays++;
+      } else {
+        presentDays++;
+      }
+
+      totalWorkHours += record.totalHours;
+      totalOvertimeHours += record.overtimeHours;
+    }
+
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: const BoxDecoration(
+        color: Colors.white,
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            'Summary for ${DateFormat('MMMM yyyy').format(DateFormat('yyyy-MM').parse(_selectedMonth))}',
+            style: const TextStyle(
+              fontSize: 18,
+              fontWeight: FontWeight.bold,
+              color: accentColor,
+            ),
+          ),
+          const SizedBox(height: 16),
+          Row(
+            children: [
+              Expanded(
+                child: _buildSummaryCard(
+                  'Total Days',
+                  totalDaysInMonth.toString(),
+                  Icons.calendar_today,
+                  Colors.blue,
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: _buildSummaryCard(
+                  'Present Days',
+                  presentDays.toString(),
+                  Icons.check_circle,
+                  Colors.green,
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: _buildSummaryCard(
+                  'Absent Days',
+                  absentDays.toString(),
+                  Icons.cancel,
+                  Colors.red,
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: _buildSummaryCard(
+                  'Total Hours',
+                  '${totalWorkHours.toStringAsFixed(1)}h',
+                  Icons.access_time,
+                  Colors.indigo,
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildAttendanceTable() {
+    return Container(
+      decoration: const BoxDecoration(
+        color: Colors.white,
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Container(
+            padding: const EdgeInsets.all(16),
+            child: Row(
+              children: [
+                const Text(
+                  'Attendance Records',
+                  style: TextStyle(
+                    fontSize: 18,
+                    fontWeight: FontWeight.bold,
+                    color: accentColor,
+                  ),
+                ),
+                const Spacer(),
+                // ✅ NEW: Quick sync button for table
+                TextButton.icon(
+                  onPressed: () => _forceRefreshToday(),
+                  icon: const Icon(Icons.sync_rounded, size: 16),
+                  label: const Text('Sync Today', style: TextStyle(fontSize: 12)),
+                  style: TextButton.styleFrom(
+                    foregroundColor: accentColor,
+                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          Expanded(
+            child: SingleChildScrollView(
+              controller: _scrollController,
+              child: SingleChildScrollView(
+                scrollDirection: Axis.horizontal,
+                child: DataTable(
+                  columnSpacing: 16,
+                  headingRowColor: MaterialStateProperty.all(Colors.grey.shade100),
+                  columns: [
+                    const DataColumn(
+                      label: Text(
+                        'Date',
+                        style: TextStyle(fontWeight: FontWeight.bold),
+                      ),
+                    ),
+                    const DataColumn(
+                      label: Text(
+                        'Check In',
+                        style: TextStyle(fontWeight: FontWeight.bold),
+                      ),
+                    ),
+                    const DataColumn(
+                      label: Text(
+                        'Check Out',
+                        style: TextStyle(fontWeight: FontWeight.bold),
+                      ),
+                    ),
+                    const DataColumn(
+                      label: Text(
+                        'Total Hours',
+                        style: TextStyle(fontWeight: FontWeight.bold),
+                      ),
+                    ),
+                    if (_hasOvertimeAccess)
+                      const DataColumn(
+                        label: Text(
+                          'Overtime',
+                          style: TextStyle(fontWeight: FontWeight.bold),
+                        ),
+                      ),
+                    const DataColumn(
+                      label: Text(
+                        'Location',
+                        style: TextStyle(fontWeight: FontWeight.bold),
+                      ),
+                    ),
+                    const DataColumn(
+                      label: Text(
+                        'Status',
+                        style: TextStyle(fontWeight: FontWeight.bold),
+                      ),
+                    ),
+                    const DataColumn(
+                      label: Text(
+                        'Attendance',
+                        style: TextStyle(fontWeight: FontWeight.bold),
+                      ),
+                    ),
+                  ],
+                  rows: _attendanceRecords.map((record) => _buildDataRow(record)).toList(),
+                ),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  DataRow _buildDataRow(AttendanceRecord record) {
+    bool hasRecord = record.rawData['hasRecord'] ?? true;
+
+    // Determine attendance status
+    String attendanceStatus = 'Present';
+    Color attendanceColor = Colors.green;
+    IconData attendanceIcon = Icons.check_circle;
+
+    if (!hasRecord || (!record.hasCheckIn && !record.hasCheckOut)) {
+      attendanceStatus = 'Absent';
+      attendanceColor = Colors.red;
+      attendanceIcon = Icons.cancel;
+    } else if (!record.hasCheckIn || !record.hasCheckOut) {
+      attendanceStatus = 'Incomplete';
+      attendanceColor = Colors.orange;
+      attendanceIcon = Icons.warning;
+    }
+
+    // Format date
+    String formattedDate = '';
+    String dayOfWeek = '';
+    try {
+      DateTime dateTime = DateFormat('yyyy-MM-dd').parse(record.date);
+      formattedDate = DateFormat('MMM dd').format(dateTime);
+      dayOfWeek = DateFormat('EEE').format(dateTime);
+    } catch (e) {
+      formattedDate = record.date;
+    }
+
+    return DataRow(
+      color: attendanceStatus == 'Absent'
+          ? MaterialStateProperty.all(Colors.red.withOpacity(0.05))
+          : attendanceStatus == 'Incomplete'
+          ? MaterialStateProperty.all(Colors.orange.withOpacity(0.05))
+          : null,
+      cells: [
+        DataCell(
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Text(
+                formattedDate,
+                style: TextStyle(
+                  fontWeight: FontWeight.w600,
+                  color: attendanceStatus == 'Absent' ? Colors.red.shade700 : Colors.black,
+                ),
+              ),
+              if (dayOfWeek.isNotEmpty)
+                Text(
+                  dayOfWeek,
+                  style: TextStyle(
+                    fontSize: 12,
+                    color: attendanceStatus == 'Absent'
+                        ? Colors.red.shade500
+                        : Colors.grey.shade600,
+                  ),
+                ),
+            ],
+          ),
+        ),
+        DataCell(
+          Text(
+            record.formattedCheckIn,
+            style: TextStyle(
+              color: record.hasCheckIn ? Colors.green.shade700 : Colors.grey,
+              fontWeight: record.hasCheckIn ? FontWeight.w600 : FontWeight.normal,
+            ),
+          ),
+        ),
+        DataCell(
+          Text(
+            record.formattedCheckOut,
+            style: TextStyle(
+              color: record.hasCheckOut ? Colors.red.shade700 : Colors.grey,
+              fontWeight: record.hasCheckOut ? FontWeight.w600 : FontWeight.normal,
+            ),
+          ),
+        ),
+        DataCell(
+          Text(
+            record.formattedTotalHours,
+            style: TextStyle(
+              color: record.totalHours > 0 ? Colors.blue.shade700 : Colors.grey,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+        ),
+        if (_hasOvertimeAccess)
+          DataCell(
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+              decoration: BoxDecoration(
+                color: record.hasOvertime ? Colors.orange.withOpacity(0.2) : Colors.transparent,
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: Text(
+                record.formattedOvertimeHours,
+                style: TextStyle(
+                  color: record.hasOvertime ? Colors.orange.shade800 : Colors.grey,
+                  fontWeight: record.hasOvertime ? FontWeight.bold : FontWeight.normal,
+                  fontSize: 12,
+                ),
+              ),
+            ),
+          ),
+        DataCell(
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Text(
+                record.location,
+                style: TextStyle(
+                  fontSize: 12,
+                  color: attendanceStatus == 'Absent' ? Colors.grey : Colors.black,
+                ),
+                overflow: TextOverflow.ellipsis,
+              ),
+              if (attendanceStatus != 'Absent' && hasRecord)
+                Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(
+                      record.isWithinGeofence ? Icons.location_on : Icons.location_off,
+                      size: 12,
+                      color: record.isWithinGeofence ? Colors.green : Colors.red,
+                    ),
+                    const SizedBox(width: 4),
+                    Text(
+                      record.isWithinGeofence ? 'Inside' : 'Outside',
+                      style: TextStyle(
+                        fontSize: 10,
+                        color: record.isWithinGeofence ? Colors.green : Colors.red,
+                      ),
+                    ),
+                  ],
+                ),
+            ],
+          ),
+        ),
+        DataCell(
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+            decoration: BoxDecoration(
+              color: _getStatusColor(record.workStatus).withOpacity(0.2),
+              borderRadius: BorderRadius.circular(8),
+            ),
+            child: Text(
+              record.workStatus,
+              style: TextStyle(
+                color: _getStatusColor(record.workStatus),
+                fontSize: 12,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+          ),
+        ),
+        DataCell(
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+            decoration: BoxDecoration(
+              color: attendanceColor.withOpacity(0.2),
+              borderRadius: BorderRadius.circular(8),
+            ),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(
+                  attendanceIcon,
+                  size: 14,
+                  color: attendanceColor,
+                ),
+                const SizedBox(width: 4),
+                Text(
+                  attendanceStatus,
+                  style: TextStyle(
+                    color: attendanceColor,
+                    fontSize: 12,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  // ===== KEEPING ALL OTHER EXISTING METHODS (overtime tab, helper methods, etc.) =====
   Widget _buildOvertimeTab() {
     return Column(
       children: [
-        // Today's overtime (compact design)
         if (_todayOvertimeRequests.isNotEmpty) _buildTodayOvertimeCompact(),
-
-        // Overtime summary
         if (!_isLoadingOvertime && _overtimeHistory.isNotEmpty)
           _buildOvertimeSummary(),
-
-        // Overtime history
         Expanded(
           child: _isLoadingOvertime
               ? const Center(
@@ -481,7 +940,8 @@ class _MyAttendanceViewState extends State<MyAttendanceView> with TickerProvider
     );
   }
 
-  // ===== IMPROVED TODAY'S OVERTIME (COMPACT & PROFESSIONAL) =====
+  // [All other existing overtime methods remain the same - _buildTodayOvertimeCompact, _buildOvertimeSummary, etc.]
+
   Widget _buildTodayOvertimeCompact() {
     return Container(
       margin: const EdgeInsets.all(12),
@@ -499,7 +959,6 @@ class _MyAttendanceViewState extends State<MyAttendanceView> with TickerProvider
       ),
       child: Column(
         children: [
-          // Header
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
             decoration: BoxDecoration(
@@ -547,8 +1006,6 @@ class _MyAttendanceViewState extends State<MyAttendanceView> with TickerProvider
               ],
             ),
           ),
-
-          // Overtime requests list (compact)
           Padding(
             padding: const EdgeInsets.all(12),
             child: Column(
@@ -562,7 +1019,6 @@ class _MyAttendanceViewState extends State<MyAttendanceView> with TickerProvider
                 ),
                 child: Row(
                   children: [
-                    // Project info
                     Expanded(
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
@@ -586,8 +1042,6 @@ class _MyAttendanceViewState extends State<MyAttendanceView> with TickerProvider
                         ],
                       ),
                     ),
-
-                    // Time info
                     Column(
                       crossAxisAlignment: CrossAxisAlignment.end,
                       children: [
@@ -627,7 +1081,6 @@ class _MyAttendanceViewState extends State<MyAttendanceView> with TickerProvider
     );
   }
 
-  // ===== IMPROVED OVERTIME SUMMARY =====
   Widget _buildOvertimeSummary() {
     int totalRequests = _overtimeStatistics['totalRequests'] ?? 0;
     int approvedRequests = _overtimeStatistics['approvedRequests'] ?? 0;
@@ -698,7 +1151,6 @@ class _MyAttendanceViewState extends State<MyAttendanceView> with TickerProvider
     );
   }
 
-  // ===== COMPACT SUMMARY CARD =====
   Widget _buildCompactSummaryCard(String title, String value, IconData icon, Color color) {
     return Container(
       padding: const EdgeInsets.all(12),
@@ -737,10 +1189,7 @@ class _MyAttendanceViewState extends State<MyAttendanceView> with TickerProvider
   Widget _buildOvertimeHistoryList() {
     return Column(
       children: [
-        // Search and filter section
         _buildOvertimeSearchAndFilter(),
-
-        // History list
         Expanded(
           child: _filteredOvertimeHistory.isEmpty
               ? _buildNoResultsState()
@@ -757,7 +1206,6 @@ class _MyAttendanceViewState extends State<MyAttendanceView> with TickerProvider
     );
   }
 
-  // ===== IMPROVED OVERTIME CARD (COMPACT & PROFESSIONAL) =====
   Widget _buildCompactOvertimeCard(OvertimeRequest request) {
     Color statusColor = _getOvertimeStatusColor(request.status);
     IconData statusIcon = _getOvertimeStatusIcon(request.status);
@@ -778,7 +1226,6 @@ class _MyAttendanceViewState extends State<MyAttendanceView> with TickerProvider
       ),
       child: Column(
         children: [
-          // Header with project and status
           Container(
             padding: const EdgeInsets.all(12),
             decoration: BoxDecoration(
@@ -832,13 +1279,10 @@ class _MyAttendanceViewState extends State<MyAttendanceView> with TickerProvider
               ],
             ),
           ),
-
-          // Content
           Padding(
             padding: const EdgeInsets.all(12),
             child: Column(
               children: [
-                // Time and duration row
                 Row(
                   children: [
                     Icon(Icons.schedule_rounded, size: 14, color: Colors.grey.shade600),
@@ -870,8 +1314,6 @@ class _MyAttendanceViewState extends State<MyAttendanceView> with TickerProvider
                   ],
                 ),
                 const SizedBox(height: 8),
-
-                // Requester and team info
                 Row(
                   children: [
                     Icon(Icons.person_rounded, size: 14, color: Colors.grey.shade600),
@@ -894,8 +1336,6 @@ class _MyAttendanceViewState extends State<MyAttendanceView> with TickerProvider
                     ),
                   ],
                 ),
-
-                // Response message (if any)
                 if (request.responseMessage != null && request.responseMessage!.isNotEmpty) ...[
                   const SizedBox(height: 8),
                   Container(
@@ -967,8 +1407,6 @@ class _MyAttendanceViewState extends State<MyAttendanceView> with TickerProvider
             ],
           ),
           const SizedBox(height: 10),
-
-          // Search bar (compact)
           SizedBox(
             height: 36,
             child: TextField(
@@ -1009,10 +1447,7 @@ class _MyAttendanceViewState extends State<MyAttendanceView> with TickerProvider
               ),
             ),
           ),
-
           const SizedBox(height: 10),
-
-          // Status filter chips (compact)
           SingleChildScrollView(
             scrollDirection: Axis.horizontal,
             child: Row(
@@ -1199,7 +1634,6 @@ class _MyAttendanceViewState extends State<MyAttendanceView> with TickerProvider
     );
   }
 
-  // ===== HELPER METHODS =====
   Color _getOvertimeStatusColor(OvertimeRequestStatus status) {
     switch (status) {
       case OvertimeRequestStatus.pending:
@@ -1226,7 +1660,6 @@ class _MyAttendanceViewState extends State<MyAttendanceView> with TickerProvider
     }
   }
 
-  // ===== ATTENDANCE UI METHODS (Keeping existing ones) =====
   Widget _buildMonthSelector() {
     return Container(
       padding: const EdgeInsets.all(16),
@@ -1262,7 +1695,8 @@ class _MyAttendanceViewState extends State<MyAttendanceView> with TickerProvider
                       setState(() {
                         _selectedMonth = newValue;
                       });
-                      _fetchAttendanceRecords();
+                      // ✅ Force refresh when changing months to get latest data
+                      _fetchAttendanceRecords(forceRefresh: true);
                     }
                   },
                 ),
@@ -1278,7 +1712,6 @@ class _MyAttendanceViewState extends State<MyAttendanceView> with TickerProvider
     List<DropdownMenuItem<String>> items = [];
     DateTime now = DateTime.now();
 
-    // Generate last 12 months
     for (int i = 0; i < 12; i++) {
       DateTime month = DateTime(now.year, now.month - i, 1);
       String monthKey = DateFormat('yyyy-MM').format(month);
@@ -1293,90 +1726,6 @@ class _MyAttendanceViewState extends State<MyAttendanceView> with TickerProvider
     }
 
     return items;
-  }
-
-  Widget _buildSummaryCards() {
-    int totalDaysInMonth = _attendanceRecords.length;
-    double totalWorkHours = 0;
-    double totalOvertimeHours = 0;
-    int absentDays = 0;
-    int presentDays = 0;
-
-    for (var record in _attendanceRecords) {
-      DateTime? checkIn = record['checkIn'];
-      DateTime? checkOut = record['checkOut'];
-      bool hasRecord = record['hasRecord'] ?? true;
-
-      if (!hasRecord || (checkIn == null && checkOut == null)) {
-        absentDays++;
-      } else {
-        presentDays++;
-      }
-
-      totalWorkHours += record['totalHours'] ?? 0.0;
-      double overtimeHours = record['overtimeHours'] ?? 0.0;
-      totalOvertimeHours += overtimeHours;
-    }
-
-    return Container(
-      padding: const EdgeInsets.all(16),
-      decoration: const BoxDecoration(
-        color: Colors.white,
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            'Summary for ${DateFormat('MMMM yyyy').format(DateFormat('yyyy-MM').parse(_selectedMonth))}',
-            style: const TextStyle(
-              fontSize: 18,
-              fontWeight: FontWeight.bold,
-              color: accentColor,
-            ),
-          ),
-          const SizedBox(height: 16),
-          Row(
-            children: [
-              Expanded(
-                child: _buildSummaryCard(
-                  'Total Days',
-                  totalDaysInMonth.toString(),
-                  Icons.calendar_today,
-                  Colors.blue,
-                ),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: _buildSummaryCard(
-                  'Present Days',
-                  presentDays.toString(),
-                  Icons.check_circle,
-                  Colors.green,
-                ),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: _buildSummaryCard(
-                  'Absent Days',
-                  absentDays.toString(),
-                  Icons.cancel,
-                  Colors.red,
-                ),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: _buildSummaryCard(
-                  'Total Hours',
-                  '${totalWorkHours.toStringAsFixed(1)}h',
-                  Icons.access_time,
-                  Colors.indigo,
-                ),
-              ),
-            ],
-          ),
-        ],
-      ),
-    );
   }
 
   Widget _buildSummaryCard(String title, String value, IconData icon, Color color) {
@@ -1440,305 +1789,32 @@ class _MyAttendanceViewState extends State<MyAttendanceView> with TickerProvider
             ),
           ),
           const SizedBox(height: 24),
-          ElevatedButton.icon(
-            onPressed: _fetchAttendanceRecords,
-            icon: const Icon(Icons.refresh),
-            label: const Text('Refresh'),
-            style: ElevatedButton.styleFrom(
-              backgroundColor: accentColor,
-              foregroundColor: Colors.white,
-            ),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              ElevatedButton.icon(
+                onPressed: () => _fetchAttendanceRecords(),
+                icon: const Icon(Icons.refresh),
+                label: const Text('Refresh'),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: Colors.blue,
+                  foregroundColor: Colors.white,
+                ),
+              ),
+              const SizedBox(width: 12),
+              ElevatedButton.icon(
+                onPressed: () => _forceRefreshAttendance(),
+                icon: const Icon(Icons.cloud_sync_rounded),
+                label: const Text('Force Sync'),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: accentColor,
+                  foregroundColor: Colors.white,
+                ),
+              ),
+            ],
           ),
         ],
       ),
-    );
-  }
-
-  Widget _buildAttendanceTable() {
-    return Container(
-      decoration: const BoxDecoration(
-        color: Colors.white,
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Container(
-            padding: const EdgeInsets.all(16),
-            child: const Text(
-              'Attendance Records',
-              style: TextStyle(
-                fontSize: 18,
-                fontWeight: FontWeight.bold,
-                color: accentColor,
-              ),
-            ),
-          ),
-          Expanded(
-            child: SingleChildScrollView(
-              controller: _scrollController,
-              child: SingleChildScrollView(
-                scrollDirection: Axis.horizontal,
-                child: DataTable(
-                  columnSpacing: 16,
-                  headingRowColor: MaterialStateProperty.all(Colors.grey.shade100),
-                  columns: [
-                    const DataColumn(
-                      label: Text(
-                        'Date',
-                        style: TextStyle(fontWeight: FontWeight.bold),
-                      ),
-                    ),
-                    const DataColumn(
-                      label: Text(
-                        'Check In',
-                        style: TextStyle(fontWeight: FontWeight.bold),
-                      ),
-                    ),
-                    const DataColumn(
-                      label: Text(
-                        'Check Out',
-                        style: TextStyle(fontWeight: FontWeight.bold),
-                      ),
-                    ),
-                    const DataColumn(
-                      label: Text(
-                        'Total Hours',
-                        style: TextStyle(fontWeight: FontWeight.bold),
-                      ),
-                    ),
-                    if (_hasOvertimeAccess)
-                      const DataColumn(
-                        label: Text(
-                          'Overtime',
-                          style: TextStyle(fontWeight: FontWeight.bold),
-                        ),
-                      ),
-                    const DataColumn(
-                      label: Text(
-                        'Location',
-                        style: TextStyle(fontWeight: FontWeight.bold),
-                      ),
-                    ),
-                    const DataColumn(
-                      label: Text(
-                        'Status',
-                        style: TextStyle(fontWeight: FontWeight.bold),
-                      ),
-                    ),
-                    const DataColumn(
-                      label: Text(
-                        'Attendance',
-                        style: TextStyle(fontWeight: FontWeight.bold),
-                      ),
-                    ),
-                  ],
-                  rows: _attendanceRecords.map((record) => _buildDataRow(record)).toList(),
-                ),
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  DataRow _buildDataRow(Map<String, dynamic> record) {
-    String date = record['date'] ?? '';
-    DateTime? checkIn = record['checkIn'];
-    DateTime? checkOut = record['checkOut'];
-    double totalHours = record['totalHours'] ?? 0.0;
-    double overtimeHours = record['overtimeHours'] ?? 0.0;
-    String location = record['location'] ?? 'Unknown';
-    String status = record['workStatus'] ?? 'Unknown';
-    bool isWithinGeofence = record['isWithinGeofence'] ?? false;
-    bool hasRecord = record['hasRecord'] ?? true;
-
-    // Determine attendance status
-    String attendanceStatus = 'Present';
-    Color attendanceColor = Colors.green;
-    IconData attendanceIcon = Icons.check_circle;
-
-    if (!hasRecord || (checkIn == null && checkOut == null)) {
-      attendanceStatus = 'Absent';
-      attendanceColor = Colors.red;
-      attendanceIcon = Icons.cancel;
-      location = 'No Location';
-      status = 'Absent';
-    } else if (checkIn == null || checkOut == null) {
-      attendanceStatus = 'Incomplete';
-      attendanceColor = Colors.orange;
-      attendanceIcon = Icons.warning;
-    }
-
-    // Format date
-    String formattedDate = '';
-    String dayOfWeek = '';
-    try {
-      DateTime dateTime = DateFormat('yyyy-MM-dd').parse(date);
-      formattedDate = DateFormat('MMM dd').format(dateTime);
-      dayOfWeek = DateFormat('EEE').format(dateTime);
-    } catch (e) {
-      formattedDate = date;
-    }
-
-    return DataRow(
-      color: attendanceStatus == 'Absent'
-          ? MaterialStateProperty.all(Colors.red.withOpacity(0.05))
-          : attendanceStatus == 'Incomplete'
-          ? MaterialStateProperty.all(Colors.orange.withOpacity(0.05))
-          : null,
-      cells: [
-        DataCell(
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Text(
-                formattedDate,
-                style: TextStyle(
-                  fontWeight: FontWeight.w600,
-                  color: attendanceStatus == 'Absent' ? Colors.red.shade700 : Colors.black,
-                ),
-              ),
-              if (dayOfWeek.isNotEmpty)
-                Text(
-                  dayOfWeek,
-                  style: TextStyle(
-                    fontSize: 12,
-                    color: attendanceStatus == 'Absent'
-                        ? Colors.red.shade500
-                        : Colors.grey.shade600,
-                  ),
-                ),
-            ],
-          ),
-        ),
-        DataCell(
-          Text(
-            checkIn != null ? DateFormat('HH:mm').format(checkIn) : '-',
-            style: TextStyle(
-              color: checkIn != null ? Colors.green.shade700 : Colors.grey,
-              fontWeight: checkIn != null ? FontWeight.w600 : FontWeight.normal,
-            ),
-          ),
-        ),
-        DataCell(
-          Text(
-            checkOut != null ? DateFormat('HH:mm').format(checkOut) : '-',
-            style: TextStyle(
-              color: checkOut != null ? Colors.red.shade700 : Colors.grey,
-              fontWeight: checkOut != null ? FontWeight.w600 : FontWeight.normal,
-            ),
-          ),
-        ),
-        DataCell(
-          Text(
-            totalHours > 0 ? '${totalHours.toStringAsFixed(1)}h' : '-',
-            style: TextStyle(
-              color: totalHours > 0 ? Colors.blue.shade700 : Colors.grey,
-              fontWeight: FontWeight.w600,
-            ),
-          ),
-        ),
-        if (_hasOvertimeAccess)
-          DataCell(
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-              decoration: BoxDecoration(
-                color: overtimeHours > 0 ? Colors.orange.withOpacity(0.2) : Colors.transparent,
-                borderRadius: BorderRadius.circular(8),
-              ),
-              child: Text(
-                overtimeHours > 0 ? '${overtimeHours.toStringAsFixed(1)}h' : '-',
-                style: TextStyle(
-                  color: overtimeHours > 0 ? Colors.orange.shade800 : Colors.grey,
-                  fontWeight: overtimeHours > 0 ? FontWeight.bold : FontWeight.normal,
-                  fontSize: 12,
-                ),
-              ),
-            ),
-          ),
-        DataCell(
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Text(
-                location,
-                style: TextStyle(
-                  fontSize: 12,
-                  color: attendanceStatus == 'Absent' ? Colors.grey : Colors.black,
-                ),
-                overflow: TextOverflow.ellipsis,
-              ),
-              if (attendanceStatus != 'Absent' && hasRecord)
-                Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Icon(
-                      isWithinGeofence ? Icons.location_on : Icons.location_off,
-                      size: 12,
-                      color: isWithinGeofence ? Colors.green : Colors.red,
-                    ),
-                    const SizedBox(width: 4),
-                    Text(
-                      isWithinGeofence ? 'Inside' : 'Outside',
-                      style: TextStyle(
-                        fontSize: 10,
-                        color: isWithinGeofence ? Colors.green : Colors.red,
-                      ),
-                    ),
-                  ],
-                ),
-            ],
-          ),
-        ),
-        DataCell(
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-            decoration: BoxDecoration(
-              color: _getStatusColor(status).withOpacity(0.2),
-              borderRadius: BorderRadius.circular(8),
-            ),
-            child: Text(
-              status,
-              style: TextStyle(
-                color: _getStatusColor(status),
-                fontSize: 12,
-                fontWeight: FontWeight.bold,
-              ),
-            ),
-          ),
-        ),
-        DataCell(
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-            decoration: BoxDecoration(
-              color: attendanceColor.withOpacity(0.2),
-              borderRadius: BorderRadius.circular(8),
-            ),
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Icon(
-                  attendanceIcon,
-                  size: 14,
-                  color: attendanceColor,
-                ),
-                const SizedBox(width: 4),
-                Text(
-                  attendanceStatus,
-                  style: TextStyle(
-                    color: attendanceColor,
-                    fontSize: 12,
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ),
-      ],
     );
   }
 

@@ -1,5 +1,8 @@
+// lib/repositories/attendance_repository.dart - FIXED CROSS-DEVICE SYNC VERSION
+
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:face_auth/model/local_attendance_model.dart';
+import 'package:face_auth/model/attendance_model.dart';
 import 'package:face_auth/services/database_helper.dart';
 import 'package:face_auth/services/connectivity_service.dart';
 import 'package:intl/intl.dart';
@@ -46,7 +49,7 @@ class AttendanceRepository {
 
       // Prepare check-in data
       Map<String, dynamic> checkInData = {
-        'employeeId': employeeId, // Added employeeId to document data
+        'employeeId': employeeId,
         'date': today,
         'checkIn': checkInTime.toIso8601String(),
         'checkOut': null,
@@ -80,7 +83,7 @@ class AttendanceRepository {
               .collection('Attendance_Records')
               .doc('PTSEmployees')
               .collection('Records')
-              .doc('$employeeId-$today') // Unique doc ID using employeeId and date
+              .doc('$employeeId-$today')
               .set({
             ...checkInData,
             'checkIn': Timestamp.fromDate(checkInTime),
@@ -97,7 +100,6 @@ class AttendanceRepository {
           print("AttendanceRepository: Check-in saved to Firestore and marked as synced");
         } catch (e) {
           print("AttendanceRepository: Error saving to Firestore: $e");
-          // Continue - local save was successful
         }
       }
 
@@ -114,7 +116,6 @@ class AttendanceRepository {
     required DateTime checkOutTime,
   }) async {
     try {
-      // Format today's date
       String today = DateFormat('yyyy-MM-dd').format(DateTime.now());
       print("AttendanceRepository: Recording check-out for $employeeId on $today");
 
@@ -127,7 +128,7 @@ class AttendanceRepository {
 
       if (localRecords.isEmpty) {
         print("AttendanceRepository: No check-in record found for today");
-        return false; // No check-in record found
+        return false;
       }
 
       // Get the local record and update it
@@ -151,8 +152,10 @@ class AttendanceRepository {
       updatedData['workStatus'] = 'Completed';
       updatedData['totalHours'] = hoursWorked;
 
-      // Determine sync status based on connectivity
-      bool shouldSync = _connectivityService.currentStatus == ConnectionStatus.online;
+      // Calculate overtime hours (standard work day is 8 hours)
+      const double standardWorkHours = 8.0;
+      double overtimeHours = hoursWorked > standardWorkHours ? hoursWorked - standardWorkHours : 0.0;
+      updatedData['overtimeHours'] = overtimeHours;
 
       // Prepare the updated local record
       LocalAttendanceRecord updatedRecord = LocalAttendanceRecord(
@@ -162,7 +165,7 @@ class AttendanceRepository {
         checkIn: record.checkIn,
         checkOut: checkOutTime.toIso8601String(),
         locationId: record.locationId,
-        isSynced: false, // Always mark as unsynced initially
+        isSynced: false,
         rawData: updatedData,
       );
 
@@ -176,7 +179,7 @@ class AttendanceRepository {
       print("AttendanceRepository: Local record updated");
 
       // If online, try to update Firestore
-      if (shouldSync) {
+      if (_connectivityService.currentStatus == ConnectionStatus.online) {
         try {
           await _firestore
               .collection('Attendance_Records')
@@ -187,6 +190,7 @@ class AttendanceRepository {
             'checkOut': Timestamp.fromDate(checkOutTime),
             'workStatus': 'Completed',
             'totalHours': hoursWorked,
+            'overtimeHours': overtimeHours,
           }, SetOptions(merge: true));
 
           print("AttendanceRepository: Firestore updated successfully");
@@ -200,7 +204,6 @@ class AttendanceRepository {
           );
         } catch (e) {
           print("AttendanceRepository: Error updating Firestore: $e");
-          // Continue - local update was successful
         }
       } else {
         print("AttendanceRepository: Offline mode - record marked for sync");
@@ -216,13 +219,17 @@ class AttendanceRepository {
   // Get today's attendance record
   Future<LocalAttendanceRecord?> getTodaysAttendance(String employeeId) async {
     String today = DateFormat('yyyy-MM-dd').format(DateTime.now());
+    return getAttendanceForDate(employeeId, today);
+  }
 
+  // Get attendance for a specific date
+  Future<LocalAttendanceRecord?> getAttendanceForDate(String employeeId, String date) async {
     try {
       // Always check local database first
       List<Map<String, dynamic>> records = await _dbHelper.query(
         'attendance',
         where: 'employee_id = ? AND date = ?',
-        whereArgs: [employeeId, today],
+        whereArgs: [employeeId, date],
       );
 
       if (records.isNotEmpty) {
@@ -235,7 +242,7 @@ class AttendanceRepository {
             .collection('Attendance_Records')
             .doc('PTSEmployees')
             .collection('Records')
-            .doc('$employeeId-$today')
+            .doc('$employeeId-$date')
             .get();
 
         if (doc.exists) {
@@ -252,7 +259,7 @@ class AttendanceRepository {
           // Create and save local record
           LocalAttendanceRecord record = LocalAttendanceRecord(
             employeeId: employeeId,
-            date: today,
+            date: date,
             checkIn: data['checkIn'],
             checkOut: data['checkOut'],
             locationId: data['locationId'],
@@ -267,12 +274,274 @@ class AttendanceRepository {
         }
       }
 
-      // No record found
       return null;
     } catch (e) {
-      print('Error getting today\'s attendance: $e');
+      print('Error getting attendance for date $date: $e');
       return null;
     }
+  }
+
+  // ✅ FIXED: Get attendance records for a date range with FORCE REFRESH option
+  Future<List<LocalAttendanceRecord>> getAttendanceForDateRange({
+    required String employeeId,
+    required DateTime startDate,
+    required DateTime endDate,
+    bool forceRefreshFromFirestore = false, // ✅ NEW: Force refresh option
+  }) async {
+    try {
+      String startDateStr = DateFormat('yyyy-MM-dd').format(startDate);
+      String endDateStr = DateFormat('yyyy-MM-dd').format(endDate);
+
+      print("AttendanceRepository: Getting attendance for $employeeId from $startDateStr to $endDateStr (force: $forceRefreshFromFirestore)");
+
+      Map<String, LocalAttendanceRecord> recordsMap = {};
+
+      // ✅ FIXED: If force refresh OR online, prioritize Firestore data
+      if (forceRefreshFromFirestore || _connectivityService.currentStatus == ConnectionStatus.online) {
+        try {
+          print("🌐 Fetching fresh data from Firestore...");
+
+          // Query Firestore for records in date range
+          QuerySnapshot snapshot = await _firestore
+              .collection('Attendance_Records')
+              .doc('PTSEmployees')
+              .collection('Records')
+              .where('employeeId', isEqualTo: employeeId)
+              .where('date', isGreaterThanOrEqualTo: startDateStr)
+              .where('date', isLessThanOrEqualTo: endDateStr)
+              .get();
+
+          print("🌐 Found ${snapshot.docs.length} records in Firestore");
+
+          // ✅ FIXED: Process ALL Firestore records and update local cache
+          for (var doc in snapshot.docs) {
+            Map<String, dynamic> data = doc.data() as Map<String, dynamic>;
+            String recordDate = data['date'] ?? '';
+
+            if (recordDate.isEmpty) continue;
+
+            // Convert Timestamp to ISO string
+            if (data['checkIn'] != null && data['checkIn'] is Timestamp) {
+              data['checkIn'] = (data['checkIn'] as Timestamp).toDate().toIso8601String();
+            }
+            if (data['checkOut'] != null && data['checkOut'] is Timestamp) {
+              data['checkOut'] = (data['checkOut'] as Timestamp).toDate().toIso8601String();
+            }
+
+            LocalAttendanceRecord record = LocalAttendanceRecord(
+              employeeId: employeeId,
+              date: recordDate,
+              checkIn: data['checkIn'],
+              checkOut: data['checkOut'],
+              locationId: data['locationId'],
+              isSynced: true,
+              rawData: data,
+            );
+
+            // Add to our collection (Firestore data takes priority)
+            recordsMap[recordDate] = record;
+
+            // ✅ FIXED: Update/replace local cache with fresh Firestore data
+            try {
+              // First, delete any existing local record for this date
+              await _dbHelper.delete(
+                'attendance',
+                where: 'employee_id = ? AND date = ?',
+                whereArgs: [employeeId, recordDate],
+              );
+
+              // Then insert the fresh data
+              await _dbHelper.insert('attendance', record.toMap());
+              print("🔄 Updated local cache for date: $recordDate");
+
+            } catch (e) {
+              print("⚠️ Error updating local cache for $recordDate: $e");
+            }
+          }
+
+        } catch (e) {
+          print("❌ Error fetching from Firestore: $e");
+          // Fall back to local data if Firestore fails
+        }
+      }
+
+      // ✅ IMPROVED: Also get local records, but Firestore data takes priority
+      if (!forceRefreshFromFirestore || recordsMap.isEmpty) {
+        print("💾 Getting local records as fallback/supplement...");
+
+        List<Map<String, dynamic>> localRecords = await _dbHelper.query(
+          'attendance',
+          where: 'employee_id = ? AND date >= ? AND date <= ?',
+          whereArgs: [employeeId, startDateStr, endDateStr],
+          orderBy: 'date DESC',
+        );
+
+        print("💾 Found ${localRecords.length} local records");
+
+        // Add local records only if not already in recordsMap (Firestore takes priority)
+        for (var record in localRecords) {
+          LocalAttendanceRecord localRecord = LocalAttendanceRecord.fromMap(record);
+          if (!recordsMap.containsKey(localRecord.date)) {
+            recordsMap[localRecord.date] = localRecord;
+          }
+        }
+      }
+
+      // Convert map to list and sort by date (newest first)
+      List<LocalAttendanceRecord> records = recordsMap.values.toList();
+      records.sort((a, b) => b.date.compareTo(a.date));
+
+      print("✅ Returning ${records.length} total records for date range");
+      return records;
+
+    } catch (e) {
+      print('❌ Error getting attendance for date range: $e');
+      return [];
+    }
+  }
+
+  // ✅ NEW: Force refresh specific month from Firestore
+  Future<List<LocalAttendanceRecord>> forceRefreshMonthFromFirestore({
+    required String employeeId,
+    required int year,
+    required int month,
+  }) async {
+    DateTime startDate = DateTime(year, month, 1);
+    DateTime endDate = DateTime(year, month + 1, 0);
+
+    print("🔄 Force refreshing month $year-$month from Firestore...");
+
+    return getAttendanceForDateRange(
+      employeeId: employeeId,
+      startDate: startDate,
+      endDate: endDate,
+      forceRefreshFromFirestore: true, // ✅ Force refresh from Firestore
+    );
+  }
+
+  // ✅ FIXED: Get attendance records for a specific month with force refresh option
+  Future<List<LocalAttendanceRecord>> getAttendanceForMonth({
+    required String employeeId,
+    required int year,
+    required int month,
+    bool forceRefresh = false,
+  }) async {
+    DateTime startDate = DateTime(year, month, 1);
+    DateTime endDate = DateTime(year, month + 1, 0);
+
+    return getAttendanceForDateRange(
+      employeeId: employeeId,
+      startDate: startDate,
+      endDate: endDate,
+      forceRefreshFromFirestore: forceRefresh,
+    );
+  }
+
+  // Convert LocalAttendanceRecord to AttendanceRecord
+  AttendanceRecord convertToAttendanceRecord(LocalAttendanceRecord localRecord) {
+    return AttendanceRecord(
+      date: localRecord.date,
+      checkIn: localRecord.checkIn != null ? DateTime.parse(localRecord.checkIn!) : null,
+      checkOut: localRecord.checkOut != null ? DateTime.parse(localRecord.checkOut!) : null,
+      location: localRecord.rawData['location'] ?? 'Unknown',
+      workStatus: localRecord.rawData['workStatus'] ?? 'Unknown',
+      totalHours: (localRecord.rawData['totalHours'] ?? 0.0).toDouble(),
+      regularHours: _calculateRegularHours((localRecord.rawData['totalHours'] ?? 0.0).toDouble()),
+      overtimeHours: (localRecord.rawData['overtimeHours'] ?? 0.0).toDouble(),
+      isWithinGeofence: localRecord.rawData['isWithinGeofence'] ?? false,
+      rawData: localRecord.rawData,
+    );
+  }
+
+  // ✅ FIXED: Get AttendanceRecord objects for a month with force refresh option
+  Future<List<AttendanceRecord>> getAttendanceRecordsForMonth({
+    required String employeeId,
+    required int year,
+    required int month,
+    bool forceRefresh = false,
+  }) async {
+    List<LocalAttendanceRecord> localRecords = await getAttendanceForMonth(
+      employeeId: employeeId,
+      year: year,
+      month: month,
+      forceRefresh: forceRefresh,
+    );
+
+    // Convert to AttendanceRecord objects
+    return localRecords.map((localRecord) => convertToAttendanceRecord(localRecord)).toList();
+  }
+
+  // ✅ NEW: Force refresh current day from Firestore (for cross-device scenarios)
+  Future<LocalAttendanceRecord?> forceRefreshTodayFromFirestore(String employeeId) async {
+    String today = DateFormat('yyyy-MM-dd').format(DateTime.now());
+
+    print("🔄 Force refreshing today's attendance from Firestore for $employeeId...");
+
+    try {
+      if (_connectivityService.currentStatus == ConnectionStatus.online) {
+        final doc = await _firestore
+            .collection('Attendance_Records')
+            .doc('PTSEmployees')
+            .collection('Records')
+            .doc('$employeeId-$today')
+            .get();
+
+        if (doc.exists) {
+          Map<String, dynamic> data = doc.data()!;
+          print("🌐 Found fresh data in Firestore for today");
+
+          // Convert Timestamp to ISO string
+          if (data['checkIn'] != null && data['checkIn'] is Timestamp) {
+            data['checkIn'] = (data['checkIn'] as Timestamp).toDate().toIso8601String();
+          }
+          if (data['checkOut'] != null && data['checkOut'] is Timestamp) {
+            data['checkOut'] = (data['checkOut'] as Timestamp).toDate().toIso8601String();
+          }
+
+          // Create record
+          LocalAttendanceRecord record = LocalAttendanceRecord(
+            employeeId: employeeId,
+            date: today,
+            checkIn: data['checkIn'],
+            checkOut: data['checkOut'],
+            locationId: data['locationId'],
+            isSynced: true,
+            rawData: data,
+          );
+
+          // ✅ Update local cache with fresh data
+          try {
+            // Delete existing local record
+            await _dbHelper.delete(
+              'attendance',
+              where: 'employee_id = ? AND date = ?',
+              whereArgs: [employeeId, today],
+            );
+
+            // Insert fresh data
+            await _dbHelper.insert('attendance', record.toMap());
+            print("🔄 Updated local cache with fresh data for today");
+
+          } catch (e) {
+            print("⚠️ Error updating local cache: $e");
+          }
+
+          return record;
+        } else {
+          print("📭 No record found in Firestore for today");
+        }
+      }
+    } catch (e) {
+      print("❌ Error force refreshing today's data: $e");
+    }
+
+    return null;
+  }
+
+  // Helper: Calculate regular hours (max 8 hours)
+  double _calculateRegularHours(double totalHours) {
+    const double standardWorkHours = 8.0;
+    return totalHours > standardWorkHours ? standardWorkHours : totalHours;
   }
 
   // Get recent attendance records
@@ -439,6 +708,72 @@ class AttendanceRepository {
     }
   }
 
+  // Get attendance statistics for an employee
+  Future<Map<String, dynamic>> getAttendanceStatistics({
+    required String employeeId,
+    DateTime? startDate,
+    DateTime? endDate,
+  }) async {
+    try {
+      // Default to current month if no dates provided
+      DateTime start = startDate ?? DateTime(DateTime.now().year, DateTime.now().month, 1);
+      DateTime end = endDate ?? DateTime(DateTime.now().year, DateTime.now().month + 1, 0);
+
+      List<LocalAttendanceRecord> records = await getAttendanceForDateRange(
+        employeeId: employeeId,
+        startDate: start,
+        endDate: end,
+      );
+
+      int totalDays = 0;
+      int presentDays = 0;
+      int absentDays = 0;
+      double totalHours = 0;
+      double totalOvertimeHours = 0;
+      int lateCheckIns = 0;
+
+      for (var record in records) {
+        totalDays++;
+
+        if (record.checkIn != null) {
+          presentDays++;
+
+          // Calculate hours
+          if (record.checkOut != null) {
+            double hours = (record.rawData['totalHours'] ?? 0.0).toDouble();
+            totalHours += hours;
+
+            double overtime = (record.rawData['overtimeHours'] ?? 0.0).toDouble();
+            totalOvertimeHours += overtime;
+          }
+
+          // Check for late check-in (after 9:00 AM)
+          DateTime checkInTime = DateTime.parse(record.checkIn!);
+          if (checkInTime.hour > 9 || (checkInTime.hour == 9 && checkInTime.minute > 0)) {
+            lateCheckIns++;
+          }
+        } else {
+          absentDays++;
+        }
+      }
+
+      return {
+        'totalDays': totalDays,
+        'presentDays': presentDays,
+        'absentDays': absentDays,
+        'attendancePercentage': totalDays > 0 ? (presentDays / totalDays) * 100 : 0.0,
+        'totalHours': totalHours,
+        'totalOvertimeHours': totalOvertimeHours,
+        'averageHoursPerDay': presentDays > 0 ? totalHours / presentDays : 0.0,
+        'lateCheckIns': lateCheckIns,
+        'onTimePercentage': presentDays > 0 ? ((presentDays - lateCheckIns) / presentDays) * 100 : 0.0,
+      };
+    } catch (e) {
+      print('Error getting attendance statistics: $e');
+      return {};
+    }
+  }
+
   // Get locally stored locations - used for testing
   Future<List<Map<String, dynamic>>> getLocalStoredLocations() async {
     try {
@@ -446,6 +781,27 @@ class AttendanceRepository {
     } catch (e) {
       print('Error getting local locations: $e');
       return [];
+    }
+  }
+
+  // Clear attendance data for testing
+  Future<bool> clearAttendanceData({String? employeeId}) async {
+    try {
+      if (employeeId != null) {
+        await _dbHelper.delete(
+          'attendance',
+          where: 'employee_id = ?',
+          whereArgs: [employeeId],
+        );
+        print("AttendanceRepository: Cleared attendance data for employee $employeeId");
+      } else {
+        await _dbHelper.delete('attendance');
+        print("AttendanceRepository: Cleared all attendance data");
+      }
+      return true;
+    } catch (e) {
+      print('Error clearing attendance data: $e');
+      return false;
     }
   }
 }

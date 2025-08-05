@@ -1,4 +1,4 @@
-// lib/dashboard/user_profile_page.dart
+// lib/dashboard/user_profile_page.dart - COMPLETE FIXED VERSION
 
 import 'dart:convert';
 import 'package:flutter/material.dart';
@@ -7,6 +7,21 @@ import 'package:face_auth/constants/theme.dart';
 import 'package:face_auth/common/utils/custom_snackbar.dart';
 import 'package:face_auth/common/views/custom_button.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+
+// Country model class with flag URL
+class CountryData {
+  final String name;
+  final String code;
+  final String flagUrl;
+  final bool isOther;
+
+  CountryData({
+    required this.name,
+    required this.code,
+    required this.flagUrl,
+    this.isOther = false,
+  });
+}
 
 class UserProfilePage extends StatefulWidget {
   final String employeeId;
@@ -29,8 +44,8 @@ class _UserProfilePageState extends State<UserProfilePage>
   late TextEditingController _departmentController;
   late TextEditingController _phoneController;
   late TextEditingController _emailController;
-  late TextEditingController _countryController;
   late TextEditingController _birthdateController;
+  late TextEditingController _otherCountryController;
 
   // Break time controllers
   late TextEditingController _breakStartTimeController;
@@ -47,6 +62,79 @@ class _UserProfilePageState extends State<UserProfilePage>
   bool _isLoading = false;
   bool _hasJummaBreak = false;
   bool _isDarkMode = false;
+  bool _showOtherCountryField = false;
+  bool _showNotificationBanner = true;
+  CountryData? _selectedCountry;
+
+  // Document upload states
+  Map<String, String?> _uploadedDocuments = {
+    'degree_certificate': null,
+    'passport': null,
+    'visa': null,
+    'emirates_id': null,
+    'other_documents': null,
+  };
+
+  // Countries with real flag image URLs (top countries for UAE context)
+  final List<CountryData> _countries = [
+    CountryData(name: "United Arab Emirates", code: "AE", flagUrl: "https://flagcdn.com/w40/ae.png"),
+    CountryData(name: "India", code: "IN", flagUrl: "https://flagcdn.com/w40/in.png"),
+    CountryData(name: "Pakistan", code: "PK", flagUrl: "https://flagcdn.com/w40/pk.png"),
+    CountryData(name: "Bangladesh", code: "BD", flagUrl: "https://flagcdn.com/w40/bd.png"),
+    CountryData(name: "Philippines", code: "PH", flagUrl: "https://flagcdn.com/w40/ph.png"),
+    CountryData(name: "Egypt", code: "EG", flagUrl: "https://flagcdn.com/w40/eg.png"),
+    CountryData(name: "Jordan", code: "JO", flagUrl: "https://flagcdn.com/w40/jo.png"),
+    CountryData(name: "Lebanon", code: "LB", flagUrl: "https://flagcdn.com/w40/lb.png"),
+    CountryData(name: "Syria", code: "SY", flagUrl: "https://flagcdn.com/w40/sy.png"),
+    CountryData(name: "Nepal", code: "NP", flagUrl: "https://flagcdn.com/w40/np.png"),
+    CountryData(name: "Sri Lanka", code: "LK", flagUrl: "https://flagcdn.com/w40/lk.png"),
+    CountryData(name: "Afghanistan", code: "AF", flagUrl: "https://flagcdn.com/w40/af.png"),
+    CountryData(name: "Iran", code: "IR", flagUrl: "https://flagcdn.com/w40/ir.png"),
+    CountryData(name: "Iraq", code: "IQ", flagUrl: "https://flagcdn.com/w40/iq.png"),
+    CountryData(name: "Palestine", code: "PS", flagUrl: "https://flagcdn.com/w40/ps.png"),
+    CountryData(name: "Yemen", code: "YE", flagUrl: "https://flagcdn.com/w40/ye.png"),
+    CountryData(name: "Sudan", code: "SD", flagUrl: "https://flagcdn.com/w40/sd.png"),
+    CountryData(name: "Morocco", code: "MA", flagUrl: "https://flagcdn.com/w40/ma.png"),
+    CountryData(name: "Algeria", code: "DZ", flagUrl: "https://flagcdn.com/w40/dz.png"),
+    CountryData(name: "Tunisia", code: "TN", flagUrl: "https://flagcdn.com/w40/tn.png"),
+    CountryData(name: "Libya", code: "LY", flagUrl: "https://flagcdn.com/w40/ly.png"),
+    CountryData(name: "Saudi Arabia", code: "SA", flagUrl: "https://flagcdn.com/w40/sa.png"),
+    CountryData(name: "Kuwait", code: "KW", flagUrl: "https://flagcdn.com/w40/kw.png"),
+    CountryData(name: "Qatar", code: "QA", flagUrl: "https://flagcdn.com/w40/qa.png"),
+    CountryData(name: "Bahrain", code: "BH", flagUrl: "https://flagcdn.com/w40/bh.png"),
+    CountryData(name: "Oman", code: "OM", flagUrl: "https://flagcdn.com/w40/om.png"),
+    CountryData(name: "Ethiopia", code: "ET", flagUrl: "https://flagcdn.com/w40/et.png"),
+    CountryData(name: "Somalia", code: "SO", flagUrl: "https://flagcdn.com/w40/so.png"),
+    CountryData(name: "Eritrea", code: "ER", flagUrl: "https://flagcdn.com/w40/er.png"),
+    CountryData(name: "Turkey", code: "TR", flagUrl: "https://flagcdn.com/w40/tr.png"),
+    CountryData(name: "United Kingdom", code: "GB", flagUrl: "https://flagcdn.com/w40/gb.png"),
+    CountryData(name: "United States", code: "US", flagUrl: "https://flagcdn.com/w40/us.png"),
+    CountryData(name: "Canada", code: "CA", flagUrl: "https://flagcdn.com/w40/ca.png"),
+    CountryData(name: "Australia", code: "AU", flagUrl: "https://flagcdn.com/w40/au.png"),
+    CountryData(name: "Germany", code: "DE", flagUrl: "https://flagcdn.com/w40/de.png"),
+    CountryData(name: "France", code: "FR", flagUrl: "https://flagcdn.com/w40/fr.png"),
+    CountryData(name: "Italy", code: "IT", flagUrl: "https://flagcdn.com/w40/it.png"),
+    CountryData(name: "Spain", code: "ES", flagUrl: "https://flagcdn.com/w40/es.png"),
+    CountryData(name: "Netherlands", code: "NL", flagUrl: "https://flagcdn.com/w40/nl.png"),
+    CountryData(name: "Russia", code: "RU", flagUrl: "https://flagcdn.com/w40/ru.png"),
+    CountryData(name: "China", code: "CN", flagUrl: "https://flagcdn.com/w40/cn.png"),
+    CountryData(name: "Japan", code: "JP", flagUrl: "https://flagcdn.com/w40/jp.png"),
+    CountryData(name: "South Korea", code: "KR", flagUrl: "https://flagcdn.com/w40/kr.png"),
+    CountryData(name: "Indonesia", code: "ID", flagUrl: "https://flagcdn.com/w40/id.png"),
+    CountryData(name: "Malaysia", code: "MY", flagUrl: "https://flagcdn.com/w40/my.png"),
+    CountryData(name: "Thailand", code: "TH", flagUrl: "https://flagcdn.com/w40/th.png"),
+    CountryData(name: "Vietnam", code: "VN", flagUrl: "https://flagcdn.com/w40/vn.png"),
+    CountryData(name: "Brazil", code: "BR", flagUrl: "https://flagcdn.com/w40/br.png"),
+    CountryData(name: "Argentina", code: "AR", flagUrl: "https://flagcdn.com/w40/ar.png"),
+    CountryData(name: "South Africa", code: "ZA", flagUrl: "https://flagcdn.com/w40/za.png"),
+    // Other option at the end
+    CountryData(
+        name: "Other (Not Listed)",
+        code: "OTHER",
+        flagUrl: "https://flagcdn.com/w40/un.png",
+        isOther: true
+    ),
+  ];
 
   @override
   void initState() {
@@ -54,6 +142,21 @@ class _UserProfilePageState extends State<UserProfilePage>
     _loadDarkModePreference();
     _initializeAnimations();
     _initializeControllers();
+    _loadUploadedDocuments();
+    _checkProfileCompleteness();
+  }
+
+  // FIXED: Enhanced profile completeness check
+  void _checkProfileCompleteness() {
+    // Get the latest values from controllers instead of initial userData
+    final phone = _phoneController.text.trim();
+    final email = _emailController.text.trim();
+
+    setState(() {
+      _showNotificationBanner = phone.isEmpty || email.isEmpty;
+    });
+
+    print('Profile completeness check - Phone: "$phone", Email: "$email", Show banner: $_showNotificationBanner');
   }
 
   void _initializeAnimations() {
@@ -81,20 +184,60 @@ class _UserProfilePageState extends State<UserProfilePage>
     _animationController.forward();
   }
 
+  // FIXED: Enhanced controller initialization with listeners
   void _initializeControllers() {
-    _nameController = TextEditingController(text: widget.userData['name'] ?? '');
-    _designationController = TextEditingController(text: widget.userData['designation'] ?? '');
-    _departmentController = TextEditingController(text: widget.userData['department'] ?? '');
-    _phoneController = TextEditingController(text: widget.userData['phone'] ?? '');
-    _emailController = TextEditingController(text: widget.userData['email'] ?? '');
-    _countryController = TextEditingController(text: widget.userData['country'] ?? '');
-    _birthdateController = TextEditingController(text: widget.userData['birthdate'] ?? '');
+    _nameController = TextEditingController(text: widget.userData['name']?.toString() ?? '');
+    _designationController = TextEditingController(text: widget.userData['designation']?.toString() ?? '');
+    _departmentController = TextEditingController(text: widget.userData['department']?.toString() ?? '');
+    _phoneController = TextEditingController(text: widget.userData['phone']?.toString() ?? '');
+    _emailController = TextEditingController(text: widget.userData['email']?.toString() ?? '');
+    _birthdateController = TextEditingController(text: widget.userData['birthdate']?.toString() ?? '');
+    _otherCountryController = TextEditingController(text: '');
 
-    _breakStartTimeController = TextEditingController(text: widget.userData['breakStartTime'] ?? '');
-    _breakEndTimeController = TextEditingController(text: widget.userData['breakEndTime'] ?? '');
+    // Add listeners to controllers for real-time validation
+    _phoneController.addListener(() {
+      if (mounted) {
+        _checkProfileCompleteness();
+      }
+    });
+
+    _emailController.addListener(() {
+      if (mounted) {
+        _checkProfileCompleteness();
+      }
+    });
+
+    // Initialize country selection
+    String? countryName = widget.userData['country']?.toString();
+    if (countryName != null && countryName.isNotEmpty) {
+      _selectedCountry = _countries.firstWhere(
+        (country) => country.name == countryName,
+        orElse: () {
+          _showOtherCountryField = true;
+          _otherCountryController.text = countryName;
+          return _countries.firstWhere((country) => country.isOther);
+        },
+      );
+    }
+
+    _breakStartTimeController = TextEditingController(text: widget.userData['breakStartTime']?.toString() ?? '');
+    _breakEndTimeController = TextEditingController(text: widget.userData['breakEndTime']?.toString() ?? '');
     _hasJummaBreak = widget.userData['hasJummaBreak'] ?? false;
-    _jummaBreakStartController = TextEditingController(text: widget.userData['jummaBreakStart'] ?? '');
-    _jummaBreakEndController = TextEditingController(text: widget.userData['jummaBreakEnd'] ?? '');
+    _jummaBreakStartController = TextEditingController(text: widget.userData['jummaBreakStart']?.toString() ?? '');
+    _jummaBreakEndController = TextEditingController(text: widget.userData['jummaBreakEnd']?.toString() ?? '');
+  }
+
+  void _loadUploadedDocuments() {
+    // Load existing documents from userData
+    setState(() {
+      _uploadedDocuments = {
+        'degree_certificate': widget.userData['degree_certificate'],
+        'passport': widget.userData['passport'],
+        'visa': widget.userData['visa'],
+        'emirates_id': widget.userData['emirates_id'],
+        'other_documents': widget.userData['other_documents'],
+      };
+    });
   }
 
   @override
@@ -105,8 +248,8 @@ class _UserProfilePageState extends State<UserProfilePage>
     _departmentController.dispose();
     _phoneController.dispose();
     _emailController.dispose();
-    _countryController.dispose();
     _birthdateController.dispose();
+    _otherCountryController.dispose();
     _breakStartTimeController.dispose();
     _breakEndTimeController.dispose();
     _jummaBreakStartController.dispose();
@@ -164,6 +307,45 @@ class _UserProfilePageState extends State<UserProfilePage>
     });
   }
 
+  // ADDED: Email validation helper method
+  bool _isValidEmail(String email) {
+    return RegExp(r'^[\w-\.]+@([\w-]+\.)+[\w-]{2,4}$').hasMatch(email);
+  }
+
+  // ADDED: Phone validation helper method
+  bool _isValidPhone(String phone) {
+    // Remove all non-numeric characters
+    String numericPhone = phone.replaceAll(RegExp(r'[^0-9]'), '');
+    // Check if it has at least 7 digits and at most 15 digits
+    return numericPhone.length >= 7 && numericPhone.length <= 15;
+  }
+
+  // ADDED: Debug method for testing Firestore connection
+  Future<void> _debugConnection() async {
+    print('=== DEBUGGING FIRESTORE CONNECTION ===');
+    print('Employee ID: ${widget.employeeId}');
+    print('Name: "${_nameController.text}"');
+    print('Phone: "${_phoneController.text}"');
+    print('Email: "${_emailController.text}"');
+    
+    try {
+      DocumentSnapshot doc = await FirebaseFirestore.instance
+          .collection('employees')
+          .doc(widget.employeeId)
+          .get();
+      
+      print('Document exists: ${doc.exists}');
+      if (doc.exists) {
+        print('Current document data: ${doc.data()}');
+      } else {
+        print('ERROR: Document does not exist!');
+      }
+    } catch (e) {
+      print('ERROR accessing Firestore: $e');
+    }
+    print('=== END DEBUG ===');
+  }
+
   Future<void> _selectTime(TextEditingController controller) async {
     final TimeOfDay? picked = await showTimePicker(
       context: context,
@@ -187,9 +369,152 @@ class _UserProfilePageState extends State<UserProfilePage>
     }
   }
 
+  // Build flag image widget
+  Widget _buildFlagImage(String flagUrl, {double size = 24}) {
+    return Container(
+      width: size,
+      height: size * 0.75,
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(2),
+        border: Border.all(color: Colors.grey[300]!, width: 0.5),
+      ),
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(2),
+        child: Image.network(
+          flagUrl,
+          width: size,
+          height: size * 0.75,
+          fit: BoxFit.cover,
+          errorBuilder: (context, error, stackTrace) {
+            return Container(
+              color: Colors.grey[200],
+              child: Icon(
+                Icons.flag_outlined,
+                size: size * 0.6,
+                color: Colors.grey[400],
+              ),
+            );
+          },
+          loadingBuilder: (context, child, loadingProgress) {
+            if (loadingProgress == null) return child;
+            return Container(
+              color: Colors.grey[100],
+              child: SizedBox(
+                width: size * 0.6,
+                height: size * 0.6,
+                child: CircularProgressIndicator(
+                  strokeWidth: 1,
+                  color: const Color(0xFF6366F1),
+                ),
+              ),
+            );
+          },
+        ),
+      ),
+    );
+  }
+
+  Future<void> _uploadDocument(String documentType) async {
+    // TODO: Implement file picker and Firebase storage upload
+    // For now, just show a placeholder dialog
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        backgroundColor: _isDarkMode ? const Color(0xFF1E293B) : Colors.white,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: Text(
+          "Upload ${_getDocumentDisplayName(documentType)}",
+          style: TextStyle(
+            color: _isDarkMode ? Colors.white : Colors.black87,
+            fontWeight: FontWeight.bold,
+          ),
+        ),
+        content: Text(
+          "Document upload functionality will be implemented with Firebase Storage.",
+          style: TextStyle(
+            color: _isDarkMode ? Colors.grey.shade300 : Colors.grey.shade700,
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(),
+            child: Text(
+              "OK",
+              style: TextStyle(color: Theme.of(context).colorScheme.primary),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  String _getDocumentDisplayName(String documentType) {
+    switch (documentType) {
+      case 'degree_certificate':
+        return 'Degree Certificate';
+      case 'passport':
+        return 'Passport';
+      case 'visa':
+        return 'Visa';
+      case 'emirates_id':
+        return 'Emirates ID';
+      case 'other_documents':
+        return 'Other Documents';
+      default:
+        return 'Document';
+    }
+  }
+
+  IconData _getDocumentIcon(String documentType) {
+    switch (documentType) {
+      case 'degree_certificate':
+        return Icons.school;
+      case 'passport':
+        return Icons.card_travel;
+      case 'visa':
+        return Icons.card_membership;
+      case 'emirates_id':
+        return Icons.badge;
+      case 'other_documents':
+        return Icons.folder;
+      default:
+        return Icons.description;
+    }
+  }
+
+  // COMPLETELY FIXED: Enhanced save profile method with proper error handling
   Future<void> _saveProfile() async {
+    print('=== STARTING SAVE PROFILE ===');
+    
+    // Enhanced validation
     if (_nameController.text.trim().isEmpty) {
       CustomSnackBar.errorSnackBar(context, "Name cannot be empty");
+      return;
+    }
+
+    // Validate phone number
+    String phone = _phoneController.text.trim();
+    if (phone.isNotEmpty && !_isValidPhone(phone)) {
+      CustomSnackBar.errorSnackBar(context, "Please enter a valid phone number (7-15 digits)");
+      return;
+    }
+
+    // Validate email format
+    String email = _emailController.text.trim();
+    if (email.isNotEmpty && !_isValidEmail(email)) {
+      CustomSnackBar.errorSnackBar(context, "Please enter a valid email address");
+      return;
+    }
+
+    // Validate country selection
+    if (_selectedCountry == null) {
+      CustomSnackBar.errorSnackBar(context, "Please select a country");
+      return;
+    }
+
+    // Validate "Other" country field
+    if (_selectedCountry?.isOther == true && _otherCountryController.text.trim().isEmpty) {
+      CustomSnackBar.errorSnackBar(context, "Please specify your country name");
       return;
     }
 
@@ -198,16 +523,20 @@ class _UserProfilePageState extends State<UserProfilePage>
     });
 
     try {
-      await FirebaseFirestore.instance
-          .collection('employees')
-          .doc(widget.employeeId)
-          .update({
+      // Determine country name to save
+      String countryToSave = _selectedCountry!.isOther
+          ? _otherCountryController.text.trim()
+          : _selectedCountry!.name;
+
+      // Prepare update data with explicit type conversion
+      Map<String, dynamic> updateData = {
         'name': _nameController.text.trim(),
         'designation': _designationController.text.trim(),
         'department': _departmentController.text.trim(),
-        'phone': _phoneController.text.trim(),
-        'email': _emailController.text.trim(),
-        'country': _countryController.text.trim(),
+        'phone': phone,
+        'email': email,
+        'country': countryToSave,
+        'countryCode': _selectedCountry!.isOther ? 'OTHER' : _selectedCountry!.code,
         'birthdate': _birthdateController.text.trim(),
         'breakStartTime': _breakStartTimeController.text.trim(),
         'breakEndTime': _breakEndTimeController.text.trim(),
@@ -215,25 +544,135 @@ class _UserProfilePageState extends State<UserProfilePage>
         'jummaBreakStart': _jummaBreakStartController.text.trim(),
         'jummaBreakEnd': _jummaBreakEndController.text.trim(),
         'lastUpdated': FieldValue.serverTimestamp(),
-      });
+      };
+
+      print('Attempting to update profile with data: $updateData');
+
+      // First check if document exists
+      DocumentReference docRef = FirebaseFirestore.instance
+          .collection('employees')
+          .doc(widget.employeeId);
+
+      DocumentSnapshot docSnapshot = await docRef.get();
+      
+      if (!docSnapshot.exists) {
+        throw Exception('Employee document does not exist');
+      }
+
+      print('Document exists, proceeding with update...');
+
+      // Perform Firestore update
+      await docRef.update(updateData);
+
+      print('Firestore update completed successfully');
+
+      // Update local userData to reflect changes
+      widget.userData.addAll(updateData);
 
       setState(() {
         _isLoading = false;
         _isEditing = false;
       });
 
+      // Re-check profile completeness with updated data
+      _checkProfileCompleteness();
+
       if (mounted) {
         CustomSnackBar.successSnackBar(context, "Profile updated successfully");
       }
+
+      print('=== SAVE PROFILE COMPLETED SUCCESSFULLY ===');
+
     } catch (e) {
+      print('ERROR in _saveProfile: $e');
+      
       setState(() {
         _isLoading = false;
       });
 
       if (mounted) {
-        CustomSnackBar.errorSnackBar(context, "Error updating profile: $e");
+        String errorMessage = "Error updating profile: ";
+        
+        // Provide more specific error messages
+        if (e.toString().contains('permission')) {
+          errorMessage += "You don't have permission to update this profile";
+        } else if (e.toString().contains('network')) {
+          errorMessage += "Network connection error. Please check your internet connection";
+        } else if (e.toString().contains('not-found') || e.toString().contains('does not exist')) {
+          errorMessage += "Profile not found in database";
+        } else {
+          errorMessage += e.toString();
+        }
+        
+        CustomSnackBar.errorSnackBar(context, errorMessage);
+        
+        // Show debug dialog in debug mode
+        if (mounted) {
+          _showDebugDialog(e.toString());
+        }
       }
     }
+  }
+
+  // ADDED: Debug dialog for development
+  void _showDebugDialog(String error) {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        backgroundColor: _isDarkMode ? const Color(0xFF1E293B) : Colors.white,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: Text(
+          "Debug Information",
+          style: TextStyle(
+            color: _isDarkMode ? Colors.white : Colors.black87,
+            fontWeight: FontWeight.bold,
+          ),
+        ),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              "Employee ID: ${widget.employeeId}",
+              style: TextStyle(
+                color: _isDarkMode ? Colors.grey.shade300 : Colors.grey.shade700,
+                fontSize: 12,
+              ),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              "Error: $error",
+              style: TextStyle(
+                color: _isDarkMode ? Colors.grey.shade300 : Colors.grey.shade700,
+                fontSize: 12,
+              ),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => _debugConnection(),
+            child: Text(
+              "Test Connection",
+              style: TextStyle(color: Theme.of(context).colorScheme.primary),
+            ),
+          ),
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(),
+            child: Text(
+              "OK",
+              style: TextStyle(color: Theme.of(context).colorScheme.primary),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _dismissNotificationBanner() {
+    setState(() {
+      _showNotificationBanner = false;
+    });
   }
 
   @override
@@ -251,7 +690,8 @@ class _UserProfilePageState extends State<UserProfilePage>
               opacity: _fadeAnimation,
               child: Column(
                 children: [
-                  _buildModernHeader(),
+                  _buildFixedHeader(),
+                  if (_showNotificationBanner) _buildNotificationBanner(),
                   Expanded(
                     child: SingleChildScrollView(
                       physics: const BouncingScrollPhysics(),
@@ -327,17 +767,131 @@ class _UserProfilePageState extends State<UserProfilePage>
     );
   }
 
-  Widget _buildModernHeader() {
+  Widget _buildNotificationBanner() {
+    final phone = _phoneController.text.trim();
+    final email = _emailController.text.trim();
+
+    List<String> missingFields = [];
+    if (phone.isEmpty) missingFields.add('mobile number');
+    if (email.isEmpty) missingFields.add('email address');
+
+    if (missingFields.isEmpty) return const SizedBox.shrink();
+
+    String message = "Please add your ${missingFields.join(' and ')} to complete your profile";
+
+    return Container(
+      margin: EdgeInsets.symmetric(
+        horizontal: responsivePadding.horizontal,
+        vertical: 8,
+      ),
+      padding: EdgeInsets.all(isTablet ? 16 : 12),
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          colors: [
+            Colors.orange.withOpacity(0.1),
+            Colors.amber.withOpacity(0.1),
+          ],
+        ),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(
+          color: Colors.orange.withOpacity(0.3),
+          width: 1,
+        ),
+      ),
+      child: Row(
+        children: [
+          Container(
+            padding: const EdgeInsets.all(8),
+            decoration: BoxDecoration(
+              color: Colors.orange.withOpacity(0.2),
+              borderRadius: BorderRadius.circular(8),
+            ),
+            child: Icon(
+              Icons.info_outline,
+              color: Colors.orange[700],
+              size: 20,
+            ),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  "Complete Your Profile",
+                  style: TextStyle(
+                    color: Colors.orange[700],
+                    fontSize: (isTablet ? 16 : 14) * responsiveFontSize,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  message,
+                  style: TextStyle(
+                    color: Colors.orange[600],
+                    fontSize: (isTablet ? 14 : 12) * responsiveFontSize,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              if (!_isEditing)
+                GestureDetector(
+                  onTap: () {
+                    setState(() {
+                      _isEditing = true;
+                    });
+                  },
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                    decoration: BoxDecoration(
+                      color: Colors.orange[700],
+                      borderRadius: BorderRadius.circular(16),
+                    ),
+                    child: Text(
+                      "Edit",
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontSize: (isTablet ? 12 : 10) * responsiveFontSize,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ),
+                ),
+              const SizedBox(width: 8),
+              GestureDetector(
+                onTap: _dismissNotificationBanner,
+                child: Container(
+                  padding: const EdgeInsets.all(4),
+                  child: Icon(
+                    Icons.close,
+                    color: Colors.orange[600],
+                    size: 18,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildFixedHeader() {
     String? imageBase64 = widget.userData['image'];
 
     return Container(
-      height: isTablet ? 320 : 280,
+      height: isTablet ? 280 : 240,
       width: double.infinity,
       child: Stack(
         children: [
-          // Cover Image - LinkedIn/Facebook Style Banner
+          // Simple Company Header Background
           Container(
-            height: isTablet ? 200 : 160,
+            height: isTablet ? 140 : 120,
             width: double.infinity,
             decoration: BoxDecoration(
               gradient: LinearGradient(
@@ -347,207 +901,115 @@ class _UserProfilePageState extends State<UserProfilePage>
                     ? [
                   const Color(0xFF1a202c),
                   const Color(0xFF2d3748),
-                  const Color(0xFF4a5568),
                 ]
                     : [
-                  const Color(0xFF667eea),
-                  const Color(0xFF764ba2),
-                  const Color(0xFF6366F1),
+                  const Color(0xFF2E7D4B),
+                  const Color(0xFF34A853),
                 ],
               ),
             ),
-            child: Stack(
-              children: [
-                // Phoenician Logo as Cover Background
-                Positioned.fill(
-                  child: Container(
-                    decoration: BoxDecoration(
-                      color: Colors.white.withOpacity(0.95),
+            child: SafeArea(
+              child: Container(
+                padding: EdgeInsets.symmetric(
+                  horizontal: responsivePadding.horizontal,
+                  vertical: 16,
+                ),
+                child: Row(
+                  children: [
+                    // Back Button
+                    Container(
+                      decoration: BoxDecoration(
+                        color: Colors.white.withOpacity(0.2),
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(
+                          color: Colors.white.withOpacity(0.3),
+                        ),
+                      ),
+                      child: IconButton(
+                        icon: const Icon(Icons.arrow_back, color: Colors.white),
+                        onPressed: () {
+                          if (_isEditing) {
+                            _showDiscardDialog();
+                          } else {
+                            Navigator.of(context).pop();
+                          }
+                        },
+                      ),
                     ),
-                    child: Center(
+
+                    // Company Name - Expanded to prevent overflow
+                    Expanded(
                       child: Container(
-                        width: isTablet ? 280 : 220,
-                        height: isTablet ? 120 : 95,
-                        child: Image.asset(
-                          'assets/images/ptslogo.png',
-                          fit: BoxFit.contain,
-                          errorBuilder: (context, error, stackTrace) {
-                            return Container(
-                              decoration: BoxDecoration(
-                                gradient: LinearGradient(
-                                  begin: Alignment.topLeft,
-                                  end: Alignment.bottomRight,
-                                  colors: [
-                                    const Color(0xFF667eea),
-                                    const Color(0xFF764ba2),
-                                  ],
+                        margin: const EdgeInsets.symmetric(horizontal: 12),
+                        child: Column(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            FittedBox(
+                              fit: BoxFit.scaleDown,
+                              child: Text(
+                                "PHOENICIAN TECHNICAL SERVICES LLC",
+                                style: TextStyle(
+                                  color: Colors.white,
+                                  fontSize: (isTablet ? 16 : 14) * responsiveFontSize,
+                                  fontWeight: FontWeight.bold,
+                                  letterSpacing: 1.0,
                                 ),
-                                borderRadius: BorderRadius.circular(12),
+                                textAlign: TextAlign.center,
+                                maxLines: 1,
                               ),
-                              child: Center(
-                                child: Text(
-                                  'PHOENICIAN',
-                                  style: TextStyle(
-                                    color: Colors.white,
-                                    fontSize: (isTablet ? 24 : 20) * responsiveFontSize,
-                                    fontWeight: FontWeight.bold,
-                                    letterSpacing: 2,
-                                  ),
+                            ),
+                            const SizedBox(height: 4),
+                            FittedBox(
+                              fit: BoxFit.scaleDown,
+                              child: Text(
+                                "DUBAI, UNITED ARAB EMIRATES",
+                                style: TextStyle(
+                                  color: Colors.white.withOpacity(0.8),
+                                  fontSize: (isTablet ? 12 : 10) * responsiveFontSize,
+                                  fontWeight: FontWeight.w500,
                                 ),
+                                textAlign: TextAlign.center,
+                                maxLines: 1,
                               ),
-                            );
-                          },
+                            ),
+                          ],
                         ),
                       ),
                     ),
-                  ),
+
+                    // Edit Button
+                    Container(
+                      decoration: BoxDecoration(
+                        color: Colors.white.withOpacity(0.2),
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(
+                          color: Colors.white.withOpacity(0.3),
+                        ),
+                      ),
+                      child: IconButton(
+                        icon: Icon(
+                          _isEditing ? Icons.save : Icons.edit,
+                          color: Colors.white,
+                        ),
+                        onPressed: _isEditing ? _saveProfile : _toggleEditing,
+                      ),
+                    ),
+                  ],
                 ),
-
-                // Subtle overlay for better contrast
-                Positioned.fill(
-                  child: Container(
-                    decoration: BoxDecoration(
-                      gradient: LinearGradient(
-                        begin: Alignment.topCenter,
-                        end: Alignment.bottomCenter,
-                        colors: [
-                          Colors.black.withOpacity(0.1),
-                          Colors.transparent,
-                          Colors.black.withOpacity(0.2),
-                        ],
-                      ),
-                    ),
-                  ),
-                ),
-
-                // Top navigation overlay
-                Positioned(
-                  top: 0,
-                  left: 0,
-                  right: 0,
-                  height: 80,
-                  child: Container(
-                    decoration: BoxDecoration(
-                      gradient: LinearGradient(
-                        begin: Alignment.topCenter,
-                        end: Alignment.bottomCenter,
-                        colors: [
-                          Colors.black.withOpacity(0.6),
-                          Colors.black.withOpacity(0.3),
-                          Colors.transparent,
-                        ],
-                      ),
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          ),
-
-          // Navigation Bar
-          SafeArea(
-            child: Container(
-              padding: EdgeInsets.symmetric(
-                horizontal: responsivePadding.horizontal,
-                vertical: 8,
-              ),
-              child: Row(
-                children: [
-                  Container(
-                    decoration: BoxDecoration(
-                      color: Colors.black.withOpacity(0.4),
-                      borderRadius: BorderRadius.circular(12),
-                      border: Border.all(
-                        color: Colors.white.withOpacity(0.3),
-                      ),
-                      boxShadow: [
-                        BoxShadow(
-                          color: Colors.black.withOpacity(0.2),
-                          blurRadius: 8,
-                          offset: const Offset(0, 2),
-                        ),
-                      ],
-                    ),
-                    child: IconButton(
-                      icon: const Icon(Icons.arrow_back, color: Colors.white),
-                      onPressed: () {
-                        if (_isEditing) {
-                          _showDiscardDialog();
-                        } else {
-                          Navigator.of(context).pop();
-                        }
-                      },
-                    ),
-                  ),
-
-                  const Spacer(),
-
-                  Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                    decoration: BoxDecoration(
-                      color: Colors.black.withOpacity(0.4),
-                      borderRadius: BorderRadius.circular(20),
-                      border: Border.all(
-                        color: Colors.white.withOpacity(0.3),
-                      ),
-                      boxShadow: [
-                        BoxShadow(
-                          color: Colors.black.withOpacity(0.2),
-                          blurRadius: 8,
-                          offset: const Offset(0, 2),
-                        ),
-                      ],
-                    ),
-                    child: Text(
-                      _isEditing ? "Edit Profile" : "Profile",
-                      style: TextStyle(
-                        color: Colors.white,
-                        fontSize: (isTablet ? 18 : 16) * responsiveFontSize,
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-                  ),
-
-                  const Spacer(),
-
-                  Container(
-                    decoration: BoxDecoration(
-                      color: Colors.black.withOpacity(0.4),
-                      borderRadius: BorderRadius.circular(12),
-                      border: Border.all(
-                        color: Colors.white.withOpacity(0.3),
-                      ),
-                      boxShadow: [
-                        BoxShadow(
-                          color: Colors.black.withOpacity(0.2),
-                          blurRadius: 8,
-                          offset: const Offset(0, 2),
-                        ),
-                      ],
-                    ),
-                    child: IconButton(
-                      icon: Icon(
-                        _isEditing ? Icons.save : Icons.edit,
-                        color: Colors.white,
-                      ),
-                      onPressed: _isEditing ? _saveProfile : _toggleEditing,
-                    ),
-                  ),
-                ],
               ),
             ),
           ),
 
-          // Profile Section - Overlapping the cover image
+          // Profile Section
           Positioned(
-            top: isTablet ? 120 : 100, // Overlap the cover image
+            top: isTablet ? 80 : 70,
             left: 0,
             right: 0,
             child: Container(
               padding: responsivePadding,
               child: Column(
                 children: [
-                  // Profile Picture with better shadow
+                  // Profile Picture
                   Hero(
                     tag: 'profile_${widget.employeeId}',
                     child: Container(
@@ -567,7 +1029,7 @@ class _UserProfilePageState extends State<UserProfilePage>
                       child: Stack(
                         children: [
                           CircleAvatar(
-                            radius: isTablet ? 80 : 65,
+                            radius: isTablet ? 70 : 60,
                             backgroundColor: _isDarkMode
                                 ? Colors.grey.shade800
                                 : Colors.grey.shade200,
@@ -580,7 +1042,7 @@ class _UserProfilePageState extends State<UserProfilePage>
                               color: _isDarkMode
                                   ? Colors.grey.shade300
                                   : Colors.grey,
-                              size: isTablet ? 80 : 65,
+                              size: isTablet ? 70 : 60,
                             )
                                 : null,
                           ),
@@ -589,7 +1051,7 @@ class _UserProfilePageState extends State<UserProfilePage>
                               bottom: 5,
                               right: 5,
                               child: Container(
-                                padding: const EdgeInsets.all(10),
+                                padding: const EdgeInsets.all(8),
                                 decoration: BoxDecoration(
                                   color: Theme.of(context).colorScheme.primary,
                                   shape: BoxShape.circle,
@@ -608,7 +1070,7 @@ class _UserProfilePageState extends State<UserProfilePage>
                                 child: const Icon(
                                   Icons.photo_camera,
                                   color: Colors.white,
-                                  size: 22,
+                                  size: 18,
                                 ),
                               ),
                             ),
@@ -617,82 +1079,24 @@ class _UserProfilePageState extends State<UserProfilePage>
                     ),
                   ),
 
-                  const SizedBox(height: 20),
+                  const SizedBox(height: 16),
 
-                  // Name Section
+                  // Name and Designation
                   Container(
                     padding: const EdgeInsets.symmetric(horizontal: 16),
                     child: Column(
                       children: [
                         // Name
-                        _isEditing
-                            ? Container(
-                          width: screenWidth * 0.8,
-                          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                          decoration: BoxDecoration(
-                            color: _isDarkMode
-                                ? Colors.white.withOpacity(0.1)
-                                : Colors.white,
-                            borderRadius: BorderRadius.circular(12),
-                            border: Border.all(
-                              color: _isDarkMode
-                                  ? Colors.white.withOpacity(0.2)
-                                  : Colors.grey.withOpacity(0.3),
-                            ),
-                            boxShadow: [
-                              BoxShadow(
-                                color: Colors.black.withOpacity(0.1),
-                                blurRadius: 8,
-                                offset: const Offset(0, 2),
-                              ),
-                            ],
+                        Text(
+                          _nameController.text.isNotEmpty
+                              ? _nameController.text
+                              : "Employee Name",
+                          style: TextStyle(
+                            color: _isDarkMode ? Colors.white : Colors.black87,
+                            fontSize: (isTablet ? 24 : 20) * responsiveFontSize,
+                            fontWeight: FontWeight.bold,
                           ),
-                          child: TextField(
-                            controller: _nameController,
-                            style: TextStyle(
-                              color: _isDarkMode ? Colors.white : Colors.black87,
-                              fontSize: (isTablet ? 28 : 24) * responsiveFontSize,
-                              fontWeight: FontWeight.bold,
-                            ),
-                            textAlign: TextAlign.center,
-                            decoration: InputDecoration(
-                              hintText: "Enter your name",
-                              hintStyle: TextStyle(
-                                color: _isDarkMode
-                                    ? Colors.grey.shade400
-                                    : Colors.grey.shade600,
-                              ),
-                              border: InputBorder.none,
-                              contentPadding: EdgeInsets.zero,
-                            ),
-                          ),
-                        )
-                            : Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
-                          decoration: BoxDecoration(
-                            color: _isDarkMode
-                                ? const Color(0xFF1E293B).withOpacity(0.8)
-                                : Colors.white.withOpacity(0.95),
-                            borderRadius: BorderRadius.circular(16),
-                            boxShadow: [
-                              BoxShadow(
-                                color: Colors.black.withOpacity(0.1),
-                                blurRadius: 12,
-                                offset: const Offset(0, 4),
-                              ),
-                            ],
-                          ),
-                          child: Text(
-                            _nameController.text.isNotEmpty
-                                ? _nameController.text
-                                : "Employee Name",
-                            style: TextStyle(
-                              color: _isDarkMode ? Colors.white : Colors.black87,
-                              fontSize: (isTablet ? 28 : 24) * responsiveFontSize,
-                              fontWeight: FontWeight.bold,
-                            ),
-                            textAlign: TextAlign.center,
-                          ),
+                          textAlign: TextAlign.center,
                         ),
 
                         const SizedBox(height: 8),
@@ -713,7 +1117,7 @@ class _UserProfilePageState extends State<UserProfilePage>
                                 : "Employee",
                             style: TextStyle(
                               color: Theme.of(context).colorScheme.primary,
-                              fontSize: (isTablet ? 16 : 14) * responsiveFontSize,
+                              fontSize: (isTablet ? 14 : 12) * responsiveFontSize,
                               fontWeight: FontWeight.w600,
                             ),
                             textAlign: TextAlign.center,
@@ -781,6 +1185,35 @@ class _UserProfilePageState extends State<UserProfilePage>
           SizedBox(height: responsivePadding.vertical),
 
           _buildModernSection(
+            title: "Personal Information",
+            icon: Icons.person,
+            children: [
+              _buildModernInfoField(
+                label: "Birthdate",
+                controller: _birthdateController,
+                icon: Icons.cake,
+                isEditing: _isEditing,
+              ),
+              // Country Dropdown
+              _buildCountryDropdown(
+                label: "Country",
+                enabled: _isEditing,
+                icon: Icons.location_on,
+              ),
+              // Other Country Text Field (shown when "Other" is selected)
+              if (_showOtherCountryField)
+                _buildModernInfoField(
+                  label: "Please specify your country",
+                  controller: _otherCountryController,
+                  icon: Icons.edit_location_outlined,
+                  isEditing: _isEditing,
+                ),
+            ],
+          ),
+
+          SizedBox(height: responsivePadding.vertical),
+
+          _buildModernSection(
             title: "Break Time Information",
             icon: Icons.schedule,
             children: [
@@ -825,22 +1258,12 @@ class _UserProfilePageState extends State<UserProfilePage>
 
           SizedBox(height: responsivePadding.vertical),
 
+          // Documents Upload Section
           _buildModernSection(
-            title: "Personal Information",
-            icon: Icons.person,
+            title: "Documents",
+            icon: Icons.folder_open,
             children: [
-              _buildModernInfoField(
-                label: "Birthdate",
-                controller: _birthdateController,
-                icon: Icons.cake,
-                isEditing: _isEditing,
-              ),
-              _buildModernInfoField(
-                label: "Country",
-                controller: _countryController,
-                icon: Icons.location_on,
-                isEditing: _isEditing,
-              ),
+              _buildDocumentUploadGrid(),
             ],
           ),
 
@@ -850,6 +1273,265 @@ class _UserProfilePageState extends State<UserProfilePage>
           ],
         ],
       ),
+    );
+  }
+
+  Widget _buildCountryDropdown({
+    required String label,
+    bool enabled = false,
+    IconData? icon,
+  }) {
+    return Container(
+      margin: const EdgeInsets.only(bottom: 20),
+      padding: EdgeInsets.all(isTablet ? 16 : 12),
+      decoration: BoxDecoration(
+        color: _isDarkMode
+            ? Colors.white.withOpacity(0.05)
+            : Colors.grey.withOpacity(0.05),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(
+          color: _isDarkMode
+              ? Colors.white.withOpacity(0.1)
+              : Colors.grey.withOpacity(0.2),
+        ),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              if (icon != null) ...[
+                Container(
+                  padding: const EdgeInsets.all(8),
+                  decoration: BoxDecoration(
+                    color: Theme.of(context).colorScheme.primary.withOpacity(0.1),
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: Icon(
+                    icon,
+                    color: Theme.of(context).colorScheme.primary,
+                    size: 18,
+                  ),
+                ),
+                const SizedBox(width: 16),
+              ],
+              Text(
+                label,
+                style: TextStyle(
+                  color: _isDarkMode
+                      ? Colors.grey.shade400
+                      : Colors.grey.shade600,
+                  fontSize: (isTablet ? 14 : 12) * responsiveFontSize,
+                  fontWeight: FontWeight.w500,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          enabled
+              ? DropdownButtonFormField<CountryData>(
+            value: _selectedCountry,
+            decoration: InputDecoration(
+              hintText: "Select your country",
+              hintStyle: TextStyle(
+                color: _isDarkMode
+                    ? Colors.grey.shade500
+                    : Colors.grey.shade400,
+              ),
+              border: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(8),
+                borderSide: BorderSide(
+                  color: _isDarkMode
+                      ? Colors.white.withOpacity(0.1)
+                      : Colors.grey.withOpacity(0.3),
+                ),
+              ),
+              contentPadding: const EdgeInsets.symmetric(
+                horizontal: 12,
+                vertical: 8,
+              ),
+            ),
+            dropdownColor: _isDarkMode ? const Color(0xFF1E293B) : Colors.white,
+            isExpanded: true,
+            menuMaxHeight: 300,
+            items: _countries.map((CountryData country) {
+              return DropdownMenuItem<CountryData>(
+                value: country,
+                child: Row(
+                  children: [
+                    _buildFlagImage(
+                      country.flagUrl,
+                      size: isTablet ? 28 : 24,
+                    ),
+                    SizedBox(width: isTablet ? 12 : 10),
+                    Expanded(
+                      child: Text(
+                        country.name,
+                        style: TextStyle(
+                          color: country.isOther
+                              ? Theme.of(context).colorScheme.primary
+                              : (_isDarkMode ? Colors.white : Colors.black87),
+                          fontSize: (isTablet ? 16 : 14) * responsiveFontSize,
+                          fontWeight: country.isOther
+                              ? FontWeight.w600
+                              : FontWeight.normal,
+                        ),
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
+                  ],
+                ),
+              );
+            }).toList(),
+            onChanged: (CountryData? newCountry) {
+              setState(() {
+                _selectedCountry = newCountry;
+                _showOtherCountryField = newCountry?.isOther ?? false;
+                if (!_showOtherCountryField) {
+                  _otherCountryController.clear();
+                }
+              });
+            },
+          )
+              : Container(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+            decoration: BoxDecoration(
+              color: _isDarkMode
+                  ? Colors.white.withOpacity(0.05)
+                  : Colors.white,
+              borderRadius: BorderRadius.circular(8),
+              border: Border.all(
+                color: _isDarkMode
+                    ? Colors.white.withOpacity(0.1)
+                    : Colors.grey.withOpacity(0.3),
+              ),
+            ),
+            child: Row(
+              children: [
+                if (_selectedCountry != null) ...[
+                  _buildFlagImage(
+                    _selectedCountry!.flagUrl,
+                    size: isTablet ? 24 : 20,
+                  ),
+                  SizedBox(width: isTablet ? 12 : 10),
+                ],
+                Expanded(
+                  child: Text(
+                    _selectedCountry?.name ?? "Not selected",
+                    style: TextStyle(
+                      fontSize: (isTablet ? 16 : 14) * responsiveFontSize,
+                      color: _selectedCountry != null
+                          ? (_isDarkMode ? Colors.white : Colors.black87)
+                          : (_isDarkMode ? Colors.grey.shade500 : Colors.grey.shade400),
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildDocumentUploadGrid() {
+    return Column(
+      children: [
+        Text(
+          "Upload your documents for verification",
+          style: TextStyle(
+            color: _isDarkMode ? Colors.grey.shade400 : Colors.grey.shade600,
+            fontSize: (isTablet ? 14 : 12) * responsiveFontSize,
+            fontWeight: FontWeight.w500,
+          ),
+          textAlign: TextAlign.center,
+        ),
+        const SizedBox(height: 20),
+        GridView.count(
+          shrinkWrap: true,
+          physics: const NeverScrollableScrollPhysics(),
+          crossAxisCount: isTablet ? 3 : 2,
+          crossAxisSpacing: 12,
+          mainAxisSpacing: 12,
+          childAspectRatio: isTablet ? 1.2 : 1.0,
+          children: _uploadedDocuments.keys.map((documentType) {
+            bool isUploaded = _uploadedDocuments[documentType] != null;
+            return GestureDetector(
+              onTap: () => _uploadDocument(documentType),
+              child: Container(
+                decoration: BoxDecoration(
+                  color: _isDarkMode
+                      ? Colors.white.withOpacity(0.05)
+                      : Colors.white,
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(
+                    color: isUploaded
+                        ? Colors.green.withOpacity(0.5)
+                        : (_isDarkMode
+                        ? Colors.white.withOpacity(0.1)
+                        : Colors.grey.withOpacity(0.2)),
+                    width: isUploaded ? 2 : 1,
+                  ),
+                  boxShadow: [
+                    BoxShadow(
+                      color: _isDarkMode
+                          ? Colors.black.withOpacity(0.2)
+                          : Colors.grey.withOpacity(0.1),
+                      blurRadius: 8,
+                      offset: const Offset(0, 2),
+                    ),
+                  ],
+                ),
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.all(12),
+                      decoration: BoxDecoration(
+                        color: isUploaded
+                            ? Colors.green.withOpacity(0.1)
+                            : Theme.of(context).colorScheme.primary.withOpacity(0.1),
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: Icon(
+                        isUploaded ? Icons.check_circle : _getDocumentIcon(documentType),
+                        color: isUploaded
+                            ? Colors.green
+                            : Theme.of(context).colorScheme.primary,
+                        size: isTablet ? 32 : 28,
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    Text(
+                      _getDocumentDisplayName(documentType),
+                      style: TextStyle(
+                        fontSize: (isTablet ? 12 : 10) * responsiveFontSize,
+                        fontWeight: FontWeight.w600,
+                        color: _isDarkMode ? Colors.white : Colors.black87,
+                      ),
+                      textAlign: TextAlign.center,
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      isUploaded ? "Uploaded" : "Tap to upload",
+                      style: TextStyle(
+                        fontSize: (isTablet ? 10 : 9) * responsiveFontSize,
+                        color: isUploaded
+                            ? Colors.green
+                            : (_isDarkMode ? Colors.grey.shade400 : Colors.grey.shade600),
+                      ),
+                      textAlign: TextAlign.center,
+                    ),
+                  ],
+                ),
+              ),
+            );
+          }).toList(),
+        ),
+      ],
     );
   }
 

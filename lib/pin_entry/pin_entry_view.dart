@@ -1,9 +1,9 @@
-// lib/pin_entry/pin_entry_view.dart - UPDATED TO USE MAIN DASHBOARD
+// lib/pin_entry/pin_entry_view.dart - COMPLETE FLEXIBLE PIN LENGTH SUPPORT (1-4 digits)
 
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:face_auth/common/utils/custom_snackbar.dart';
 import 'package:face_auth/constants/theme.dart';
-import 'package:face_auth/dashboard/dashboard_view.dart'; // ✅ CHANGED: Use main DashboardView
+import 'package:face_auth/dashboard/dashboard_view.dart';
 import 'package:face_auth/pin_entry/user_profile_view.dart';
 import 'package:face_auth/model/user_model.dart';
 import 'package:flutter/material.dart';
@@ -18,30 +18,24 @@ class PinEntryView extends StatefulWidget {
   State<PinEntryView> createState() => _PinEntryViewState();
 }
 
-class _PinEntryViewState extends State<PinEntryView> 
+class _PinEntryViewState extends State<PinEntryView>
     with SingleTickerProviderStateMixin {
-  final List<TextEditingController> _controllers = List.generate(
-    4,
-    (index) => TextEditingController(),
-  );
-  final List<FocusNode> _focusNodes = List.generate(
-    4,
-    (index) => FocusNode(),
-  );
-
+  final List<String> _pinValues = ['', '', '', ''];
   bool _isLoading = false;
-  bool _isPinEntered = false;
   late AnimationController _animationController;
   late Animation<double> _scaleAnimation;
+  int _currentIndex = 0;
 
   @override
   void initState() {
     super.initState();
 
+    print("🔐 PIN Entry initialized with flexible PIN length support (1-4 digits)");
+
     // Initialize animation
     _animationController = AnimationController(
       vsync: this,
-      duration: const Duration(milliseconds: 300),
+      duration: const Duration(milliseconds: 150),
     );
 
     _scaleAnimation = Tween<double>(begin: 1.0, end: 0.95).animate(
@@ -50,96 +44,60 @@ class _PinEntryViewState extends State<PinEntryView>
         curve: Curves.easeInOut,
       ),
     );
-
-    // Set up listeners for PIN fields
-    for (int i = 0; i < 4; i++) {
-      _focusNodes[i].addListener(() {
-        setState(() {});
-      });
-
-      _controllers[i].addListener(() {
-        _handlePinInput(i);
-      });
-    }
-  }
-
-  void _handlePinInput(int index) {
-    // Auto advance to next field
-    if (_controllers[index].text.length == 1 && index < 3) {
-      FocusScope.of(context).requestFocus(_focusNodes[index + 1]);
-    }
-
-    // Check if all PIN fields are filled
-    _checkPinCompletion();
-
-    // Auto-verify when 4th digit is entered
-    if (index == 3 && _controllers[index].text.length == 1) {
-      _handleFourthDigitEntered();
-    }
-  }
-
-  void _handleFourthDigitEntered() async {
-    await Future.delayed(const Duration(milliseconds: 100));
-
-    if (_pin.length == 4 && !_isLoading) {
-      debugPrint("🔐 4th digit entered, auto-verifying PIN: $_pin");
-      
-      // Hide keyboard
-      FocusScope.of(context).unfocus();
-      SystemChannels.textInput.invokeMethod('TextInput.hide');
-      
-      // Auto-verify PIN
-      await Future.delayed(const Duration(milliseconds: 500));
-      
-      if (mounted) {
-        await _verifyPin();
-      }
-    }
-  }
-
-  void _checkPinCompletion() {
-    bool allFilled = true;
-    for (var controller in _controllers) {
-      if (controller.text.isEmpty) {
-        allFilled = false;
-        break;
-      }
-    }
-
-    if (allFilled != _isPinEntered) {
-      setState(() {
-        _isPinEntered = allFilled;
-      });
-    }
   }
 
   @override
   void dispose() {
-    for (var controller in _controllers) {
-      controller.dispose();
-    }
-    for (var node in _focusNodes) {
-      node.dispose();
-    }
     _animationController.dispose();
     super.dispose();
   }
 
-  String get _pin => _controllers.map((e) => e.text).join();
+  String get _pin => _pinValues.join();
+  bool get _isPinComplete => _pinValues.every((value) => value.isNotEmpty);
+  int get _enteredDigits => _pinValues.where((value) => value.isNotEmpty).length;
 
-  void _clearPin() {
-    for (var controller in _controllers) {
-      controller.clear();
+  void _onNumberPressed(String number) {
+    if (_isLoading) return;
+
+    HapticFeedback.lightImpact();
+
+    if (_currentIndex < 4) {
+      setState(() {
+        _pinValues[_currentIndex] = number;
+        _currentIndex++;
+      });
     }
-    setState(() {
-      _isPinEntered = false;
-    });
-    FocusScope.of(context).requestFocus(_focusNodes[0]);
   }
 
+  void _onBackspacePressed() {
+    if (_isLoading) return;
+
+    HapticFeedback.lightImpact();
+
+    if (_currentIndex > 0) {
+      setState(() {
+        _currentIndex--;
+        _pinValues[_currentIndex] = '';
+      });
+    }
+  }
+
+  void _clearPin() {
+    if (_isLoading) return;
+
+    HapticFeedback.lightImpact();
+
+    setState(() {
+      _pinValues.fillRange(0, 4, '');
+      _currentIndex = 0;
+      _isLoading = false;
+    });
+  }
+
+  // Manual verify function (called by Continue button)
   Future<void> _verifyPin() async {
-    if (_pin.length != 4) {
-      _showError("Please enter a 4-digit PIN");
+    if (_enteredDigits == 0) {
+      _showError("Please enter your PIN");
       return;
     }
 
@@ -152,16 +110,46 @@ class _PinEntryViewState extends State<PinEntryView>
     HapticFeedback.mediumImpact();
 
     try {
-      debugPrint("🔐 Verifying PIN: $_pin");
+      String enteredPin = _pin.replaceAll('', '').substring(0, _enteredDigits);
+      debugPrint("🔐 Verifying entered PIN: '$enteredPin' (${_enteredDigits} digits)");
 
-      // Find employee by PIN
-      final querySnapshot = await FirebaseFirestore.instance
+      // Try to find employee with exact PIN match first
+      QuerySnapshot exactMatch = await FirebaseFirestore.instance
           .collection("employees")
-          .where("pin", isEqualTo: _pin)
+          .where("pin", isEqualTo: enteredPin)
           .limit(1)
           .get();
 
-      if (querySnapshot.docs.isEmpty) {
+      DocumentSnapshot? matchedDoc;
+      String? actualPin;
+
+      if (exactMatch.docs.isNotEmpty) {
+        matchedDoc = exactMatch.docs.first;
+        actualPin = enteredPin;
+        debugPrint("✅ Found exact PIN match: '$actualPin'");
+      } else {
+        // Try flexible matching - compare normalized PINs
+        debugPrint("🔍 Exact match not found, trying flexible PIN matching...");
+
+        QuerySnapshot allEmployees = await FirebaseFirestore.instance
+            .collection("employees")
+            .get();
+
+        for (var doc in allEmployees.docs) {
+          Map<String, dynamic>? data = doc.data() as Map<String, dynamic>?;
+          String? storedPin = data?['pin']?.toString();
+          if (storedPin != null) {
+            if (_pinsMatch(enteredPin, storedPin)) {
+              matchedDoc = doc;
+              actualPin = storedPin;
+              debugPrint("✅ Found flexible PIN match: entered='$enteredPin', stored='$storedPin'");
+              break;
+            }
+          }
+        }
+      }
+
+      if (matchedDoc == null) {
         setState(() {
           _isLoading = false;
         });
@@ -171,14 +159,13 @@ class _PinEntryViewState extends State<PinEntryView>
       }
 
       // Get employee data
-      final employeeDoc = querySnapshot.docs.first;
-      final employeeData = employeeDoc.data();
-      final employeeId = employeeDoc.id;
+      final employeeData = matchedDoc.data() as Map<String, dynamic>;
+      final employeeId = matchedDoc.id;
 
       debugPrint("✅ Employee found: ${employeeData['name']} ($employeeId)");
 
       // Save authentication data
-      await _saveAuthenticationData(employeeId, employeeData);
+      await _saveAuthenticationData(employeeId, employeeData, actualPin!);
 
       // Create UserModel
       final employee = UserModel(
@@ -186,7 +173,7 @@ class _PinEntryViewState extends State<PinEntryView>
         name: employeeData['name'] ?? 'Employee',
       );
 
-      // Check if user is registered
+      // Check if user is fully registered
       bool isRegistered = await _checkIfUserIsRegistered(employeeId, employeeData);
 
       setState(() {
@@ -195,18 +182,18 @@ class _PinEntryViewState extends State<PinEntryView>
 
       if (mounted) {
         if (isRegistered) {
-          // ✅ CHANGED: User is fully registered, go to main DashboardView
+          debugPrint("✅ User is registered, navigating to Dashboard");
           Navigator.of(context).pushReplacement(
             MaterialPageRoute(
-              builder: (context) => DashboardView(employeeId: employeeId), // ✅ CHANGED
+              builder: (context) => DashboardView(employeeId: employeeId),
             ),
           );
         } else {
-          // User needs to complete registration
+          debugPrint("⚠️ User needs to complete registration");
           Navigator.of(context).push(
             MaterialPageRoute(
               builder: (context) => UserProfileView(
-                employeePin: _pin,
+                employeePin: actualPin!,
                 user: employee,
                 isNewUser: true,
               ),
@@ -225,26 +212,52 @@ class _PinEntryViewState extends State<PinEntryView>
     }
   }
 
+  // Smart PIN matching function
+  bool _pinsMatch(String enteredPin, String storedPin) {
+    // Remove any whitespace
+    enteredPin = enteredPin.trim();
+    storedPin = storedPin.trim();
+
+    // Direct match
+    if (enteredPin == storedPin) {
+      return true;
+    }
+
+    // Convert both to integers for numeric comparison
+    try {
+      int enteredNum = int.parse(enteredPin);
+      int storedNum = int.parse(storedPin);
+
+      // They match if they represent the same number
+      // e.g., "0004" matches "4", "0018" matches "18"
+      bool matches = enteredNum == storedNum;
+
+      if (matches) {
+        debugPrint("📋 PIN match found: '$enteredPin' (${enteredNum}) == '$storedPin' (${storedNum})");
+      }
+
+      return matches;
+    } catch (e) {
+      // If parsing fails, fall back to string comparison
+      return enteredPin == storedPin;
+    }
+  }
+
   Future<bool> _checkIfUserIsRegistered(String employeeId, Map<String, dynamic> employeeData) async {
     try {
-      // Check if user has completed all registration steps
       bool profileCompleted = employeeData['profileCompleted'] ?? false;
       bool faceRegistered = employeeData['faceRegistered'] ?? false;
+      bool enhancedRegistration = employeeData['enhancedRegistration'] ?? false;
       bool hasImage = employeeData.containsKey('image') && employeeData['image'] != null;
-      
-      // Also check local storage
+
       SharedPreferences prefs = await SharedPreferences.getInstance();
       bool localRegistrationComplete = prefs.getBool('registration_complete_$employeeId') ?? false;
-      
-      bool isFullyRegistered = profileCompleted && faceRegistered && hasImage;
-      
-      debugPrint("📋 Registration Status for $employeeId:");
-      debugPrint("   - Profile Completed: $profileCompleted");
-      debugPrint("   - Face Registered: $faceRegistered");
-      debugPrint("   - Has Image: $hasImage");
-      debugPrint("   - Local Registration Complete: $localRegistrationComplete");
-      debugPrint("   - Fully Registered: $isFullyRegistered");
-      
+      bool localFaceRegistered = prefs.getBool('face_registered_$employeeId') ?? false;
+
+      bool isFullyRegistered = profileCompleted &&
+          (faceRegistered || enhancedRegistration || localFaceRegistered) &&
+          (hasImage || localRegistrationComplete);
+
       return isFullyRegistered;
     } catch (e) {
       debugPrint("❌ Error checking registration status: $e");
@@ -252,16 +265,15 @@ class _PinEntryViewState extends State<PinEntryView>
     }
   }
 
-  Future<void> _saveAuthenticationData(String employeeId, Map<String, dynamic> employeeData) async {
+  Future<void> _saveAuthenticationData(String employeeId, Map<String, dynamic> employeeData, String actualPin) async {
     try {
       final prefs = await SharedPreferences.getInstance();
 
       await prefs.setString('authenticated_user_id', employeeId);
-      await prefs.setString('authenticated_employee_pin', _pin);
+      await prefs.setString('authenticated_employee_pin', actualPin);
       await prefs.setBool('is_authenticated', true);
       await prefs.setInt('authentication_timestamp', DateTime.now().millisecondsSinceEpoch);
 
-      // Save employee data for offline use
       Map<String, dynamic> dataToSave = Map<String, dynamic>.from(employeeData);
       dataToSave.forEach((key, value) {
         if (value is Timestamp) {
@@ -285,283 +297,384 @@ class _PinEntryViewState extends State<PinEntryView>
 
   @override
   Widget build(BuildContext context) {
+    final screenHeight = MediaQuery.of(context).size.height;
+    final screenWidth = MediaQuery.of(context).size.width;
+    final isTablet = screenWidth > 600;
+
     return Scaffold(
-      resizeToAvoidBottomInset: false,
-      body: Container(
-        width: double.infinity,
-        height: double.infinity,
-        decoration: const BoxDecoration(
-          gradient: LinearGradient(
-            begin: Alignment.topCenter,
-            end: Alignment.bottomCenter,
-            colors: [
-              scaffoldTopGradientClr,
-              scaffoldBottomGradientClr,
-            ],
-          ),
-        ),
-        child: SafeArea(
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.start,
-            crossAxisAlignment: CrossAxisAlignment.center,
-            children: [
-              const SizedBox(height: 60),
-
-              // App logo
-              Container(
-                padding: const EdgeInsets.all(16),
-                decoration: BoxDecoration(
-                  color: Colors.white.withOpacity(0.2),
-                  shape: BoxShape.circle,
-                ),
-                child: const Icon(
-                  Icons.fingerprint,
-                  color: Colors.white,
-                  size: 40,
-                ),
-              ),
-
-              const SizedBox(height: 30),
-
-              // Title
-              const Text(
-                "🚀 Employee Authentication Pro",
-                style: TextStyle(
-                  color: Colors.white,
-                  fontSize: 24,
-                  fontWeight: FontWeight.bold,
-                ),
-              ),
-
-              const SizedBox(height: 12),
-
-              // Instruction text
-              Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 40),
-                child: Text(
-                  _isLoading
-                      ? "Verifying your PIN..."
-                      : _isPinEntered
-                          ? "PIN entered successfully!"
-                          : "Enter your 4-digit PIN to continue",
-                  style: TextStyle(
-                    color: _isLoading ? Colors.yellow : Colors.white70,
-                    fontSize: 16,
-                  ),
-                  textAlign: TextAlign.center,
-                ),
-              ),
-
-              const SizedBox(height: 40),
-
-              // PIN input fields
-              Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 40),
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: List.generate(
-                    4,
-                    (index) => _buildPinField(index),
-                  ),
-                ),
-              ),
-
-              const SizedBox(height: 40),
-
-              // Status indicator
-              if (_isLoading) ...[
-                const CircularProgressIndicator(color: Colors.white),
-                const SizedBox(height: 16),
-                const Text(
-                  "Processing...",
-                  style: TextStyle(
-                    color: Colors.white70,
-                    fontSize: 14,
-                  ),
-                ),
-              ] else if (_isPinEntered) ...[
-                Container(
-                  padding: const EdgeInsets.all(16),
-                  decoration: BoxDecoration(
-                    color: Colors.green.withOpacity(0.2),
-                    shape: BoxShape.circle,
-                  ),
-                  child: const Icon(
-                    Icons.check_circle_outline,
-                    color: Colors.green,
-                    size: 60,
-                  ),
-                ),
-                const SizedBox(height: 16),
-                const Text(
-                  "PIN verified successfully!",
-                  style: TextStyle(
-                    color: Colors.green,
-                    fontSize: 16,
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
-              ] else ...[
-                Container(
-                  padding: const EdgeInsets.all(16),
-                  decoration: BoxDecoration(
-                    color: Colors.white.withOpacity(0.1),
-                    shape: BoxShape.circle,
-                  ),
-                  child: const Icon(
-                    Icons.lock_outline,
-                    color: Colors.white,
-                    size: 60,
-                  ),
-                ),
-                const SizedBox(height: 16),
-                const Text(
-                  "Enter your 4-digit PIN",
-                  style: TextStyle(
-                    color: Colors.white70,
-                    fontSize: 16,
-                  ),
-                ),
-              ],
-
-              const Spacer(),
-
-              // Action buttons
-              if (!_isLoading && _isPinEntered) ...[
-                Padding(
-                  padding: const EdgeInsets.only(bottom: 40),
-                  child: Row(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      // Clear button
-                      GestureDetector(
-                        onTap: _clearPin,
-                        child: Container(
-                          width: 120,
-                          height: 50,
+      backgroundColor: Colors.white,
+      body: SafeArea(
+        child: SingleChildScrollView(
+          child: ConstrainedBox(
+            constraints: BoxConstraints(
+              minHeight: screenHeight - MediaQuery.of(context).padding.top - MediaQuery.of(context).padding.bottom,
+            ),
+            child: Column(
+              children: [
+                // Header Section
+                SizedBox(
+                  height: screenHeight * 0.35,
+                  child: Container(
+                    width: double.infinity,
+                    padding: EdgeInsets.symmetric(
+                      horizontal: isTablet ? 60.0 : 24.0,
+                      vertical: isTablet ? 32.0 : 24.0,
+                    ),
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        // Company Logo
+                        Container(
+                          width: isTablet ? 80 : 70,
+                          height: isTablet ? 80 : 70,
                           decoration: BoxDecoration(
-                            color: Colors.white.withOpacity(0.3),
-                            borderRadius: BorderRadius.circular(25),
+                            color: const Color(0xFF2E7D4B),
+                            borderRadius: BorderRadius.circular(18),
+                            boxShadow: [
+                              BoxShadow(
+                                color: const Color(0xFF2E7D4B).withOpacity(0.2),
+                                spreadRadius: 0,
+                                blurRadius: 12,
+                                offset: const Offset(0, 6),
+                              ),
+                            ],
                           ),
-                          child: const Center(
+                          child: Center(
                             child: Text(
-                              "Clear",
+                              "P",
                               style: TextStyle(
                                 color: Colors.white,
+                                fontSize: isTablet ? 32 : 28,
                                 fontWeight: FontWeight.bold,
-                                fontSize: 16,
                               ),
                             ),
                           ),
                         ),
+
+                        SizedBox(height: isTablet ? 16 : 14),
+
+                        // Company Name
+                        Text(
+                          "PHOENICIAN TECHNICAL SERVICES LLC",
+                          style: TextStyle(
+                            color: const Color(0xFF2E7D4B),
+                            fontSize: isTablet ? 16 : 14,
+                            fontWeight: FontWeight.bold,
+                            letterSpacing: 1.0,
+                          ),
+                          textAlign: TextAlign.center,
+                        ),
+
+                        SizedBox(height: isTablet ? 8 : 6),
+
+                        Text(
+                          "",
+                          style: TextStyle(
+                            color: Colors.grey[600],
+                            fontSize: isTablet ? 12 : 10,
+                            fontWeight: FontWeight.w500,
+                          ),
+                          textAlign: TextAlign.center,
+                        ),
+
+                        SizedBox(height: isTablet ? 20 : 16),
+
+                        // Status Text
+                        Text(
+                          _isLoading
+                              ? "Verifying your PIN..."
+                              : _enteredDigits > 0
+                              ? "${_enteredDigits} digit${_enteredDigits > 1 ? 's' : ''} entered"
+                              : "Enter your PIN (1-4 digits)",
+                          style: TextStyle(
+                            color: _isLoading
+                                ? const Color(0xFFFF8C00)
+                                : _enteredDigits > 0
+                                ? const Color(0xFF2E7D4B)
+                                : Colors.grey[700],
+                            fontSize: isTablet ? 14 : 12,
+                            fontWeight: FontWeight.w500,
+                          ),
+                          textAlign: TextAlign.center,
+                        ),
+
+                        SizedBox(height: isTablet ? 8 : 6),
+
+                        // Helper text
+                        Text(
+                          "",
+                          style: TextStyle(
+                            color: Colors.grey[500],
+                            fontSize: isTablet ? 10 : 9,
+                            fontWeight: FontWeight.w400,
+                          ),
+                          textAlign: TextAlign.center,
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+
+                // PIN Display Section
+                Container(
+                  padding: EdgeInsets.symmetric(vertical: isTablet ? 20 : 16),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: List.generate(
+                      4,
+                          (index) => Container(
+                        width: isTablet ? 50 : 45,
+                        height: isTablet ? 50 : 45,
+                        margin: EdgeInsets.symmetric(horizontal: isTablet ? 10 : 8),
+                        decoration: BoxDecoration(
+                          color: _pinValues[index].isNotEmpty
+                              ? const Color(0xFF2E7D4B)
+                              : Colors.grey[100],
+                          borderRadius: BorderRadius.circular(12),
+                          border: Border.all(
+                            color: _pinValues[index].isNotEmpty
+                                ? const Color(0xFF2E7D4B)
+                                : Colors.grey[300]!,
+                            width: 2,
+                          ),
+                        ),
+                        child: Center(
+                          child: _pinValues[index].isNotEmpty
+                              ? Container(
+                            width: isTablet ? 12 : 10,
+                            height: isTablet ? 12 : 10,
+                            decoration: const BoxDecoration(
+                              color: Colors.white,
+                              shape: BoxShape.circle,
+                            ),
+                          )
+                              : null,
+                        ),
                       ),
+                    ),
+                  ),
+                ),
 
-                      const SizedBox(width: 20),
+                // Loading Indicator
+                if (_isLoading) ...[
+                  const CircularProgressIndicator(
+                    color: Color(0xFF2E7D4B),
+                    strokeWidth: 3,
+                  ),
+                  SizedBox(height: isTablet ? 16 : 12),
+                ],
 
-                      // Continue button
-                      GestureDetector(
-                        onTapDown: (_) => _animationController.forward(),
-                        onTapUp: (_) {
-                          _animationController.reverse();
-                          _verifyPin();
-                        },
-                        onTapCancel: () => _animationController.reverse(),
-                        child: ScaleTransition(
-                          scale: _scaleAnimation,
-                          child: Container(
-                            width: 120,
-                            height: 50,
-                            decoration: BoxDecoration(
-                              color: accentColor,
-                              borderRadius: BorderRadius.circular(25),
-                              boxShadow: [
-                                BoxShadow(
-                                  color: accentColor.withOpacity(0.3),
-                                  blurRadius: 10,
-                                  offset: const Offset(0, 5),
+                // Number Pad Section
+                SizedBox(
+                  height: screenHeight * 0.45,
+                  child: Container(
+                    padding: EdgeInsets.symmetric(horizontal: isTablet ? 60.0 : 24.0),
+                    child: Column(
+                      children: [
+                        // Number Rows
+                        Expanded(
+                          child: Column(
+                            mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                            children: [
+                              _buildNumberRow(['1', '2', '3'], isTablet),
+                              _buildNumberRow(['4', '5', '6'], isTablet),
+                              _buildNumberRow(['7', '8', '9'], isTablet),
+                              _buildBottomRow(isTablet),
+                            ],
+                          ),
+                        ),
+
+                        // Action Buttons
+                        if (_enteredDigits > 0 && !_isLoading) ...[
+                          Padding(
+                            padding: EdgeInsets.only(
+                              top: isTablet ? 16 : 12,
+                              bottom: isTablet ? 12 : 8,
+                            ),
+                            child: Row(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              children: [
+                                // Clear Button
+                                GestureDetector(
+                                  onTap: _clearPin,
+                                  child: Container(
+                                    width: isTablet ? 120 : 100,
+                                    height: isTablet ? 44 : 40,
+                                    decoration: BoxDecoration(
+                                      color: Colors.grey[100],
+                                      borderRadius: BorderRadius.circular(20),
+                                      border: Border.all(color: Colors.grey[300]!, width: 1),
+                                    ),
+                                    child: Center(
+                                      child: Text(
+                                        "Clear",
+                                        style: TextStyle(
+                                          color: Colors.grey[700],
+                                          fontWeight: FontWeight.w600,
+                                          fontSize: isTablet ? 14 : 12,
+                                        ),
+                                      ),
+                                    ),
+                                  ),
+                                ),
+
+                                SizedBox(width: isTablet ? 16 : 12),
+
+                                // Continue Button
+                                GestureDetector(
+                                  onTapDown: (_) => _animationController.forward(),
+                                  onTapUp: (_) {
+                                    _animationController.reverse();
+                                    _verifyPin();
+                                  },
+                                  onTapCancel: () => _animationController.reverse(),
+                                  child: ScaleTransition(
+                                    scale: _scaleAnimation,
+                                    child: Container(
+                                      width: isTablet ? 120 : 100,
+                                      height: isTablet ? 44 : 40,
+                                      decoration: BoxDecoration(
+                                        color: const Color(0xFF2E7D4B),
+                                        borderRadius: BorderRadius.circular(20),
+                                        boxShadow: [
+                                          BoxShadow(
+                                            color: const Color(0xFF2E7D4B).withOpacity(0.3),
+                                            spreadRadius: 0,
+                                            blurRadius: 8,
+                                            offset: const Offset(0, 4),
+                                          ),
+                                        ],
+                                      ),
+                                      child: Center(
+                                        child: Text(
+                                          "Continue",
+                                          style: TextStyle(
+                                            color: Colors.white,
+                                            fontWeight: FontWeight.w600,
+                                            fontSize: isTablet ? 14 : 12,
+                                          ),
+                                        ),
+                                      ),
+                                    ),
+                                  ),
                                 ),
                               ],
                             ),
-                            child: const Center(
-                              child: Text(
-                                "Continue",
-                                style: TextStyle(
-                                  color: Colors.white,
-                                  fontWeight: FontWeight.bold,
-                                  fontSize: 16,
+                          ),
+                        ] else if (!_isLoading) ...[
+                          Padding(
+                            padding: EdgeInsets.only(
+                              top: isTablet ? 16 : 12,
+                              bottom: isTablet ? 12 : 8,
+                            ),
+                            child: Column(
+                              children: [
+                                Container(
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 12,
+                                    vertical: 6,
+                                  ),
+                                  decoration: BoxDecoration(
+                                    color: const Color(0xFF2E7D4B).withOpacity(0.1),
+                                    borderRadius: BorderRadius.circular(16),
+                                  ),
+                                  child: Text(
+                                    "PHOENICIAN",
+                                    style: TextStyle(
+                                      color: const Color(0xFF2E7D4B),
+                                      fontSize: isTablet ? 10 : 9,
+                                      fontWeight: FontWeight.w600,
+                                    ),
+                                  ),
                                 ),
-                              ),
+                                const SizedBox(height: 6),
+                                Text(
+                                  "DUBAI,UNITED ARAB EMIRATES",
+                                  style: TextStyle(
+                                    color: Colors.grey[600],
+                                    fontSize: isTablet ? 10 : 9,
+                                    fontWeight: FontWeight.w500,
+                                  ),
+                                ),
+                              ],
                             ),
                           ),
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ] else if (!_isLoading) ...[
-                const Padding(
-                  padding: EdgeInsets.only(bottom: 40),
-                  child: Text(
-                    "✅ Routes to Full Featured Dashboard with Attendance, Leave & Overtime Management",
-                    style: TextStyle(
-                      color: Colors.green,
-                      fontSize: 12,
+                        ],
+                      ],
                     ),
-                    textAlign: TextAlign.center,
                   ),
                 ),
               ],
-            ],
+            ),
           ),
         ),
       ),
     );
   }
 
-  Widget _buildPinField(int index) {
-    return Container(
-      width: 50,
-      height: 50,
-      margin: const EdgeInsets.symmetric(horizontal: 8),
-      decoration: BoxDecoration(
-        color: _controllers[index].text.isNotEmpty
-            ? Colors.white
-            : Colors.white.withOpacity(0.2),
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(
-          color: _controllers[index].text.isNotEmpty
-              ? accentColor
-              : Colors.transparent,
-          width: 2,
+  Widget _buildNumberRow(List<String> numbers, bool isTablet) {
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+      children: numbers.map((number) => _buildNumberButton(number, isTablet)).toList(),
+    );
+  }
+
+  Widget _buildBottomRow(bool isTablet) {
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+      children: [
+        SizedBox(width: isTablet ? 60 : 55), // Empty space
+        _buildNumberButton('0', isTablet),
+        _buildBackspaceButton(isTablet),
+      ],
+    );
+  }
+
+  Widget _buildNumberButton(String number, bool isTablet) {
+    return GestureDetector(
+      onTap: () => _onNumberPressed(number),
+      child: Container(
+        width: isTablet ? 60 : 55,
+        height: isTablet ? 60 : 55,
+        decoration: BoxDecoration(
+          color: Colors.grey[50],
+          borderRadius: BorderRadius.circular(30),
+          border: Border.all(color: Colors.grey[200]!, width: 1),
+        ),
+        child: Center(
+          child: Text(
+            number,
+            style: TextStyle(
+              color: const Color(0xFF2E7D4B),
+              fontSize: isTablet ? 22 : 18,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
         ),
       ),
-      child: TextField(
-        controller: _controllers[index],
-        focusNode: _focusNodes[index],
-        keyboardType: TextInputType.number,
-        textAlign: TextAlign.center,
-        maxLength: 1,
-        obscureText: true,
-        inputFormatters: [
-          FilteringTextInputFormatter.digitsOnly,
-          LengthLimitingTextInputFormatter(1),
-        ],
-        style: TextStyle(
-          color: _controllers[index].text.isNotEmpty
-              ? accentColor
-              : Colors.white,
-          fontSize: 24,
-          fontWeight: FontWeight.bold,
+    );
+  }
+
+  Widget _buildBackspaceButton(bool isTablet) {
+    return GestureDetector(
+      onTap: _onBackspacePressed,
+      child: Container(
+        width: isTablet ? 60 : 55,
+        height: isTablet ? 60 : 55,
+        decoration: BoxDecoration(
+          color: Colors.grey[50],
+          borderRadius: BorderRadius.circular(30),
+          border: Border.all(color: Colors.grey[200]!, width: 1),
         ),
-        decoration: const InputDecoration(
-          counterText: "",
-          border: InputBorder.none,
+        child: Center(
+          child: Text(
+            "⌫",
+            style: TextStyle(
+              color: const Color(0xFF2E7D4B),
+              fontSize: isTablet ? 18 : 16,
+            ),
+          ),
         ),
-        onChanged: (value) {
-          if (value.isEmpty && index > 0) {
-            FocusScope.of(context).requestFocus(_focusNodes[index - 1]);
-          }
-        },
       ),
     );
   }

@@ -5,9 +5,12 @@ import 'package:cloud_functions/cloud_functions.dart';
 import 'package:geodesy/geodesy.dart';
 import 'dart:io' show Platform;
 import 'package:flutter/material.dart';
+import 'package:face_auth/model/local_attendance_model.dart';
+import 'package:face_auth/services/database_helper.dart';
 import 'package:face_auth/services/overtime_approver_service.dart';
 import 'package:face_auth/authenticate_face/authentication_success_screen.dart';
-
+import 'package:face_auth/services/work_schedule_service.dart';
+import 'dart:async';
 import 'package:flutter/foundation.dart';
 import 'package:face_auth/services/overtime_approver_service.dart';
 import 'package:flutter/foundation.dart';
@@ -37,6 +40,7 @@ import 'package:face_auth/services/database_helper.dart';
 import 'package:face_auth/services/database_helper.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:face_auth/model/location_model.dart';
+import 'package:face_auth/model/overtime_request_model.dart';
 import 'package:face_auth/dashboard/team_management_view.dart';
 import 'package:face_auth/dashboard/checkout_handler.dart';
 import 'package:face_auth/checkout_request/manager_pending_requests_view.dart';
@@ -66,11 +70,7 @@ import 'package:face_auth/services/leave_application_service.dart';
 import 'package:face_auth/repositories/leave_application_repository.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:face_auth/services/firebase_auth_service.dart';
-
-// ✅ ADD THIS MISSING IMPORT:
 import 'package:face_auth/services/secure_face_storage_service.dart';
-
-// Then the rest of your DashboardView class remains the same...
 
 
 class DashboardView extends StatefulWidget {
@@ -82,28 +82,43 @@ class DashboardView extends StatefulWidget {
   State<DashboardView> createState() => _DashboardViewState();
 }
 
-class _DashboardViewState extends State<DashboardView>
-    with SingleTickerProviderStateMixin, TickerProviderStateMixin {
 
-  // Animation Controllers
+class _DashboardViewState extends State<DashboardView>
+    with TickerProviderStateMixin, AutomaticKeepAliveClientMixin {
+
+  // Animation Controllers - Optimized
   late AnimationController _animationController;
   late AnimationController _pulseController;
+  late AnimationController _slideController;
   late Animation<double> _fadeAnimation;
   late Animation<double> _slideAnimation;
   late Animation<double> _pulseAnimation;
+  late Animation<Offset> _offsetAnimation;
 
-  // Existing state variables
+  // Core State Variables
   bool _isLoading = true;
   bool _isDarkMode = false;
   Map<String, dynamic>? _userData;
   bool _isCheckedIn = false;
   DateTime? _checkInTime;
+
+  // Time and Date State
   String _formattedDate = '';
   String _currentTime = '';
   String _greetingMessage = '';
-  List<Map<String, dynamic>> _todaysActivity = []; // Changed from _recentActivity
+
+  // Activity and Location State
+  List<Map<String, dynamic>> _todaysActivity = [];
   LocationModel? _nearestLocation;
   List<LocationModel> _availableLocations = [];
+
+  List<OvertimeRequest> _activeOvertimeAssignments = [];
+  List<OvertimeRequest> _todayOvertimeSchedule = [];
+  bool _isLoadingOvertime = false;
+  bool _hasActiveOvertime = false;
+
+
+  // Manager and Approval State
   bool _isLineManager = false;
   String? _lineManagerDocumentId;
   Map<String, dynamic>? _lineManagerData;
@@ -113,23 +128,34 @@ class _DashboardViewState extends State<DashboardView>
   bool _isLoadingLeaveData = false;
   late LeaveApplicationService _leaveService;
 
-  // New variables for today's activity tracking
+  // Work Schedule State
+  WorkSchedule? _workSchedule;
+  bool _isLoadingSchedule = false;
+  Timer? _checkOutReminderTimer;
+  Timer? _timeUpdateTimer;
+  Timer? _periodicRefreshTimer;
+  bool _hasShownCheckOutReminder = false;
+  String? _currentTimingMessage;
+  Color? _timingMessageColor;
+
+  // Activity Tracking State
   bool _hasTodaysAttendance = false;
   bool _hasTodaysLeaveApplication = false;
   bool _isAbsentToday = false;
 
-  // Geofencing related variables
+  // Geofencing State
   bool _isCheckingLocation = false;
+
   bool _isWithinGeofence = false;
   double? _distanceToOffice;
 
-  // Authentication related variables
+  // Authentication State
   bool _isAuthenticating = false;
   bool _isOvertimeApprover = false;
   Map<String, dynamic>? _approverInfo;
   bool _checkingApproverStatus = true;
 
-  // Offline support
+  // Offline Support State
   late ConnectivityService _connectivityService;
   late AttendanceRepository _attendanceRepository;
   late LocationRepository _locationRepository;
@@ -137,16 +163,78 @@ class _DashboardViewState extends State<DashboardView>
   bool _needsSync = false;
   late AppLifecycleObserver _lifecycleObserver;
 
+  // Performance Optimization
+  @override
+  bool get wantKeepAlive => true;
+
   @override
   void initState() {
     super.initState();
-    _initializeAnimations();
+    _initializeControllers();
+    _initializeServices();
+    _initializeData();
+    _setupTimers();
+  }
+
+  void _initializeControllers() {
+    _animationController = AnimationController(
+      duration: const Duration(milliseconds: 800),
+      vsync: this,
+    );
+
+    _pulseController = AnimationController(
+      duration: const Duration(milliseconds: 1500),
+      vsync: this,
+    );
+
+    _slideController = AnimationController(
+      duration: const Duration(milliseconds: 600),
+      vsync: this,
+    );
+
+    _fadeAnimation = Tween<double>(
+      begin: 0.0,
+      end: 1.0,
+    ).animate(CurvedAnimation(
+      parent: _animationController,
+      curve: Curves.easeOut,
+    ));
+
+    _slideAnimation = Tween<double>(
+      begin: 30.0,
+      end: 0.0,
+    ).animate(CurvedAnimation(
+      parent: _animationController,
+      curve: Curves.elasticOut,
+    ));
+
+    _pulseAnimation = Tween<double>(
+      begin: 1.0,
+      end: 1.05,
+    ).animate(CurvedAnimation(
+      parent: _pulseController,
+      curve: Curves.easeInOut,
+    ));
+
+    _offsetAnimation = Tween<Offset>(
+      begin: const Offset(0, 0.3),
+      end: Offset.zero,
+    ).animate(CurvedAnimation(
+      parent: _slideController,
+      curve: Curves.easeOutCubic,
+    ));
+
+    _animationController.forward();
+    _slideController.forward();
+    _pulseController.repeat(reverse: true);
+  }
+
+  void _initializeServices() {
     _loadDarkModePreference();
     _initializeLeaveService();
     _initializeNotifications();
     _setupOvertimeApproverIfNeeded();
     _checkOvertimeApproverStatus();
-
 
     final notificationService = getIt<NotificationService>();
     notificationService.notificationStream.listen(_handleNotification);
@@ -161,25 +249,43 @@ class _DashboardViewState extends State<DashboardView>
       _loadPendingOvertimeRequests();
     }
 
-    _connectivityService.connectionStatusStream.listen((status) {
-      debugPrint("Connectivity status changed: $status");
-      if (status == ConnectionStatus.online && _needsSync) {
-        _syncService.syncData().then((_) {
-          _fetchUserData();
-          if (_isLineManager) {
-            _loadPendingApprovalRequests();
-            _loadPendingLeaveApprovals();
-          }
+    _connectivityService.connectionStatusStream.listen(_handleConnectivityChange);
+
+    _lifecycleObserver = AppLifecycleObserver(
+      onResume: () async {
+        debugPrint("App resumed - Refreshing dashboard with force sync");
+        await _forceAttendanceSync(); // Use the enhanced sync method
+      },
+    );
+    WidgetsBinding.instance.addObserver(_lifecycleObserver);
+  }
+
+  void _initializeData() {
+    _fetchUserData();
+    _fetchAttendanceStatus();
+    _fetchTodaysActivity();
+    _checkGeofenceStatus();
+    _fetchOvertimeAssignments();
+    _updateDateTime();
+    _fetchWorkSchedule();
+    _setupTimingChecks();
+  }
+
+  void _setupTimers() {
+    // ✅ ENHANCED: More frequent time updates for real-time sync
+    _timeUpdateTimer = Timer.periodic(const Duration(minutes: 1), (timer) {
+      if (mounted) {
+        _updateDateTime();
+
+        // ✅ NEW: Also check attendance status every minute when online
+        if (_connectivityService.currentStatus == ConnectionStatus.online) {
           _fetchAttendanceStatus();
-          _fetchTodaysActivity(); // Changed from _fetchRecentActivity
-          setState(() {
-            _needsSync = false;
-          });
-        });
+        }
       }
     });
 
-    Timer.periodic(Duration(seconds: 30), (timer) {
+    // ✅ ENHANCED: More frequent overtime refresh for approvers
+    Timer.periodic(const Duration(seconds: 30), (timer) {
       if (mounted && _isOvertimeApprover) {
         _loadPendingOvertimeRequests();
       } else if (!mounted) {
@@ -187,334 +293,294 @@ class _DashboardViewState extends State<DashboardView>
       }
     });
 
-    _lifecycleObserver = AppLifecycleObserver(
-      onResume: () async {
-        debugPrint("App resumed - refreshing dashboard");
-        await _refreshDashboard();
-      },
-    );
-    WidgetsBinding.instance.addObserver(_lifecycleObserver);
+    // ✅ ENHANCED: More frequent dashboard refresh for cross-device sync
+    _periodicRefreshTimer = Timer.periodic(const Duration(minutes: 2), (timer) {
+      if (mounted) {
+        debugPrint("⏰ Periodic refresh triggered for cross-device sync");
+        _refreshDashboard();
+      } else {
+        timer.cancel();
+      }
+    });
 
-    _fetchUserData();
-    _fetchAttendanceStatus();
-    _fetchTodaysActivity(); // Changed from _fetchRecentActivity
-    _checkGeofenceStatus();
-    _updateDateTime();
-    Future.delayed(const Duration(seconds: 1), () {
-      if (mounted) _updateDateTime();
+    // ✅ NEW: Specific timer for attendance status sync (every 30 seconds when online)
+    Timer.periodic(const Duration(seconds: 30), (timer) {
+      if (mounted && _connectivityService.currentStatus == ConnectionStatus.online) {
+        debugPrint("🔄 Syncing attendance status for cross-device compatibility");
+        _fetchAttendanceStatus();
+      } else if (!mounted) {
+        timer.cancel();
+      }
     });
   }
 
-  void _initializeAnimations() {
-    _animationController = AnimationController(
-      duration: const Duration(milliseconds: 1200),
-      vsync: this,
-    );
 
-    _pulseController = AnimationController(
-      duration: const Duration(milliseconds: 2000),
-      vsync: this,
-    );
 
-    _fadeAnimation = Tween<double>(
-      begin: 0.0,
-      end: 1.0,
-    ).animate(CurvedAnimation(
-      parent: _animationController,
-      curve: Curves.easeInOut,
-    ));
 
-    _slideAnimation = Tween<double>(
-      begin: 30.0,
-      end: 0.0,
-    ).animate(CurvedAnimation(
-      parent: _animationController,
-      curve: Curves.easeOutBack,
-    ));
 
-    _pulseAnimation = Tween<double>(
-      begin: 1.0,
-      end: 1.05,
-    ).animate(CurvedAnimation(
-      parent: _pulseController,
-      curve: Curves.easeInOut,
-    ));
-
-    _animationController.forward();
-    _pulseController.repeat(reverse: true);
+  void _handleConnectivityChange(ConnectionStatus status) {
+    debugPrint("Connectivity status changed: $status");
+    if (status == ConnectionStatus.online && _needsSync) {
+      _syncService.syncData().then((_) {
+        _fetchUserData();
+        if (_isLineManager) {
+          _loadPendingApprovalRequests();
+          _loadPendingLeaveApprovals();
+        }
+        _fetchAttendanceStatus();
+        _fetchTodaysActivity();
+        if (mounted) {
+          setState(() {
+            _needsSync = false;
+          });
+        }
+      });
+    }
   }
 
   @override
   void dispose() {
     _animationController.dispose();
     _pulseController.dispose();
+    _slideController.dispose();
+    _timeUpdateTimer?.cancel();
+    _periodicRefreshTimer?.cancel();
+    _checkOutReminderTimer?.cancel();
     WidgetsBinding.instance.removeObserver(_lifecycleObserver);
     _syncService.dispose();
     super.dispose();
   }
 
-  // Responsive design helpers methods
+  // Responsive Design Helpers - Optimized
   double get screenWidth => MediaQuery.of(context).size.width;
   double get screenHeight => MediaQuery.of(context).size.height;
   bool get isTablet => screenWidth > 600;
   bool get isSmallScreen => screenWidth < 360;
+  bool get isLargeScreen => screenWidth > 800;
 
   EdgeInsets get responsivePadding => EdgeInsets.symmetric(
-    horizontal: isTablet ? 24.0 : (isSmallScreen ? 12.0 : 16.0),
-    vertical: isTablet ? 20.0 : (isSmallScreen ? 12.0 : 16.0),
+    horizontal: isLargeScreen ? 32.0 : (isTablet ? 24.0 : (isSmallScreen ? 12.0 : 16.0)),
+    vertical: isLargeScreen ? 24.0 : (isTablet ? 20.0 : (isSmallScreen ? 12.0 : 16.0)),
   );
 
   double get responsiveFontSize {
+    if (isLargeScreen) return 1.3;
     if (isTablet) return 1.2;
     if (isSmallScreen) return 0.9;
     return 1.0;
   }
 
-  // Updated time-based greeting logic without emojis
+  double get cardBorderRadius => isTablet ? 20.0 : 16.0;
+  double get containerSpacing => isTablet ? 20.0 : 16.0;
+
+  // Time and Date Methods
   String _getTimeBasedGreeting() {
     final hour = DateTime.now().hour;
-    String greeting;
-
-    if (hour >= 5 && hour < 12) {
-      greeting = "Good Morning";
-    } else if (hour >= 12 && hour < 17) {
-      greeting = "Good Afternoon";
-    } else if (hour >= 17 && hour < 21) {
-      greeting = "Good Evening";
-    } else {
-      greeting = "Good Night";
-    }
-
-    return greeting; // Removed emoji
+    if (hour >= 5 && hour < 12) return "Good Morning";
+    if (hour >= 12 && hour < 17) return "Good Afternoon";
+    if (hour >= 17 && hour < 21) return "Good Evening";
+    return "Good Night";
   }
 
-  // Load dark mode preference
+  void _updateDateTime() {
+    if (mounted) {
+      final now = DateTime.now();
+      final newFormattedDate = DateFormat('EEEE, MMMM d, yyyy').format(now);
+      final newCurrentTime = DateFormat('h:mm a').format(now);
+      final newGreeting = _getTimeBasedGreeting();
+
+      // Only update if changed to prevent unnecessary rebuilds
+      if (_formattedDate != newFormattedDate ||
+          _currentTime != newCurrentTime ||
+          _greetingMessage != newGreeting) {
+        setState(() {
+          _formattedDate = newFormattedDate;
+          _currentTime = newCurrentTime;
+          _greetingMessage = newGreeting;
+        });
+      }
+    }
+  }
+
+
+
+
+
+
+
+
+
+  // Work Schedule Methods - Enhanced
+  DateTime _parseTimeForToday(String timeString) {
+    DateTime today = DateTime.now();
+    try {
+      if (timeString.contains('AM') || timeString.contains('PM')) {
+        DateFormat format = DateFormat('h:mm a');
+        DateTime parsedTime = format.parse(timeString);
+        return DateTime(today.year, today.month, today.day, parsedTime.hour, parsedTime.minute);
+      }
+      List<String> timeParts = timeString.split(':');
+      if (timeParts.length >= 2) {
+        int hour = int.parse(timeParts[0]);
+        int minute = int.parse(timeParts[1]);
+        return DateTime(today.year, today.month, today.day, hour, minute);
+      }
+      return today;
+    } catch (e) {
+      return today;
+    }
+  }
+
+  String _formatDuration(Duration duration) {
+    if (duration.inHours > 0) {
+      return "${duration.inHours}h ${duration.inMinutes % 60}m";
+    } else {
+      return "${duration.inMinutes}m";
+    }
+  }
+
+  IconData _getTimingMessageIcon() {
+    if (_currentTimingMessage == null) return Icons.schedule;
+    if (_currentTimingMessage!.contains("Break Time")) return Icons.restaurant;
+    if (_currentTimingMessage!.contains("Work starts")) return Icons.alarm;
+    if (_currentTimingMessage!.contains("Work ends")) return Icons.timer;
+    if (_currentTimingMessage!.contains("ended")) return Icons.check_circle;
+    if (_currentTimingMessage!.contains("not checked in")) return Icons.warning;
+    return Icons.schedule;
+  }
+
+  bool _shouldShowScheduleWarning() {
+    if (_workSchedule == null) return false;
+    DateTime now = DateTime.now();
+    DateTime workStart = _parseTimeForToday(_workSchedule!.startTime);
+    DateTime workEnd = _parseTimeForToday(_workSchedule!.endTime);
+
+    if (now.isAfter(workStart) && now.isBefore(workEnd) && !_isCheckedIn) {
+      return true;
+    }
+    if (_isCheckedIn && _checkInTime != null) {
+      Duration lateDuration = _checkInTime!.difference(workStart);
+      if (lateDuration.inMinutes > 15) {
+        return true;
+      }
+    }
+    return false;
+  }
+
+  String _getScheduleWarningMessage() {
+    if (_workSchedule == null) return "";
+    DateTime now = DateTime.now();
+    DateTime workStart = _parseTimeForToday(_workSchedule!.startTime);
+    DateTime workEnd = _parseTimeForToday(_workSchedule!.endTime);
+
+    if (now.isAfter(workStart) && now.isBefore(workEnd) && !_isCheckedIn) {
+      Duration lateBy = now.difference(workStart);
+      return "You're ${lateBy.inMinutes} minutes late! Expected start: ${_workSchedule!.startTime}";
+    }
+    if (_isCheckedIn && _checkInTime != null) {
+      Duration lateDuration = _checkInTime!.difference(workStart);
+      if (lateDuration.inMinutes > 15) {
+        return "Late check-in recorded: ${lateDuration.inMinutes} minutes after ${_workSchedule!.startTime}";
+      }
+    }
+    return "";
+  }
+
+
+
+
+
+
+
+  Future<void> _fetchOvertimeAssignments() async {
+    setState(() => _isLoadingOvertime = true);
+
+    try {
+      debugPrint("🕐 Setting up REAL-TIME overtime listener for ${widget.employeeId}");
+      debugPrint("Looking for EMP ID from PIN: ${_userData?['pin']}");
+
+      // Get the correct EMP ID format
+      String empId = "EMP${_userData?['pin'] ?? ''}";
+      debugPrint("Searching for overtime with EMP ID: $empId");
+
+      // ✅ REAL-TIME LISTENER - This will update automatically!
+      FirebaseFirestore.instance
+          .collection('overtime_requests')
+          .where('status', isEqualTo: 'approved')
+          .where('employeeIds', arrayContains: empId)  // Use EMP3576 format
+          .snapshots()  // ✅ Real-time updates!
+          .listen((snapshot) {
+
+        debugPrint("🔥 REAL-TIME OVERTIME UPDATE: Found ${snapshot.docs.length} approved requests");
+
+        List<OvertimeRequest> activeOvertime = [];
+        List<OvertimeRequest> todayOvertime = [];
+
+        DateTime now = DateTime.now();
+        DateTime today = DateTime(now.year, now.month, now.day);
+        DateTime tomorrow = today.add(Duration(days: 1));
+
+        for (var doc in snapshot.docs) {
+          try {
+            Map<String, dynamic> data = doc.data();
+            OvertimeRequest request = OvertimeRequest.fromMap(doc.id, data);
+
+            debugPrint("Processing overtime: ${request.projectName} - ${request.startTime}");
+
+            // Check if it's today's overtime
+            if (request.startTime.isAfter(today) && request.startTime.isBefore(tomorrow)) {
+              todayOvertime.add(request);
+              debugPrint("✅ Added to today's overtime: ${request.projectName}");
+
+              // Check if currently active
+              if (now.isAfter(request.startTime) && now.isBefore(request.endTime)) {
+                activeOvertime.add(request);
+                debugPrint("🔥 OVERTIME IS ACTIVE NOW: ${request.projectName}");
+              }
+            }
+          } catch (e) {
+            debugPrint("Error parsing overtime: $e");
+          }
+        }
+
+        if (mounted) {
+          setState(() {
+            _activeOvertimeAssignments = activeOvertime;
+            _todayOvertimeSchedule = todayOvertime;
+            _hasActiveOvertime = activeOvertime.isNotEmpty || todayOvertime.isNotEmpty;
+            _isLoadingOvertime = false;
+          });
+
+          debugPrint("🎯 DASHBOARD UPDATED:");
+          debugPrint("  - Active Overtime: ${activeOvertime.length}");
+          debugPrint("  - Today's Overtime: ${todayOvertime.length}");
+          debugPrint("  - Has Active Overtime: $_hasActiveOvertime");
+        }
+      });
+
+    } catch (e) {
+      debugPrint("❌ Error setting up overtime listener: $e");
+      if (mounted) {
+        setState(() => _isLoadingOvertime = false);
+      }
+    }
+  }
+
+  // Theme Methods
   Future<void> _loadDarkModePreference() async {
     SharedPreferences prefs = await SharedPreferences.getInstance();
-    setState(() {
-      _isDarkMode = prefs.getBool('isDarkMode') ?? false;
-    });
+    if (mounted) {
+      setState(() {
+        _isDarkMode = prefs.getBool('isDarkMode') ?? false;
+      });
+    }
   }
 
-  // Save dark mode preference
   Future<void> _saveDarkModePreference(bool isDarkMode) async {
     SharedPreferences prefs = await SharedPreferences.getInstance();
     await prefs.setBool('isDarkMode', isDarkMode);
   }
 
-
-
-
-
-
-  void _initializeLeaveService() {
-    try {
-      final repository = getIt<LeaveApplicationRepository>();
-      final connectivityService = getIt<ConnectivityService>();
-
-      _leaveService = LeaveApplicationService(
-        repository: repository,
-        connectivityService: connectivityService,
-      );
-
-      debugPrint("Leave service initialized successfully");
-    } catch (e) {
-      debugPrint("Error initializing leave service: $e");
-    }
-  }
-
-  Future<void> _loadPendingLeaveApprovals() async {
-    if (!_isLineManager) return;
-
-    try {
-      setState(() => _isLoadingLeaveData = true);
-
-      final pendingApplications = await _leaveService.getPendingApplicationsForManager(widget.employeeId);
-
-      setState(() {
-        _pendingLeaveApprovals = pendingApplications.length;
-        _isLoadingLeaveData = false;
-      });
-
-      debugPrint("Loaded ${_pendingLeaveApprovals} pending leave approvals");
-    } catch (e) {
-      setState(() => _isLoadingLeaveData = false);
-      debugPrint("Error loading pending leave approvals: $e");
-    }
-  }
-
-  void _updateDateTime() {
-    if (mounted) {
-      setState(() {
-        final now = DateTime.now();
-        _formattedDate = DateFormat('EEEE, MMMM d, yyyy').format(now);
-        _currentTime = DateFormat('h:mm a').format(now);
-        _greetingMessage = _getTimeBasedGreeting();
-      });
-
-      Future.delayed(const Duration(minutes: 1), _updateDateTime);
-    }
-  }
-
-  // New method to fetch today's activity including attendance and leave applications
-  Future<void> _fetchTodaysActivity() async {
-    try {
-      List<Map<String, dynamic>> todaysActivity = [];
-      String today = DateFormat('yyyy-MM-dd').format(DateTime.now());
-
-      bool hasAttendance = false;
-      bool hasLeaveApplication = false;
-
-      // Fetch today's attendance
-      if (_connectivityService.currentStatus == ConnectionStatus.online) {
-        try {
-          DocumentSnapshot attendanceDoc = await FirebaseFirestore.instance
-              .collection('employees')
-              .doc(widget.employeeId)
-              .collection('attendance')
-              .doc(today)
-              .get();
-
-          if (attendanceDoc.exists) {
-            Map<String, dynamic> data = attendanceDoc.data() as Map<String, dynamic>;
-            todaysActivity.add({
-              'type': 'attendance',
-              'date': data['date'] ?? today,
-              'checkIn': data['checkIn'],
-              'checkOut': data['checkOut'],
-              'workStatus': data['workStatus'] ?? 'In Progress',
-              'totalHours': data['totalHours'],
-              'location': data['location'] ?? 'Unknown',
-              'isSynced': true,
-            });
-            hasAttendance = true;
-            debugPrint("Found today's attendance record");
-          }
-        } catch (e) {
-          debugPrint("Error fetching today's attendance: $e");
-        }
-
-        // Fetch today's leave applications
-        try {
-          QuerySnapshot leaveSnapshot = await FirebaseFirestore.instance
-              .collection('leave_applications')
-              .where('employeeId', isEqualTo: widget.employeeId)
-              .where('applicationDate', isEqualTo: today)
-              .get();
-
-          for (var doc in leaveSnapshot.docs) {
-            Map<String, dynamic> data = doc.data() as Map<String, dynamic>;
-            todaysActivity.add({
-              'type': 'leave',
-              'applicationId': doc.id,
-              'date': today,
-              'leaveType': data['leaveType'] ?? 'Leave',
-              'fromDate': data['fromDate'],
-              'toDate': data['toDate'],
-              'totalDays': data['totalDays'] ?? 0,
-              'status': data['status'] ?? 'pending',
-              'reason': data['reason'] ?? '',
-              'appliedAt': data['appliedAt'],
-              'isSynced': true,
-            });
-            hasLeaveApplication = true;
-            debugPrint("Found today's leave application");
-          }
-        } catch (e) {
-          debugPrint("Error fetching today's leave applications: $e");
-        }
-      } else {
-        // Offline mode - check local data
-        final localAttendance = await _attendanceRepository.getTodaysAttendance(widget.employeeId);
-        if (localAttendance != null) {
-          todaysActivity.add(localAttendance.rawData);
-          hasAttendance = true;
-          debugPrint("Using local attendance data");
-        }
-      }
-
-      setState(() {
-        _todaysActivity = todaysActivity;
-        _hasTodaysAttendance = hasAttendance;
-        _hasTodaysLeaveApplication = hasLeaveApplication;
-        _isAbsentToday = !hasAttendance && !hasLeaveApplication && !_isCheckedIn;
-      });
-
-      debugPrint("Today's activity loaded: ${todaysActivity.length} items");
-      debugPrint("Has attendance: $hasAttendance, Has leave: $hasLeaveApplication, Is absent: $_isAbsentToday");
-
-    } catch (e) {
-      debugPrint("Error fetching today's activity: $e");
-      setState(() {
-        _todaysActivity = [];
-        _isAbsentToday = !_isCheckedIn;
-      });
-    }
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    // Set context for snackbar
-    if (CustomSnackBar.context == null) {
-      CustomSnackBar.context = context;
-    }
-
-    return Theme(
-      data: _isDarkMode ? _buildDarkTheme() : _buildLightTheme(),
-      child: Scaffold(
-        backgroundColor: _isDarkMode ? const Color(0xFF0A0E1A) : const Color(0xFFF8FAFC),
-        body: _isLoading
-            ? _buildLoadingScreen()
-            : AnimatedBuilder(
-          animation: _fadeAnimation,
-          builder: (context, child) {
-            return FadeTransition(
-              opacity: _fadeAnimation,
-              child: Column(
-                children: [
-                  // Connectivity banners
-                  ConnectivityBanner(connectivityService: _connectivityService),
-                  if (_needsSync && _connectivityService.currentStatus == ConnectionStatus.online)
-                    _buildSyncBanner(),
-
-                  // Main content
-                  Expanded(
-                    child: SafeArea(
-                      child: Column(
-                        children: [
-                          _buildModernHeader(),
-                          _buildDateTimeSection(),
-                          Expanded(
-                            child: SingleChildScrollView(
-                              physics: const BouncingScrollPhysics(),
-                              child: Column(
-                                children: [
-                                  _buildModernStatusCard(),
-                                  SizedBox(height: responsivePadding.vertical),
-                                  _buildQuickActionsSection(),
-                                  SizedBox(height: responsivePadding.vertical),
-                                  _buildTodaysActivitySection(), // Updated method name
-                                  SizedBox(height: 100), // Space for FAB
-                                ],
-                              ),
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-            );
-          },
-        ),
-        floatingActionButton: _buildModernFloatingActionButtons(),
-        floatingActionButtonLocation: FloatingActionButtonLocation.endFloat,
-      ),
-    );
-  }
-
-  // Modern Theme Builders
   ThemeData _buildLightTheme() {
     return ThemeData(
       useMaterial3: true,
@@ -524,7 +590,7 @@ class _DashboardViewState extends State<DashboardView>
       ),
       cardTheme: CardTheme(
         elevation: 0,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(cardBorderRadius)),
         color: Colors.white,
       ),
       appBarTheme: const AppBarTheme(
@@ -544,7 +610,7 @@ class _DashboardViewState extends State<DashboardView>
       ),
       cardTheme: CardTheme(
         elevation: 0,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(cardBorderRadius)),
         color: const Color(0xFF1E293B),
       ),
       appBarTheme: const AppBarTheme(
@@ -555,61 +621,165 @@ class _DashboardViewState extends State<DashboardView>
     );
   }
 
-  // Loading Screen
-  Widget _buildLoadingScreen() {
-    return Container(
-      decoration: BoxDecoration(
-        gradient: LinearGradient(
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-          colors: _isDarkMode
-              ? [const Color(0xFF0A0E1A), const Color(0xFF1E293B)]
-              : [const Color(0xFF6366F1), const Color(0xFF8B5CF6)],
-        ),
-      ),
-      child: Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
+  @override
+  @override
+  Widget build(BuildContext context) {
+    super.build(context); // Required for AutomaticKeepAliveClientMixin
+
+    if (CustomSnackBar.context == null) {
+      CustomSnackBar.context = context;
+    }
+
+    return Theme(
+      data: _isDarkMode ? _buildDarkTheme() : _buildLightTheme(),
+      child: Scaffold(
+        backgroundColor: _isDarkMode ? const Color(0xFF0A0E1A) : const Color(0xFFF8FAFC),
+        body: Stack(
           children: [
-            Container(
-              padding: const EdgeInsets.all(20),
-              decoration: BoxDecoration(
-                color: Colors.white.withOpacity(0.1),
-                borderRadius: BorderRadius.circular(20),
-                border: Border.all(
-                  color: Colors.white.withOpacity(0.2),
-                  width: 1,
+            // Main Content - Always visible
+            SlideTransition(
+              position: _offsetAnimation,
+              child: FadeTransition(
+                opacity: _fadeAnimation,
+                child: Column(
+                  children: [
+                    ConnectivityBanner(connectivityService: _connectivityService),
+                    if (_needsSync && _connectivityService.currentStatus == ConnectionStatus.online)
+                      _buildSyncBanner(),
+                    Expanded(
+                      child: SafeArea(
+                        child: Column(
+                          children: [
+                            _buildModernHeader(),
+                            SizedBox(height: containerSpacing * 0.5),
+                            _buildDateTimeSection(),
+                            Expanded(
+                              child: CustomScrollView(
+                                physics: const BouncingScrollPhysics(),
+                                slivers: [
+                                  SliverPadding(
+                                    padding: EdgeInsets.symmetric(vertical: containerSpacing * 0.5),
+                                    sliver: SliverToBoxAdapter(
+                                      child: _buildModernStatusCard(),
+                                    ),
+                                  ),
+                                  SliverPadding(
+                                    padding: EdgeInsets.symmetric(vertical: containerSpacing * 0.5),
+                                    sliver: SliverToBoxAdapter(
+                                      child: _buildQuickActionsSection(),
+                                    ),
+                                  ),
+                                  SliverPadding(
+                                    padding: EdgeInsets.symmetric(vertical: containerSpacing * 0.5),
+                                    sliver: SliverToBoxAdapter(
+                                      child: _buildTodaysActivitySection(),
+                                    ),
+                                  ),
+                                  const SliverPadding(
+                                    padding: EdgeInsets.only(bottom: 120),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ],
                 ),
               ),
-              child: CircularProgressIndicator(
-                valueColor: AlwaysStoppedAnimation<Color>(
-                  _isDarkMode ? Colors.white : Colors.white,
-                ),
-                strokeWidth: 3,
-              ),
             ),
-            const SizedBox(height: 24),
-            Text(
-              'Loading your dashboard...',
-              style: TextStyle(
-                color: Colors.white,
-                fontSize: 16 * responsiveFontSize,
-                fontWeight: FontWeight.w500,
-              ),
-            ),
+
+            // Loading Overlay - Only shows when loading
+            if (_isLoading)
+              _buildLoadingOverlay(),
           ],
+        ),
+        floatingActionButton: _buildCleanFloatingActionButton(),
+        floatingActionButtonLocation: FloatingActionButtonLocation.endFloat,
+      ),
+    );
+  }
+
+  Widget _buildLoadingOverlay() {
+    return Container(
+      color: Colors.black.withOpacity(0.3), // Semi-transparent overlay
+      child: Center(
+        child: Container(
+          padding: EdgeInsets.all(isLargeScreen ? 32 : (isTablet ? 28 : 24)),
+          decoration: BoxDecoration(
+            color: _isDarkMode ? const Color(0xFF1E293B) : Colors.white,
+            borderRadius: BorderRadius.circular(cardBorderRadius + 8),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withOpacity(0.2),
+                blurRadius: 20,
+                offset: const Offset(0, 10),
+              ),
+            ],
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Container(
+                width: 60,
+                height: 60,
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: Theme.of(context).colorScheme.primary.withOpacity(0.1),
+                  borderRadius: BorderRadius.circular(30),
+                ),
+                child: CircularProgressIndicator(
+                  valueColor: AlwaysStoppedAnimation<Color>(
+                    Theme.of(context).colorScheme.primary,
+                  ),
+                  strokeWidth: 3,
+                ),
+              ),
+              SizedBox(height: containerSpacing),
+              Text(
+                'Refreshing Dashboard...',
+                style: TextStyle(
+                  color: _isDarkMode ? Colors.white : Colors.black87,
+                  fontSize: (isLargeScreen ? 20 : (isTablet ? 18 : 16)) * responsiveFontSize,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+              const SizedBox(height: 8),
+              Text(
+                'Please wait while we sync your data',
+                style: TextStyle(
+                  color: _isDarkMode ? Colors.grey.shade400 : Colors.grey.shade600,
+                  fontSize: (isLargeScreen ? 16 : (isTablet ? 14 : 12)) * responsiveFontSize,
+                ),
+                textAlign: TextAlign.center,
+              ),
+            ],
+          ),
         ),
       ),
     );
   }
 
-  // Sync Banner
+  Widget _buildCleanFloatingActionButton() {
+    return FloatingActionButton(
+      onPressed: _checkGeofenceStatus,
+      tooltip: 'Refresh Location',
+      backgroundColor: Theme.of(context).colorScheme.primary,
+      elevation: 8,
+      child: const Icon(Icons.my_location_rounded, color: Colors.white),
+    );
+  }
+
   Widget _buildSyncBanner() {
     return GestureDetector(
       onTap: _manualSync,
       child: Container(
         width: double.infinity,
-        padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 16),
+        padding: EdgeInsets.symmetric(
+          vertical: isTablet ? 12 : 10,
+          horizontal: containerSpacing,
+        ),
         decoration: BoxDecoration(
           gradient: LinearGradient(
             colors: [Colors.amber.shade400, Colors.orange.shade500],
@@ -631,7 +801,7 @@ class _DashboardViewState extends State<DashboardView>
               'Tap to synchronize pending data',
               style: TextStyle(
                 color: Colors.white,
-                fontSize: 13 * responsiveFontSize,
+                fontSize: (isTablet ? 15 : 13) * responsiveFontSize,
                 fontWeight: FontWeight.w500,
               ),
             ),
@@ -641,36 +811,33 @@ class _DashboardViewState extends State<DashboardView>
     );
   }
 
-  // Modern Header
   Widget _buildModernHeader() {
     String name = _userData?['name'] ?? 'User';
     String designation = _userData?['designation'] ?? 'Employee';
     String? imageBase64 = _userData?['image'];
-
     int totalNotificationCount = _pendingApprovalRequests + _pendingOvertimeRequests + _pendingLeaveApprovals;
 
     return Container(
       margin: responsivePadding,
-      padding: EdgeInsets.all(isTablet ? 24.0 : 20.0),
+      padding: EdgeInsets.all(isLargeScreen ? 28 : (isTablet ? 24.0 : 20.0)),
       decoration: BoxDecoration(
         color: _isDarkMode ? const Color(0xFF1E293B) : Colors.white,
-        borderRadius: BorderRadius.circular(24),
+        borderRadius: BorderRadius.circular(cardBorderRadius + 8),
         boxShadow: [
           BoxShadow(
-            color: _isDarkMode ? Colors.black.withOpacity(0.3) : Colors.grey.withOpacity(0.1),
-            blurRadius: 20,
+            color: _isDarkMode ? Colors.black.withOpacity(0.3) : Colors.grey.withOpacity(0.08),
+            blurRadius: 24,
             offset: const Offset(0, 8),
             spreadRadius: 0,
           ),
         ],
         border: Border.all(
-          color: _isDarkMode ? Colors.white.withOpacity(0.1) : Colors.grey.withOpacity(0.1),
+          color: _isDarkMode ? Colors.white.withOpacity(0.1) : Colors.grey.withOpacity(0.08),
           width: 1,
         ),
       ),
       child: Row(
         children: [
-          // Profile Image with modern design
           Hero(
             tag: 'profile_${widget.employeeId}',
             child: GestureDetector(
@@ -706,7 +873,7 @@ class _DashboardViewState extends State<DashboardView>
                     color: Colors.white,
                   ),
                   child: CircleAvatar(
-                    radius: isTablet ? 35 : 28,
+                    radius: isLargeScreen ? 40 : (isTablet ? 35 : 28),
                     backgroundColor: _isDarkMode ? Colors.grey.shade800 : Colors.grey.shade200,
                     backgroundImage: imageBase64 != null
                         ? MemoryImage(base64Decode(imageBase64))
@@ -715,7 +882,7 @@ class _DashboardViewState extends State<DashboardView>
                         ? Icon(
                       Icons.person,
                       color: _isDarkMode ? Colors.grey.shade300 : Colors.grey,
-                      size: isTablet ? 35 : 28,
+                      size: isLargeScreen ? 40 : (isTablet ? 35 : 28),
                     )
                         : null,
                   ),
@@ -723,27 +890,24 @@ class _DashboardViewState extends State<DashboardView>
               ),
             ),
           ),
-
-          SizedBox(width: isTablet ? 20 : 16),
-
-          // User info with greeting
+          SizedBox(width: isLargeScreen ? 24 : (isTablet ? 20 : 16)),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  _greetingMessage, // Now without emoji
+                  _greetingMessage,
                   style: TextStyle(
                     color: _isDarkMode ? Colors.grey.shade400 : Colors.grey.shade600,
-                    fontSize: (isTablet ? 16 : 14) * responsiveFontSize,
+                    fontSize: (isLargeScreen ? 18 : (isTablet ? 16 : 14)) * responsiveFontSize,
                     fontWeight: FontWeight.w500,
                   ),
                 ),
                 const SizedBox(height: 4),
                 Text(
-                  name.split(' ').first, // Show first name only for space
+                  name.split(' ').first,
                   style: TextStyle(
-                    fontSize: (isTablet ? 24 : 20) * responsiveFontSize,
+                    fontSize: (isLargeScreen ? 28 : (isTablet ? 24 : 20)) * responsiveFontSize,
                     fontWeight: FontWeight.bold,
                     color: _isDarkMode ? Colors.white : Colors.black87,
                   ),
@@ -755,7 +919,7 @@ class _DashboardViewState extends State<DashboardView>
                   designation,
                   style: TextStyle(
                     color: _isDarkMode ? Colors.grey.shade400 : Colors.grey.shade600,
-                    fontSize: (isTablet ? 16 : 14) * responsiveFontSize,
+                    fontSize: (isLargeScreen ? 18 : (isTablet ? 16 : 14)) * responsiveFontSize,
                     fontWeight: FontWeight.w400,
                   ),
                   maxLines: 1,
@@ -764,21 +928,15 @@ class _DashboardViewState extends State<DashboardView>
               ],
             ),
           ),
-
-          // Action buttons
           Row(
             mainAxisSize: MainAxisSize.min,
             children: [
-              // Notification button
               _buildHeaderActionButton(
                 icon: Icons.notifications_outlined,
                 badgeCount: totalNotificationCount,
                 onTap: () => _showNotificationMenu(context),
               ),
-
               SizedBox(width: isTablet ? 12 : 8),
-
-              // Settings button
               _buildHeaderActionButton(
                 icon: Icons.settings_outlined,
                 onTap: () => _showSettingsMenu(context),
@@ -803,10 +961,10 @@ class _DashboardViewState extends State<DashboardView>
         child: Container(
           padding: EdgeInsets.all(isTablet ? 12 : 10),
           decoration: BoxDecoration(
-            color: _isDarkMode ? Colors.white.withOpacity(0.1) : Colors.grey.withOpacity(0.1),
+            color: _isDarkMode ? Colors.white.withOpacity(0.1) : Colors.grey.withOpacity(0.08),
             borderRadius: BorderRadius.circular(12),
             border: Border.all(
-              color: _isDarkMode ? Colors.white.withOpacity(0.1) : Colors.grey.withOpacity(0.2),
+              color: _isDarkMode ? Colors.white.withOpacity(0.1) : Colors.grey.withOpacity(0.15),
             ),
           ),
           child: Stack(
@@ -849,17 +1007,23 @@ class _DashboardViewState extends State<DashboardView>
     );
   }
 
-  // Date Time Section
   Widget _buildDateTimeSection() {
     return Container(
       margin: EdgeInsets.symmetric(horizontal: responsivePadding.horizontal),
-      padding: EdgeInsets.all(isTablet ? 20 : 16),
+      padding: EdgeInsets.all(isLargeScreen ? 24 : (isTablet ? 20 : 16)),
       decoration: BoxDecoration(
         color: _isDarkMode ? const Color(0xFF1E293B) : Colors.white,
-        borderRadius: BorderRadius.circular(16),
+        borderRadius: BorderRadius.circular(cardBorderRadius),
         border: Border.all(
-          color: _isDarkMode ? Colors.white.withOpacity(0.1) : Colors.grey.withOpacity(0.1),
+          color: _isDarkMode ? Colors.white.withOpacity(0.1) : Colors.grey.withOpacity(0.08),
         ),
+        boxShadow: [
+          BoxShadow(
+            color: _isDarkMode ? Colors.black.withOpacity(0.2) : Colors.grey.withOpacity(0.05),
+            blurRadius: 8,
+            offset: const Offset(0, 2),
+          ),
+        ],
       ),
       child: Row(
         children: [
@@ -883,7 +1047,7 @@ class _DashboardViewState extends State<DashboardView>
                   child: Text(
                     _formattedDate,
                     style: TextStyle(
-                      fontSize: (isTablet ? 16 : 14) * responsiveFontSize,
+                      fontSize: (isLargeScreen ? 18 : (isTablet ? 16 : 14)) * responsiveFontSize,
                       color: _isDarkMode ? Colors.grey.shade300 : Colors.grey.shade700,
                       fontWeight: FontWeight.w500,
                     ),
@@ -894,15 +1058,12 @@ class _DashboardViewState extends State<DashboardView>
               ],
             ),
           ),
-
           Container(
             width: 1,
             height: 24,
             color: _isDarkMode ? Colors.white.withOpacity(0.1) : Colors.grey.withOpacity(0.3),
           ),
-
           const SizedBox(width: 16),
-
           Row(
             children: [
               Container(
@@ -921,7 +1082,7 @@ class _DashboardViewState extends State<DashboardView>
               Text(
                 _currentTime,
                 style: TextStyle(
-                  fontSize: (isTablet ? 16 : 14) * responsiveFontSize,
+                  fontSize: (isLargeScreen ? 18 : (isTablet ? 16 : 14)) * responsiveFontSize,
                   color: _isDarkMode ? Colors.grey.shade300 : Colors.grey.shade700,
                   fontWeight: FontWeight.w600,
                 ),
@@ -933,7 +1094,6 @@ class _DashboardViewState extends State<DashboardView>
     );
   }
 
-  // Modern Status Card
   Widget _buildModernStatusCard() {
     final String locationName = _nearestLocation?.name ?? 'office location';
 
@@ -945,283 +1105,521 @@ class _DashboardViewState extends State<DashboardView>
           child: Container(
             margin: responsivePadding,
             decoration: BoxDecoration(
-              borderRadius: BorderRadius.circular(24),
+              borderRadius: BorderRadius.circular(cardBorderRadius + 4),
+              // 🎨 Dark Modern Gradient for better contrast
               gradient: LinearGradient(
                 begin: Alignment.topLeft,
                 end: Alignment.bottomRight,
                 colors: _isDarkMode
-                    ? [const Color(0xFF2D3748), const Color(0xFF4A5568)]
-                    : [const Color(0xFF667EEA), const Color(0xFF764BA2)],
+                    ? [const Color(0xFF1F2937), const Color(0xFF374151)] // Dark gray gradient
+                    : [const Color(0xFF1F2937), const Color(0xFF4B5563)], // Consistent dark theme
               ),
               boxShadow: [
                 BoxShadow(
-                  color: _isDarkMode ? Colors.black.withOpacity(0.3) : const Color(0xFF667EEA).withOpacity(0.3),
+                  color: _isDarkMode
+                      ? Colors.black.withOpacity(0.3)
+                      : const Color(0xFF1F2937).withOpacity(0.15),
                   blurRadius: 20,
-                  offset: const Offset(0, 10),
-                  spreadRadius: 0,
+                  offset: const Offset(0, 8),
                 ),
               ],
             ),
-            child: Container(
-              decoration: BoxDecoration(
-                borderRadius: BorderRadius.circular(24),
-                border: Border.all(
-                  color: Colors.white.withOpacity(0.2),
-                  width: 1,
-                ),
-              ),
+            child: Padding(
+              padding: EdgeInsets.all(isLargeScreen ? 28 : (isTablet ? 24 : 20)),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  // Status Header
-                  Padding(
-                    padding: EdgeInsets.all(isTablet ? 28 : 24),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Row(
-                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  // Main Status Header
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Expanded(
+                        child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            Expanded(
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Text(
-                                    "Today's Status",
-                                    style: TextStyle(
-                                      color: Colors.white.withOpacity(0.8),
-                                      fontSize: (isTablet ? 18 : 16) * responsiveFontSize,
-                                      fontWeight: FontWeight.w500,
-                                    ),
-                                  ),
-                                  const SizedBox(height: 8),
-                                  AnimatedBuilder(
-                                    animation: _pulseAnimation,
-                                    builder: (context, child) {
-                                      return Transform.scale(
-                                        scale: _isCheckedIn ? _pulseAnimation.value : 1.0,
-                                        child: Text(
-                                          _isCheckedIn ? "Checked In" : "Ready to Start",
-                                          style: TextStyle(
-                                            color: Colors.white,
-                                            fontSize: (isTablet ? 32 : 28) * responsiveFontSize,
-                                            fontWeight: FontWeight.bold,
-                                          ),
-                                        ),
-                                      );
-                                    },
-                                  ),
-                                  const SizedBox(height: 4),
-                                  if (_isCheckedIn && _checkInTime != null)
-                                    Text(
-                                      "Since ${DateFormat('h:mm a').format(_checkInTime!)}",
-                                      style: TextStyle(
-                                        color: Colors.white.withOpacity(0.8),
-                                        fontSize: (isTablet ? 18 : 16) * responsiveFontSize,
-                                        fontWeight: FontWeight.w400,
-                                      ),
-                                    ),
-                                ],
+                            Text(
+                              "Today's Status",
+                              style: TextStyle(
+                                color: Colors.white.withOpacity(0.85),
+                                fontSize: (isLargeScreen ? 18 : (isTablet ? 16 : 14)) * responsiveFontSize,
+                                fontWeight: FontWeight.w500,
                               ),
                             ),
-
-                            // Status indicator
-                            Container(
-                              padding: EdgeInsets.symmetric(
-                                horizontal: isTablet ? 16 : 12,
-                                vertical: isTablet ? 10 : 8,
-                              ),
-                              decoration: BoxDecoration(
-                                color: _isCheckedIn
-                                    ? Colors.green.withOpacity(0.3)
-                                    : Colors.white.withOpacity(0.2),
-                                borderRadius: BorderRadius.circular(20),
-                                border: Border.all(
-                                  color: Colors.white.withOpacity(0.3),
-                                ),
-                              ),
-                              child: Row(
-                                mainAxisSize: MainAxisSize.min,
-                                children: [
-                                  Icon(
-                                    _isCheckedIn ? Icons.check_circle : Icons.schedule,
-                                    color: Colors.white,
-                                    size: isTablet ? 20 : 16,
-                                  ),
-                                  const SizedBox(width: 6),
-                                  Text(
-                                    _isCheckedIn ? "Active" : "Inactive",
+                            SizedBox(height: 6),
+                            AnimatedBuilder(
+                              animation: _pulseAnimation,
+                              builder: (context, child) {
+                                return Transform.scale(
+                                  scale: _isCheckedIn ? _pulseAnimation.value : 1.0,
+                                  child: Text(
+                                    _isCheckedIn ? "Checked In" : "Ready to Start",
                                     style: TextStyle(
                                       color: Colors.white,
-                                      fontSize: (isTablet ? 14 : 12) * responsiveFontSize,
-                                      fontWeight: FontWeight.w600,
+                                      fontSize: (isLargeScreen ? 32 : (isTablet ? 28 : 24)) * responsiveFontSize,
+                                      fontWeight: FontWeight.bold,
+                                      height: 1.1,
                                     ),
                                   ),
-                                ],
+                                );
+                              },
+                            ),
+                            if (_isCheckedIn && _checkInTime != null) ...[
+                              SizedBox(height: 4),
+                              Text(
+                                "Since ${DateFormat('h:mm a').format(_checkInTime!)}",
+                                style: TextStyle(
+                                  color: Colors.white.withOpacity(0.8),
+                                  fontSize: (isLargeScreen ? 18 : (isTablet ? 16 : 14)) * responsiveFontSize,
+                                  fontWeight: FontWeight.w400,
+                                ),
+                              ),
+                            ],
+                          ],
+                        ),
+                      ),
+                      Container(
+                        padding: EdgeInsets.symmetric(
+                          horizontal: isLargeScreen ? 16 : (isTablet ? 14 : 12),
+                          vertical: isLargeScreen ? 10 : (isTablet ? 8 : 6),
+                        ),
+                        decoration: BoxDecoration(
+                          color: _isCheckedIn
+                              ? Colors.green.withOpacity(0.25)
+                              : Colors.white.withOpacity(0.15),
+                          borderRadius: BorderRadius.circular(16),
+                          border: Border.all(
+                            color: Colors.white.withOpacity(0.25),
+                          ),
+                        ),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Icon(
+                              _isCheckedIn ? Icons.check_circle : Icons.schedule,
+                              color: Colors.white,
+                              size: 16,
+                            ),
+                            const SizedBox(width: 6),
+                            Text(
+                              _isCheckedIn ? "Active" : "Inactive",
+                              style: TextStyle(
+                                color: Colors.white,
+                                fontSize: (isLargeScreen ? 14 : (isTablet ? 12 : 11)) * responsiveFontSize,
+                                fontWeight: FontWeight.w600,
                               ),
                             ),
                           ],
                         ),
-                      ],
-                    ),
+                      ),
+                    ],
                   ),
 
-                  // Location Status
-                  Padding(
-                    padding: EdgeInsets.fromLTRB(
-                      isTablet ? 28 : 24,
-                      0,
-                      isTablet ? 28 : 24,
-                      isTablet ? 16 : 12,
-                    ),
-                    child: Container(
-                      padding: EdgeInsets.all(isTablet ? 16 : 14),
-                      decoration: BoxDecoration(
-                        color: Colors.white.withOpacity(0.1),
-                        borderRadius: BorderRadius.circular(16),
-                        border: Border.all(
-                          color: Colors.white.withOpacity(0.2),
-                        ),
+                  SizedBox(height: 20),
+
+                  // ✅ ENHANCED: Quick Info Section with Overtime Integration
+                  Container(
+                    padding: EdgeInsets.all(isLargeScreen ? 18 : (isTablet ? 16 : 14)),
+                    decoration: BoxDecoration(
+                      color: Colors.white.withOpacity(0.08),
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(
+                        color: Colors.white.withOpacity(0.15),
                       ),
-                      child: Row(
-                        children: [
+                    ),
+                    child: Column(
+                      children: [
+                        // ✅ PRIORITY: Active Overtime Information (Show First)
+                        if (_hasActiveOvertime && _activeOvertimeAssignments.isNotEmpty) ...[
                           Container(
-                            padding: const EdgeInsets.all(8),
+                            padding: EdgeInsets.all(12),
                             decoration: BoxDecoration(
-                              color: _isWithinGeofence
-                                  ? Colors.green.withOpacity(0.3)
-                                  : Colors.red.withOpacity(0.3),
+                              color: Colors.orangeAccent.withOpacity(0.15),
                               borderRadius: BorderRadius.circular(8),
+                              border: Border.all(color: Colors.orangeAccent.withOpacity(0.3)),
                             ),
-                            child: Icon(
-                              _isWithinGeofence ? Icons.location_on : Icons.location_off,
-                              color: Colors.white,
-                              size: 16,
-                            ),
-                          ),
-                          const SizedBox(width: 12),
-                          Expanded(
                             child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
-                                Text(
-                                  _isCheckingLocation
-                                      ? "Checking location..."
-                                      : _isWithinGeofence
-                                      ? "At $locationName"
-                                      : "Outside $locationName",
-                                  style: TextStyle(
-                                    color: Colors.white,
-                                    fontSize: (isTablet ? 16 : 14) * responsiveFontSize,
-                                    fontWeight: FontWeight.w600,
-                                  ),
+                                Row(
+                                  children: [
+                                    Icon(Icons.work_history_rounded, color: Colors.orangeAccent, size: 18),
+                                    SizedBox(width: 8),
+                                    Text(
+                                      "OVERTIME ACTIVE NOW",
+                                      style: TextStyle(
+                                        color: Colors.orangeAccent,
+                                        fontSize: (isLargeScreen ? 14 : (isTablet ? 13 : 12)) * responsiveFontSize,
+                                        fontWeight: FontWeight.bold,
+                                        letterSpacing: 0.5,
+                                      ),
+                                    ),
+                                  ],
                                 ),
-                                if (_distanceToOffice != null && !_isWithinGeofence)
+                                SizedBox(height: 8),
+                                ...(_activeOvertimeAssignments.take(2).map((overtime) => Container(
+                                  margin: EdgeInsets.only(bottom: 8),
+                                  child: Column(
+                                    children: [
+                                      _buildInfoRow(
+                                        icon: Icons.business_center_rounded,
+                                        label: "Project",
+                                        value: "${overtime.projectName} (${overtime.projectCode})",
+                                        valueColor: Colors.orangeAccent.withOpacity(0.95),
+                                      ),
+                                      SizedBox(height: 6),
+                                      _buildInfoRow(
+                                        icon: Icons.access_time_rounded,
+                                        label: "Hours",
+                                        value: "${DateFormat('h:mm a').format(overtime.startTime)} - ${DateFormat('h:mm a').format(overtime.endTime)}",
+                                        valueColor: Colors.greenAccent.withOpacity(0.9),
+                                      ),
+                                    ],
+                                  ),
+                                )).toList()),
+                                if (_activeOvertimeAssignments.length > 2)
                                   Text(
-                                    "${_distanceToOffice!.toStringAsFixed(0)}m away",
+                                    "... and ${_activeOvertimeAssignments.length - 2} more active",
                                     style: TextStyle(
-                                      color: Colors.white.withOpacity(0.7),
-                                      fontSize: (isTablet ? 14 : 12) * responsiveFontSize,
+                                      color: Colors.orangeAccent.withOpacity(0.8),
+                                      fontSize: (isLargeScreen ? 12 : (isTablet ? 11 : 10)) * responsiveFontSize,
+                                      fontStyle: FontStyle.italic,
                                     ),
                                   ),
                               ],
                             ),
                           ),
-                          if (_isCheckingLocation)
-                            SizedBox(
-                              width: 16,
-                              height: 16,
-                              child: CircularProgressIndicator(
-                                color: Colors.white,
-                                strokeWidth: 2,
-                              ),
-                            ),
+                          SizedBox(height: 12),
                         ],
-                      ),
+
+                        // ✅ SECONDARY: Today's Scheduled Overtime (If no active overtime)
+                        if (_hasActiveOvertime && _todayOvertimeSchedule.isNotEmpty && _activeOvertimeAssignments.isEmpty) ...[
+                          Container(
+                            padding: EdgeInsets.all(12),
+                            decoration: BoxDecoration(
+                              color: Colors.blueAccent.withOpacity(0.12),
+                              borderRadius: BorderRadius.circular(8),
+                              border: Border.all(color: Colors.blueAccent.withOpacity(0.25)),
+                            ),
+                            child: Column(
+                              children: [
+                                Row(
+                                  children: [
+                                    Icon(Icons.event_available_rounded, color: Colors.blueAccent, size: 18),
+                                    SizedBox(width: 8),
+                                    Text(
+                                      "📅 TODAY'S OVERTIME SCHEDULE",
+                                      style: TextStyle(
+                                        color: Colors.blueAccent,
+                                        fontSize: (isLargeScreen ? 14 : (isTablet ? 13 : 12)) * responsiveFontSize,
+                                        fontWeight: FontWeight.bold,
+                                        letterSpacing: 0.5,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                                SizedBox(height: 8),
+                                ...(_todayOvertimeSchedule.take(3).map((overtime) => Container(
+                                  margin: EdgeInsets.only(bottom: 6),
+                                  child: _buildInfoRow(
+                                    icon: Icons.schedule_rounded,
+                                    label: "${overtime.projectName}",
+                                    value: "${DateFormat('h:mm a').format(overtime.startTime)} - ${DateFormat('h:mm a').format(overtime.endTime)}",
+                                    valueColor: Colors.blueAccent.withOpacity(0.9),
+                                  ),
+                                )).toList()),
+                                if (_todayOvertimeSchedule.length > 3)
+                                  Text(
+                                    "... ${_todayOvertimeSchedule.length - 3} more scheduled",
+                                    style: TextStyle(
+                                      color: Colors.blueAccent.withOpacity(0.8),
+                                      fontSize: (isLargeScreen ? 12 : (isTablet ? 11 : 10)) * responsiveFontSize,
+                                      fontStyle: FontStyle.italic,
+                                    ),
+                                  ),
+                              ],
+                            ),
+                          ),
+                          SizedBox(height: 12),
+                        ],
+
+                        // Work Schedule Info
+                        if (_workSchedule != null) ...[
+                          _buildInfoRow(
+                            icon: Icons.access_time_rounded,
+                            label: "Work Hours",
+                            value: _workSchedule!.workTiming ?? "${_workSchedule!.startTime} - ${_workSchedule!.endTime}",
+                          ),
+                          if (_workSchedule!.hasBreakTime) ...[
+                            SizedBox(height: 8),
+                            _buildInfoRow(
+                              icon: Icons.restaurant_rounded,
+                              label: "Break Time",
+                              value: "${_workSchedule!.breakStartTime} - ${_workSchedule!.breakEndTime}",
+                            ),
+                          ],
+                          SizedBox(height: 8),
+                        ],
+
+                        // Current Timing Message
+                        if (_currentTimingMessage != null) ...[
+                          _buildInfoRow(
+                            icon: _getTimingMessageIcon(),
+                            label: "Status",
+                            value: _currentTimingMessage!,
+                            valueColor: _timingMessageColor != null
+                                ? _timingMessageColor!.withOpacity(0.9)
+                                : null,
+                          ),
+                          SizedBox(height: 8),
+                        ],
+
+                        // Location Status
+                        _buildInfoRow(
+                          icon: _isWithinGeofence ? Icons.location_on_rounded : Icons.location_off_rounded,
+                          label: "Location",
+                          value: _isCheckingLocation
+                              ? "Checking location..."
+                              : _isWithinGeofence
+                              ? "At $locationName"
+                              : "Outside $locationName ${_distanceToOffice != null ? '(${_distanceToOffice!.toStringAsFixed(0)}m away)' : ''}",
+                          valueColor: _isWithinGeofence
+                              ? Colors.greenAccent.withOpacity(0.9)
+                              : Colors.orangeAccent.withOpacity(0.9),
+                        ),
+                      ],
                     ),
                   ),
 
-                  // Status badges for offline/sync
-                  if (_needsSync || _connectivityService.currentStatus == ConnectionStatus.offline)
-                    Padding(
-                      padding: EdgeInsets.fromLTRB(
-                        isTablet ? 28 : 24,
-                        0,
-                        isTablet ? 28 : 24,
-                        isTablet ? 16 : 12,
+                  SizedBox(height: 20),
+
+                  // ✅ ENHANCED: Status badges with overtime integration
+                  if (_needsSync || _connectivityService.currentStatus == ConnectionStatus.offline || _hasActiveOvertime) ...[
+                    Container(
+                      padding: EdgeInsets.all(12),
+                      decoration: BoxDecoration(
+                        color: Colors.white.withOpacity(0.05),
+                        borderRadius: BorderRadius.circular(8),
+                        border: Border.all(color: Colors.white.withOpacity(0.1)),
                       ),
-                      child: Wrap(
-                        spacing: 8,
-                        runSpacing: 8,
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          if (_needsSync && _isCheckedIn)
-                            _buildStatusBadge(
-                              icon: Icons.sync_disabled,
-                              text: "Pending sync",
-                              color: Colors.orange,
-                            ),
-                          if (_connectivityService.currentStatus == ConnectionStatus.offline)
-                            _buildStatusBadge(
-                              icon: Icons.wifi_off,
-                              text: "Offline Mode",
-                              color: Colors.red,
-                            ),
+                          Row(
+                            children: [
+                              Icon(Icons.info_outline, color: Colors.white.withOpacity(0.7), size: 16),
+                              SizedBox(width: 8),
+                              Text(
+                                "Status Indicators",
+                                style: TextStyle(
+                                  color: Colors.white.withOpacity(0.8),
+                                  fontSize: (isLargeScreen ? 14 : (isTablet ? 12 : 11)) * responsiveFontSize,
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
+                            ],
+                          ),
+                          SizedBox(height: 8),
+                          Wrap(
+                            spacing: 8,
+                            runSpacing: 6,
+                            children: [
+                              // ✅ Active Overtime Badge
+                              if (_hasActiveOvertime && _activeOvertimeAssignments.isNotEmpty)
+                                Container(
+                                  padding: EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                                  decoration: BoxDecoration(
+                                    color: Colors.orangeAccent.withOpacity(0.2),
+                                    borderRadius: BorderRadius.circular(16),
+                                    border: Border.all(color: Colors.orangeAccent.withOpacity(0.4)),
+                                  ),
+                                  child: Row(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      Icon(Icons.work_history, size: 14, color: Colors.orangeAccent),
+                                      SizedBox(width: 6),
+                                      Text(
+                                        "Overtime Active",
+                                        style: TextStyle(
+                                          color: Colors.orangeAccent.withOpacity(0.95),
+                                          fontSize: (isLargeScreen ? 12 : (isTablet ? 11 : 10)) * responsiveFontSize,
+                                          fontWeight: FontWeight.w600,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+
+                              // ✅ Scheduled Overtime Badge
+                              if (_hasActiveOvertime && _todayOvertimeSchedule.isNotEmpty && _activeOvertimeAssignments.isEmpty)
+                                Container(
+                                  padding: EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                                  decoration: BoxDecoration(
+                                    color: Colors.blueAccent.withOpacity(0.2),
+                                    borderRadius: BorderRadius.circular(16),
+                                    border: Border.all(color: Colors.blueAccent.withOpacity(0.4)),
+                                  ),
+                                  child: Row(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      Icon(Icons.event_available, size: 14, color: Colors.blueAccent),
+                                      SizedBox(width: 6),
+                                      Text(
+                                        "${_todayOvertimeSchedule.length} Overtime Scheduled",
+                                        style: TextStyle(
+                                          color: Colors.blueAccent.withOpacity(0.95),
+                                          fontSize: (isLargeScreen ? 12 : (isTablet ? 11 : 10)) * responsiveFontSize,
+                                          fontWeight: FontWeight.w600,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+
+                              // Existing badges
+                              if (_needsSync && _isCheckedIn)
+                                Container(
+                                  padding: EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                                  decoration: BoxDecoration(
+                                    color: Colors.amberAccent.withOpacity(0.2),
+                                    borderRadius: BorderRadius.circular(16),
+                                    border: Border.all(color: Colors.amberAccent.withOpacity(0.4)),
+                                  ),
+                                  child: Row(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      Icon(Icons.sync, size: 14, color: Colors.amberAccent),
+                                      SizedBox(width: 6),
+                                      Text(
+                                        "Pending Sync",
+                                        style: TextStyle(
+                                          color: Colors.amberAccent.withOpacity(0.95),
+                                          fontSize: (isLargeScreen ? 12 : (isTablet ? 11 : 10)) * responsiveFontSize,
+                                          fontWeight: FontWeight.w500,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+
+                              if (_connectivityService.currentStatus == ConnectionStatus.offline)
+                                Container(
+                                  padding: EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                                  decoration: BoxDecoration(
+                                    color: Colors.redAccent.withOpacity(0.2),
+                                    borderRadius: BorderRadius.circular(16),
+                                    border: Border.all(color: Colors.redAccent.withOpacity(0.4)),
+                                  ),
+                                  child: Row(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      Icon(Icons.wifi_off, size: 14, color: Colors.redAccent),
+                                      SizedBox(width: 6),
+                                      Text(
+                                        "Offline Mode",
+                                        style: TextStyle(
+                                          color: Colors.redAccent.withOpacity(0.95),
+                                          fontSize: (isLargeScreen ? 12 : (isTablet ? 11 : 10)) * responsiveFontSize,
+                                          fontWeight: FontWeight.w500,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                            ],
+                          ),
                         ],
                       ),
                     ),
+                    SizedBox(height: 16),
+                  ],
 
-                  // Check In/Out Button
-                  Padding(
-                    padding: EdgeInsets.all(isTablet ? 28 : 24),
-                    child: SizedBox(
-                      width: double.infinity,
-                      height: isTablet ? 60 : 56,
-                      child: ElevatedButton(
-                        onPressed: _isLoading || _isAuthenticating
-                            ? null
-                            : _handleCheckInOut,
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: (!_isCheckedIn && !_isWithinGeofence) || _isLoading || _isAuthenticating
-                              ? Colors.grey.withOpacity(0.5)
-                              : _isCheckedIn
-                              ? const Color(0xFFEC407A)
-                              : const Color(0xFF4CAF50),
-                          foregroundColor: Colors.white,
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(16),
-                          ),
-                          elevation: 0,
-                          shadowColor: Colors.transparent,
+                  // Schedule Warning (if needed)
+                  if (_workSchedule != null && _shouldShowScheduleWarning()) ...[
+                    Container(
+                      padding: EdgeInsets.all(isLargeScreen ? 16 : (isTablet ? 14 : 12)),
+                      decoration: BoxDecoration(
+                        color: Colors.orangeAccent.withOpacity(0.15),
+                        borderRadius: BorderRadius.circular(10),
+                        border: Border.all(
+                          color: Colors.orangeAccent.withOpacity(0.3),
                         ),
-                        child: _isLoading || _isAuthenticating
-                            ? SizedBox(
-                          width: 24,
-                          height: 24,
-                          child: CircularProgressIndicator(
-                            color: Colors.white,
-                            strokeWidth: 2,
+                      ),
+                      child: Row(
+                        children: [
+                          Icon(
+                            Icons.warning_amber_rounded,
+                            color: Colors.orangeAccent,
+                            size: 20,
                           ),
-                        )
-                            : Row(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            Icon(
-                              _isCheckedIn ? Icons.logout : Icons.face,
-                              color: Colors.white,
-                              size: isTablet ? 28 : 24,
-                            ),
-                            const SizedBox(width: 12),
-                            Text(
-                              _isCheckedIn ? "CHECK OUT WITH FACE ID" : "CHECK IN WITH FACE ID",
+                          SizedBox(width: 12),
+                          Expanded(
+                            child: Text(
+                              _getScheduleWarningMessage(),
                               style: TextStyle(
-                                fontSize: (isTablet ? 18 : 16) * responsiveFontSize,
-                                fontWeight: FontWeight.bold,
-                                color: Colors.white,
+                                color: Colors.white.withOpacity(0.95),
+                                fontSize: (isLargeScreen ? 14 : (isTablet ? 12 : 11)) * responsiveFontSize,
+                                fontWeight: FontWeight.w500,
+                                height: 1.3,
                               ),
                             ),
-                          ],
+                          ),
+                        ],
+                      ),
+                    ),
+                    SizedBox(height: 16),
+                  ],
+
+                  // Main Action Button
+                  SizedBox(
+                    width: double.infinity,
+                    height: isLargeScreen ? 60 : (isTablet ? 56 : 52),
+                    child: ElevatedButton(
+                      onPressed: _isLoading || _isAuthenticating
+                          ? null
+                          : (!_isCheckedIn && !_isWithinGeofence)
+                          ? null
+                          : _handleCheckInOut,
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: (!_isCheckedIn && !_isWithinGeofence) || _isLoading || _isAuthenticating
+                            ? Colors.grey.withOpacity(0.5)
+                            : _isCheckedIn
+                            ? const Color(0xFFE53E3E) // More vibrant red for check out
+                            : const Color(0xFF38A169), // More vibrant green for check in
+                        foregroundColor: Colors.white,
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(16),
                         ),
+                        elevation: 2,
+                        shadowColor: Colors.black.withOpacity(0.2),
+                      ),
+                      child: _isLoading || _isAuthenticating
+                          ? SizedBox(
+                        width: 24,
+                        height: 24,
+                        child: CircularProgressIndicator(
+                          color: Colors.white,
+                          strokeWidth: 2.5,
+                        ),
+                      )
+                          : Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Icon(
+                            _isCheckedIn ? Icons.logout_rounded : Icons.face_rounded,
+                            color: Colors.white,
+                            size: isLargeScreen ? 28 : (isTablet ? 24 : 22),
+                          ),
+                          SizedBox(width: 12),
+                          Text(
+                            _isCheckedIn ? "CHECK OUT WITH FACE ID" : "CHECK IN WITH FACE ID",
+                            style: TextStyle(
+                              fontSize: (isLargeScreen ? 18 : (isTablet ? 16 : 15)) * responsiveFontSize,
+                              fontWeight: FontWeight.bold,
+                              color: Colors.white,
+                              letterSpacing: 0.5,
+                            ),
+                          ),
+                        ],
                       ),
                     ),
                   ),
@@ -1233,6 +1631,53 @@ class _DashboardViewState extends State<DashboardView>
       },
     );
   }
+
+// Helper method for clean info rows (keep existing)
+  Widget _buildInfoRow({
+    required IconData icon,
+    required String label,
+    required String value,
+    Color? valueColor,
+  }) {
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Icon(
+          icon,
+          color: Colors.white.withOpacity(0.8),
+          size: 16,
+        ),
+        SizedBox(width: 10),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                label,
+                style: TextStyle(
+                  color: Colors.white.withOpacity(0.7),
+                  fontSize: (isLargeScreen ? 13 : (isTablet ? 12 : 11)) * responsiveFontSize,
+                  fontWeight: FontWeight.w500,
+                ),
+              ),
+              SizedBox(height: 2),
+              Text(
+                value,
+                style: TextStyle(
+                  color: valueColor ?? Colors.white.withOpacity(0.95),
+                  fontSize: (isLargeScreen ? 15 : (isTablet ? 14 : 13)) * responsiveFontSize,
+                  fontWeight: FontWeight.w600,
+                  height: 1.2,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+
+
 
   Widget _buildStatusBadge({
     required IconData icon,
@@ -1269,10 +1714,6 @@ class _DashboardViewState extends State<DashboardView>
     );
   }
 
-  // Quick Actions Section
-  // ✅ UPDATED: Replace your _buildQuickActionsSection method with this
-  // ✅ CRITICAL FIX: Make sure your quick actions section uses the RIGHT method
-
   Widget _buildQuickActionsSection() {
     return Container(
       margin: EdgeInsets.symmetric(horizontal: responsivePadding.horizontal),
@@ -1284,7 +1725,7 @@ class _DashboardViewState extends State<DashboardView>
             child: Text(
               "Quick Actions",
               style: TextStyle(
-                fontSize: (isTablet ? 24 : 20) * responsiveFontSize,
+                fontSize: (isLargeScreen ? 28 : (isTablet ? 24 : 20)) * responsiveFontSize,
                 fontWeight: FontWeight.bold,
                 color: _isDarkMode ? Colors.white : Colors.black87,
               ),
@@ -1293,15 +1734,16 @@ class _DashboardViewState extends State<DashboardView>
 
           if (_hasActiveRestTiming())
             _buildRestTimingCard(),
-          const SizedBox(height: 16),
+
+          SizedBox(height: containerSpacing),
 
           GridView.count(
             shrinkWrap: true,
             physics: const NeverScrollableScrollPhysics(),
-            crossAxisCount: isTablet ? 4 : 2,
+            crossAxisCount: isLargeScreen ? 4 : (isTablet ? 4 : 2),
             crossAxisSpacing: isTablet ? 16 : 12,
             mainAxisSpacing: isTablet ? 16 : 12,
-            childAspectRatio: isTablet ? 1.2 : 1.1,
+            childAspectRatio: isLargeScreen ? 1.3 : (isTablet ? 1.2 : 1.1),
             children: [
               _buildQuickActionCard(
                 icon: Icons.event_available,
@@ -1322,7 +1764,6 @@ class _DashboardViewState extends State<DashboardView>
                   ).then((_) => _refreshDashboard());
                 },
               ),
-
               _buildQuickActionCard(
                 icon: Icons.history,
                 title: "Leave History",
@@ -1342,7 +1783,6 @@ class _DashboardViewState extends State<DashboardView>
                   ).then((_) => _refreshDashboard());
                 },
               ),
-
               _buildQuickActionCard(
                 icon: Icons.calendar_view_month,
                 title: "My Attendance",
@@ -1360,9 +1800,6 @@ class _DashboardViewState extends State<DashboardView>
                   );
                 },
               ),
-
-              // ✅ CRITICAL FIX: Use ONLY database-driven check (no Builder widget)
-              // Remove any hardcoded logic completely
               if (_userData != null &&
                   (_userData!['hasOvertimeAccess'] == true ||
                       _userData!['overtimeAccessGrantedAt'] != null ||
@@ -1391,12 +1828,6 @@ class _DashboardViewState extends State<DashboardView>
     );
   }
 
-// ✅ REMOVE: Delete the old _hasOvertimeAccess() method completely
-// ✅ REMOVE: Delete the _hasOvertimeAccessFromDatabase() method
-// ✅ REMOVE: All Builder widgets with robust condition checks
-
-// ✅ KEEP ONLY: Direct database field checks in the if condition above
-
   Widget _buildQuickActionCard({
     required IconData icon,
     required String title,
@@ -1408,29 +1839,29 @@ class _DashboardViewState extends State<DashboardView>
       color: Colors.transparent,
       child: InkWell(
         onTap: onTap,
-        borderRadius: BorderRadius.circular(20),
+        borderRadius: BorderRadius.circular(cardBorderRadius + 4),
         child: Container(
           decoration: BoxDecoration(
             color: _isDarkMode ? const Color(0xFF1E293B) : Colors.white,
-            borderRadius: BorderRadius.circular(20),
+            borderRadius: BorderRadius.circular(cardBorderRadius + 4),
             border: Border.all(
-              color: _isDarkMode ? Colors.white.withOpacity(0.1) : Colors.grey.withOpacity(0.1),
+              color: _isDarkMode ? Colors.white.withOpacity(0.1) : Colors.grey.withOpacity(0.08),
             ),
             boxShadow: [
               BoxShadow(
-                color: _isDarkMode ? Colors.black.withOpacity(0.2) : Colors.grey.withOpacity(0.1),
-                blurRadius: 8,
+                color: _isDarkMode ? Colors.black.withOpacity(0.2) : Colors.grey.withOpacity(0.08),
+                blurRadius: 12,
                 offset: const Offset(0, 4),
               ),
             ],
           ),
           child: Padding(
-            padding: EdgeInsets.all(isTablet ? 20 : 16),
+            padding: EdgeInsets.all(isLargeScreen ? 24 : (isTablet ? 20 : 16)),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Container(
-                  padding: EdgeInsets.all(isTablet ? 12 : 10),
+                  padding: EdgeInsets.all(isLargeScreen ? 16 : (isTablet ? 12 : 10)),
                   decoration: BoxDecoration(
                     color: color.withOpacity(0.1),
                     borderRadius: BorderRadius.circular(12),
@@ -1438,29 +1869,25 @@ class _DashboardViewState extends State<DashboardView>
                   child: Icon(
                     icon,
                     color: color,
-                    size: isTablet ? 28 : 24,
+                    size: isLargeScreen ? 32 : (isTablet ? 28 : 24),
                   ),
                 ),
-
                 const Spacer(),
-
                 Text(
                   title,
                   style: TextStyle(
-                    fontSize: (isTablet ? 18 : 16) * responsiveFontSize,
+                    fontSize: (isLargeScreen ? 20 : (isTablet ? 18 : 16)) * responsiveFontSize,
                     fontWeight: FontWeight.bold,
                     color: _isDarkMode ? Colors.white : Colors.black87,
                   ),
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                 ),
-
                 const SizedBox(height: 4),
-
                 Text(
                   subtitle,
                   style: TextStyle(
-                    fontSize: (isTablet ? 14 : 12) * responsiveFontSize,
+                    fontSize: (isLargeScreen ? 16 : (isTablet ? 14 : 12)) * responsiveFontSize,
                     color: _isDarkMode ? Colors.grey.shade400 : Colors.grey.shade600,
                   ),
                   maxLines: 1,
@@ -1476,20 +1903,20 @@ class _DashboardViewState extends State<DashboardView>
 
   Widget _buildRestTimingCard() {
     return Container(
-      margin: const EdgeInsets.only(bottom: 16),
-      padding: const EdgeInsets.all(20),
+      margin: EdgeInsets.only(bottom: containerSpacing),
+      padding: EdgeInsets.all(isLargeScreen ? 24 : (isTablet ? 20 : 16)),
       decoration: BoxDecoration(
         gradient: LinearGradient(
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
           colors: [Colors.blue.withOpacity(0.8), Colors.cyan.withOpacity(0.6)],
         ),
-        borderRadius: BorderRadius.circular(20),
+        borderRadius: BorderRadius.circular(cardBorderRadius + 4),
         boxShadow: [
           BoxShadow(
             color: Colors.blue.withOpacity(0.3),
-            blurRadius: 12,
-            offset: const Offset(0, 6),
+            blurRadius: 16,
+            offset: const Offset(0, 8),
           ),
         ],
       ),
@@ -1499,18 +1926,18 @@ class _DashboardViewState extends State<DashboardView>
           Row(
             children: [
               Container(
-                padding: const EdgeInsets.all(12),
+                padding: EdgeInsets.all(isTablet ? 16 : 12),
                 decoration: BoxDecoration(
                   color: Colors.white.withOpacity(0.2),
                   shape: BoxShape.circle,
                 ),
-                child: const Icon(
+                child: Icon(
                   Icons.schedule,
                   color: Colors.white,
-                  size: 28,
+                  size: isTablet ? 32 : 28,
                 ),
               ),
-              const SizedBox(width: 16),
+              SizedBox(width: containerSpacing),
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
@@ -1519,7 +1946,7 @@ class _DashboardViewState extends State<DashboardView>
                       "Rest Timing Schedule",
                       style: TextStyle(
                         color: Colors.white,
-                        fontSize: (isTablet ? 20 : 18) * responsiveFontSize,
+                        fontSize: (isLargeScreen ? 24 : (isTablet ? 20 : 18)) * responsiveFontSize,
                         fontWeight: FontWeight.bold,
                       ),
                     ),
@@ -1528,7 +1955,7 @@ class _DashboardViewState extends State<DashboardView>
                       _getRestTimingStatus(),
                       style: TextStyle(
                         color: Colors.white.withOpacity(0.9),
-                        fontSize: (isTablet ? 14 : 12) * responsiveFontSize,
+                        fontSize: (isLargeScreen ? 16 : (isTablet ? 14 : 12)) * responsiveFontSize,
                       ),
                     ),
                   ],
@@ -1536,12 +1963,12 @@ class _DashboardViewState extends State<DashboardView>
               ),
             ],
           ),
-          const SizedBox(height: 16),
+          SizedBox(height: containerSpacing),
           Container(
-            padding: const EdgeInsets.all(16),
+            padding: EdgeInsets.all(containerSpacing),
             decoration: BoxDecoration(
               color: Colors.white.withOpacity(0.15),
-              borderRadius: BorderRadius.circular(12),
+              borderRadius: BorderRadius.circular(cardBorderRadius - 2),
             ),
             child: Row(
               children: [
@@ -1553,7 +1980,7 @@ class _DashboardViewState extends State<DashboardView>
                         "Today's Rest Time",
                         style: TextStyle(
                           color: Colors.white.withOpacity(0.8),
-                          fontSize: (isTablet ? 14 : 12) * responsiveFontSize,
+                          fontSize: (isLargeScreen ? 16 : (isTablet ? 14 : 12)) * responsiveFontSize,
                         ),
                       ),
                       const SizedBox(height: 4),
@@ -1561,7 +1988,7 @@ class _DashboardViewState extends State<DashboardView>
                         _getRestTimingHours(),
                         style: TextStyle(
                           color: Colors.white,
-                          fontSize: (isTablet ? 18 : 16) * responsiveFontSize,
+                          fontSize: (isLargeScreen ? 20 : (isTablet ? 18 : 16)) * responsiveFontSize,
                           fontWeight: FontWeight.bold,
                         ),
                       ),
@@ -1590,8 +2017,6 @@ class _DashboardViewState extends State<DashboardView>
 
   bool _hasActiveRestTiming() {
     if (_userData == null) return false;
-
-    // Check if user has rest timing data
     if (_userData!['eligibleForRestTiming'] != true) return false;
 
     final String? startDateStr = _userData!['restTimingStartDate'];
@@ -1604,9 +2029,8 @@ class _DashboardViewState extends State<DashboardView>
       final DateTime endDate = DateTime.parse(endDateStr);
       final DateTime now = DateTime.now();
 
-      // Check if currently within the rest timing period
-      return now.isAfter(startDate.subtract(Duration(days: 1))) &&
-          now.isBefore(endDate.add(Duration(days: 1)));
+      return now.isAfter(startDate.subtract(const Duration(days: 1))) &&
+          now.isBefore(endDate.add(const Duration(days: 1)));
     } catch (e) {
       debugPrint("Error parsing rest timing dates: $e");
       return false;
@@ -1649,7 +2073,6 @@ class _DashboardViewState extends State<DashboardView>
     return "$startTime - $endTime";
   }
 
-  // Updated Today's Activity Section
   Widget _buildTodaysActivitySection() {
     return Container(
       margin: EdgeInsets.symmetric(horizontal: responsivePadding.horizontal),
@@ -1660,16 +2083,23 @@ class _DashboardViewState extends State<DashboardView>
             padding: EdgeInsets.only(left: isTablet ? 8 : 4, bottom: isTablet ? 20 : 16),
             child: Row(
               children: [
-                Icon(
-                  Icons.today,
-                  color: _isDarkMode ? Colors.white : Colors.black87,
-                  size: isTablet ? 28 : 24,
+                Container(
+                  padding: const EdgeInsets.all(8),
+                  decoration: BoxDecoration(
+                    color: Theme.of(context).colorScheme.primary.withOpacity(0.1),
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: Icon(
+                    Icons.today_rounded,
+                    color: Theme.of(context).colorScheme.primary,
+                    size: isLargeScreen ? 24 : (isTablet ? 22 : 20),
+                  ),
                 ),
-                const SizedBox(width: 12),
+                SizedBox(width: isTablet ? 16 : 12),
                 Text(
                   "Today's Activity",
                   style: TextStyle(
-                    fontSize: (isTablet ? 24 : 20) * responsiveFontSize,
+                    fontSize: (isLargeScreen ? 28 : (isTablet ? 24 : 20)) * responsiveFontSize,
                     fontWeight: FontWeight.bold,
                     color: _isDarkMode ? Colors.white : Colors.black87,
                   ),
@@ -1677,271 +2107,146 @@ class _DashboardViewState extends State<DashboardView>
               ],
             ),
           ),
-
-          _buildTodaysActivityList(),
+          _buildCleanTodaysActivityCard(),
         ],
       ),
     );
   }
 
-  Widget _buildTodaysActivityList() {
-    // Check if user is absent today (no check-in and no leave application)
-    if (_isAbsentToday) {
-      return _buildAbsentTodayCard();
+
+  Widget _buildCleanTodaysActivityCard() {
+    // Initialize with default values
+    bool hasCheckIn = false;
+    bool hasCheckOut = false;
+    String checkInTimeStr = "Not recorded";
+    String checkOutTimeStr = "Not recorded";
+    String workStatus = "Not started";
+    String locationName = "Unknown location";
+
+    debugPrint("=== TODAY'S ACTIVITY DEBUG ===");
+    debugPrint("_isCheckedIn: $_isCheckedIn");
+    debugPrint("_checkInTime: $_checkInTime");
+    debugPrint("_todaysActivity length: ${_todaysActivity.length}");
+
+    // PRIORITY 1: Use current dashboard state (most reliable)
+    if (_isCheckedIn && _checkInTime != null) {
+      checkInTimeStr = DateFormat('h:mm a').format(_checkInTime!);
+      hasCheckIn = true;
+      workStatus = "In Progress";
+      locationName = _nearestLocation?.name ?? "Office location";
+      debugPrint("✅ Used current dashboard state - Check-in: $checkInTimeStr");
     }
 
-    if (_todaysActivity.isEmpty) {
-      return Container(
-        padding: EdgeInsets.all(isTablet ? 48 : 40),
-        decoration: BoxDecoration(
-          color: _isDarkMode ? const Color(0xFF1E293B) : Colors.white,
-          borderRadius: BorderRadius.circular(20),
-          border: Border.all(
-            color: _isDarkMode ? Colors.white.withOpacity(0.1) : Colors.grey.withOpacity(0.1),
-          ),
-        ),
-        child: Column(
-          children: [
-            Container(
-              padding: EdgeInsets.all(isTablet ? 24 : 20),
-              decoration: BoxDecoration(
-                color: _isDarkMode ? Colors.white.withOpacity(0.05) : Colors.grey.withOpacity(0.1),
-                shape: BoxShape.circle,
-              ),
-              child: Icon(
-                Icons.today_outlined,
-                size: isTablet ? 64 : 48,
-                color: _isDarkMode ? Colors.grey.shade600 : Colors.grey.shade400,
-              ),
-            ),
+    // PRIORITY 2: Check today's activity data for additional info
+    if (_todaysActivity.isNotEmpty) {
+      for (var activity in _todaysActivity) {
+        debugPrint("Activity type: ${activity['type']}");
 
-            SizedBox(height: isTablet ? 24 : 20),
+        if (activity['type'] == 'attendance') {
+          debugPrint("Attendance activity found: ${activity.keys}");
 
-            Text(
-              "No activity today",
-              style: TextStyle(
-                color: _isDarkMode ? Colors.grey.shade400 : Colors.grey.shade600,
-                fontSize: (isTablet ? 20 : 18) * responsiveFontSize,
-                fontWeight: FontWeight.w600,
-              ),
-            ),
+          // Parse check-in time (but don't override if we already have it from current state)
+          if (activity['checkIn'] != null && !hasCheckIn) {
+            try {
+              DateTime checkInDate;
+              if (activity['checkIn'] is Timestamp) {
+                checkInDate = (activity['checkIn'] as Timestamp).toDate();
+              } else if (activity['checkIn'] is String) {
+                checkInDate = DateTime.parse(activity['checkIn']);
+              } else {
+                continue;
+              }
+              checkInTimeStr = DateFormat('h:mm a').format(checkInDate);
+              hasCheckIn = true;
+              debugPrint("✅ Parsed check-in from activity: $checkInTimeStr");
+            } catch (e) {
+              debugPrint("❌ Error parsing check-in time: $e");
+            }
+          }
 
-            const SizedBox(height: 8),
+          // Parse check-out time
+          if (activity['checkOut'] != null) {
+            try {
+              DateTime checkOutDate;
+              if (activity['checkOut'] is Timestamp) {
+                checkOutDate = (activity['checkOut'] as Timestamp).toDate();
+              } else if (activity['checkOut'] is String) {
+                checkOutDate = DateTime.parse(activity['checkOut']);
+              } else {
+                continue;
+              }
+              checkOutTimeStr = DateFormat('h:mm a').format(checkOutDate);
+              hasCheckOut = true;
+              debugPrint("✅ Parsed check-out from activity: $checkOutTimeStr");
+            } catch (e) {
+              debugPrint("❌ Error parsing check-out time: $e");
+            }
+          }
 
-            Text(
-              "Your today's attendance and leave records will appear here",
-              style: TextStyle(
-                color: _isDarkMode ? Colors.grey.shade500 : Colors.grey.shade500,
-                fontSize: (isTablet ? 16 : 14) * responsiveFontSize,
-              ),
-              textAlign: TextAlign.center,
-            ),
-          ],
-        ),
-      );
+          // Get additional info from activity
+          String activityStatus = activity['workStatus'] ?? '';
+          String activityLocation = activity['location'] ?? '';
+
+          if (activityStatus.isNotEmpty) {
+            workStatus = activityStatus;
+          }
+          if (activityLocation.isNotEmpty) {
+            locationName = activityLocation;
+          }
+
+          debugPrint("Activity work status: $activityStatus");
+          debugPrint("Activity location: $activityLocation");
+          break;
+        }
+      }
     }
 
-    return Column(
-      children: _todaysActivity.map((activity) => _buildTodaysActivityCard(activity)).toList(),
-    );
-  }
+    // PRIORITY 3: Final fallback - use current state even if no _checkInTime
+    if (!hasCheckIn && _isCheckedIn) {
+      checkInTimeStr = "Just now";
+      hasCheckIn = true;
+      workStatus = "In Progress";
+      debugPrint("✅ Used fallback - user is checked in but no time available");
+    }
 
-  // New method to build absent today card with apply leave suggestion
-  Widget _buildAbsentTodayCard() {
-    return Container(
-      padding: EdgeInsets.all(isTablet ? 24 : 20),
-      decoration: BoxDecoration(
-        gradient: LinearGradient(
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-          colors: [
-            Colors.orange.withOpacity(0.8),
-            Colors.red.withOpacity(0.6),
-          ],
-        ),
-        borderRadius: BorderRadius.circular(20),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.orange.withOpacity(0.3),
-            blurRadius: 12,
-            offset: const Offset(0, 6),
-          ),
-        ],
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Container(
-                padding: EdgeInsets.all(isTablet ? 16 : 12),
-                decoration: BoxDecoration(
-                  color: Colors.white.withOpacity(0.2),
-                  shape: BoxShape.circle,
-                  border: Border.all(color: Colors.white.withOpacity(0.3)),
-                ),
-                child: Icon(
-                  Icons.warning_amber_rounded,
-                  color: Colors.white,
-                  size: isTablet ? 32 : 28,
-                ),
-              ),
-              const SizedBox(width: 16),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      "You're Absent Today",
-                      style: TextStyle(
-                        color: Colors.white,
-                        fontSize: (isTablet ? 22 : 20) * responsiveFontSize,
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-                    const SizedBox(height: 4),
-                    Text(
-                      "No check-in or leave application found for today",
-                      style: TextStyle(
-                        color: Colors.white.withOpacity(0.9),
-                        fontSize: (isTablet ? 16 : 14) * responsiveFontSize,
-                        fontWeight: FontWeight.w400,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ],
-          ),
-
-          SizedBox(height: isTablet ? 24 : 20),
-
-          Container(
-            padding: EdgeInsets.all(isTablet ? 16 : 14),
-            decoration: BoxDecoration(
-              color: Colors.white.withOpacity(0.15),
-              borderRadius: BorderRadius.circular(12),
-              border: Border.all(color: Colors.white.withOpacity(0.2)),
-            ),
-            child: Row(
-              children: [
-                Icon(
-                  Icons.lightbulb_outline,
-                  color: Colors.white,
-                  size: isTablet ? 24 : 20,
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: Text(
-                    "Need time off? Apply for leave to mark today as an official leave day.",
-                    style: TextStyle(
-                      color: Colors.white,
-                      fontSize: (isTablet ? 16 : 14) * responsiveFontSize,
-                      fontWeight: FontWeight.w500,
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          ),
-
-          SizedBox(height: isTablet ? 20 : 16),
-
-          SizedBox(
-            width: double.infinity,
-            height: isTablet ? 52 : 48,
-            child: ElevatedButton.icon(
-              onPressed: () {
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(
-                    builder: (context) => ApplyLeaveView(
-                      employeeId: widget.employeeId,
-                      employeeName: _userData?['name'] ?? 'Employee',
-                      employeePin: _userData?['pin'] ?? widget.employeeId,
-                      userData: _userData ?? {},
-                    ),
-                  ),
-                ).then((_) => _refreshDashboard());
-              },
-              icon: const Icon(Icons.event_available, color: Colors.orange),
-              label: Text(
-                "Apply for Leave",
-                style: TextStyle(
-                  fontSize: (isTablet ? 18 : 16) * responsiveFontSize,
-                  fontWeight: FontWeight.bold,
-                  color: Colors.orange.shade800,
-                ),
-              ),
-              style: ElevatedButton.styleFrom(
-                backgroundColor: Colors.white,
-                foregroundColor: Colors.orange.shade800,
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                elevation: 0,
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildTodaysActivityCard(Map<String, dynamic> activity) {
-    String activityType = activity['type'] ?? 'attendance';
-
-    if (activityType == 'leave') {
-      return _buildLeaveActivityCard(activity);
+    // Determine final work status
+    if (hasCheckIn && hasCheckOut) {
+      workStatus = "Completed";
+    } else if (hasCheckIn && !hasCheckOut) {
+      workStatus = "In Progress";
     } else {
-      return _buildAttendanceActivityCard(activity);
-    }
-  }
-
-  Widget _buildAttendanceActivityCard(Map<String, dynamic> activity) {
-    DateTime? checkIn;
-    if (activity['checkIn'] != null) {
-      if (activity['checkIn'] is Timestamp) {
-        checkIn = (activity['checkIn'] as Timestamp).toDate();
-      } else if (activity['checkIn'] is String) {
-        checkIn = DateTime.parse(activity['checkIn']);
-      }
+      workStatus = "Not started";
     }
 
-    DateTime? checkOut;
-    if (activity['checkOut'] != null) {
-      if (activity['checkOut'] is Timestamp) {
-        checkOut = (activity['checkOut'] as Timestamp).toDate();
-      } else if (activity['checkOut'] is String) {
-        checkOut = DateTime.parse(activity['checkOut']);
-      }
-    }
-
-    String status = activity['workStatus'] ?? 'In Progress';
-    String location = activity['location'] ?? 'Unknown';
-    bool isSynced = activity['isSynced'] ?? true;
+    debugPrint("=== FINAL RESULTS ===");
+    debugPrint("hasCheckIn: $hasCheckIn");
+    debugPrint("checkInTimeStr: $checkInTimeStr");
+    debugPrint("hasCheckOut: $hasCheckOut");
+    debugPrint("workStatus: $workStatus");
+    debugPrint("locationName: $locationName");
+    debugPrint("=== END DEBUG ===");
 
     return Container(
-      margin: EdgeInsets.only(bottom: isTablet ? 16 : 12),
       decoration: BoxDecoration(
         color: _isDarkMode ? const Color(0xFF1E293B) : Colors.white,
-        borderRadius: BorderRadius.circular(16),
+        borderRadius: BorderRadius.circular(cardBorderRadius + 4),
         border: Border.all(
-          color: _isDarkMode ? Colors.white.withOpacity(0.1) : Colors.grey.withOpacity(0.1),
+          color: _isDarkMode ? Colors.white.withOpacity(0.1) : Colors.grey.withOpacity(0.08),
         ),
         boxShadow: [
           BoxShadow(
-            color: _isDarkMode ? Colors.black.withOpacity(0.2) : Colors.grey.withOpacity(0.1),
-            blurRadius: 8,
+            color: _isDarkMode ? Colors.black.withOpacity(0.2) : Colors.grey.withOpacity(0.08),
+            blurRadius: 12,
             offset: const Offset(0, 2),
           ),
         ],
       ),
       child: Padding(
-        padding: EdgeInsets.all(isTablet ? 20 : 16),
+        padding: EdgeInsets.all(isLargeScreen ? 28 : (isTablet ? 24 : 20)),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
+            // Header with status
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
@@ -1951,500 +2256,303 @@ class _DashboardViewState extends State<DashboardView>
                       Container(
                         padding: const EdgeInsets.all(8),
                         decoration: BoxDecoration(
-                          color: Colors.blue.withOpacity(0.1),
+                          color: _getCleanStatusColor(workStatus).withOpacity(0.1),
                           borderRadius: BorderRadius.circular(8),
                         ),
                         child: Icon(
-                          Icons.access_time,
-                          color: Colors.blue,
+                          _getStatusIcon(workStatus),
+                          color: _getCleanStatusColor(workStatus),
                           size: 20,
                         ),
                       ),
-                      const SizedBox(width: 12),
-                      Text(
-                        "Attendance Record",
-                        style: TextStyle(
-                          fontWeight: FontWeight.bold,
-                          fontSize: (isTablet ? 20 : 18) * responsiveFontSize,
-                          color: _isDarkMode ? Colors.white : Colors.black87,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-
-                Row(
-                  children: [
-                    if (!isSynced)
-                      Container(
-                        padding: EdgeInsets.symmetric(
-                          horizontal: isTablet ? 10 : 8,
-                          vertical: isTablet ? 6 : 4,
-                        ),
-                        decoration: BoxDecoration(
-                          color: Colors.orange.withOpacity(0.1),
-                          borderRadius: BorderRadius.circular(8),
-                          border: Border.all(color: Colors.orange.withOpacity(0.3)),
-                        ),
-                        child: Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            Icon(Icons.sync_disabled, color: Colors.orange, size: 12),
-                            const SizedBox(width: 4),
-                            Text(
-                              "Pending",
-                              style: TextStyle(
-                                color: Colors.orange,
-                                fontSize: (isTablet ? 12 : 10) * responsiveFontSize,
-                                fontWeight: FontWeight.w500,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-
-                    const SizedBox(width: 8),
-
-                    Container(
-                      padding: EdgeInsets.symmetric(
-                        horizontal: isTablet ? 12 : 10,
-                        vertical: isTablet ? 8 : 6,
-                      ),
-                      decoration: BoxDecoration(
-                        color: _getStatusColor(status).withOpacity(0.1),
-                        borderRadius: BorderRadius.circular(8),
-                        border: Border.all(color: _getStatusColor(status).withOpacity(0.3)),
-                      ),
-                      child: Text(
-                        status,
-                        style: TextStyle(
-                          color: _getStatusColor(status),
-                          fontSize: (isTablet ? 14 : 12) * responsiveFontSize,
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-              ],
-            ),
-
-            SizedBox(height: isTablet ? 16 : 12),
-
-            Container(
-              padding: EdgeInsets.all(isTablet ? 16 : 12),
-              decoration: BoxDecoration(
-                color: _isDarkMode ? Colors.white.withOpacity(0.05) : Colors.grey.withOpacity(0.05),
-                borderRadius: BorderRadius.circular(12),
-              ),
-              child: Column(
-                children: [
-                  Row(
-                    children: [
-                      Expanded(
-                        child: _buildTimeInfo(
-                          icon: Icons.login,
-                          label: "Check In",
-                          time: checkIn != null
-                              ? DateFormat('h:mm a').format(checkIn)
-                              : 'Not recorded',
-                          color: Colors.green,
-                        ),
-                      ),
-
-                      Container(
-                        width: 1,
-                        height: 40,
-                        color: _isDarkMode ? Colors.white.withOpacity(0.1) : Colors.grey.withOpacity(0.3),
-                      ),
-
-                      Expanded(
-                        child: _buildTimeInfo(
-                          icon: Icons.logout,
-                          label: "Check Out",
-                          time: checkOut != null
-                              ? DateFormat('h:mm a').format(checkOut)
-                              : 'Not recorded',
-                          color: Colors.red,
-                        ),
-                      ),
-                    ],
-                  ),
-
-                  SizedBox(height: isTablet ? 12 : 8),
-
-                  Row(
-                    children: [
-                      Icon(
-                        Icons.location_on,
-                        size: 16,
-                        color: _isDarkMode ? Colors.grey.shade400 : Colors.grey.shade600,
-                      ),
-                      const SizedBox(width: 8),
-                      Expanded(
-                        child: Text(
-                          location,
-                          style: TextStyle(
-                            fontSize: (isTablet ? 16 : 14) * responsiveFontSize,
-                            color: _isDarkMode ? Colors.grey.shade400 : Colors.grey.shade600,
-                            fontWeight: FontWeight.w500,
-                          ),
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                      ),
-                    ],
-                  ),
-                ],
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildLeaveActivityCard(Map<String, dynamic> activity) {
-    String leaveType = activity['leaveType'] ?? 'Leave';
-    String status = activity['status'] ?? 'pending';
-    int totalDays = activity['totalDays'] ?? 0;
-    String reason = activity['reason'] ?? '';
-    String applicationId = activity['applicationId'] ?? '';
-
-    DateTime? appliedAt;
-    if (activity['appliedAt'] != null) {
-      if (activity['appliedAt'] is Timestamp) {
-        appliedAt = (activity['appliedAt'] as Timestamp).toDate();
-      } else if (activity['appliedAt'] is String) {
-        appliedAt = DateTime.parse(activity['appliedAt']);
-      }
-    }
-
-    Color statusColor = _getLeaveStatusColor(status);
-
-    return Container(
-      margin: EdgeInsets.only(bottom: isTablet ? 16 : 12),
-      decoration: BoxDecoration(
-        color: _isDarkMode ? const Color(0xFF1E293B) : Colors.white,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(
-          color: statusColor.withOpacity(0.3),
-        ),
-        boxShadow: [
-          BoxShadow(
-            color: _isDarkMode ? Colors.black.withOpacity(0.2) : Colors.grey.withOpacity(0.1),
-            blurRadius: 8,
-            offset: const Offset(0, 2),
-          ),
-        ],
-      ),
-      child: Padding(
-        padding: EdgeInsets.all(isTablet ? 20 : 16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                Expanded(
-                  child: Row(
-                    children: [
-                      Container(
-                        padding: const EdgeInsets.all(8),
-                        decoration: BoxDecoration(
-                          color: statusColor.withOpacity(0.1),
-                          borderRadius: BorderRadius.circular(8),
-                        ),
-                        child: Icon(
-                          Icons.event_available,
-                          color: statusColor,
-                          size: 20,
-                        ),
-                      ),
-                      const SizedBox(width: 12),
+                      SizedBox(width: isTablet ? 16 : 12),
                       Expanded(
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
                             Text(
-                              "Leave Application",
+                              "Work Day Status",
                               style: TextStyle(
-                                fontWeight: FontWeight.bold,
-                                fontSize: (isTablet ? 20 : 18) * responsiveFontSize,
-                                color: _isDarkMode ? Colors.white : Colors.black87,
-                              ),
-                            ),
-                            const SizedBox(height: 2),
-                            Text(
-                              leaveType,
-                              style: TextStyle(
-                                fontSize: (isTablet ? 14 : 12) * responsiveFontSize,
-                                color: _isDarkMode ? Colors.grey.shade400 : Colors.grey.shade600,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-
-                Container(
-                  padding: EdgeInsets.symmetric(
-                    horizontal: isTablet ? 12 : 10,
-                    vertical: isTablet ? 8 : 6,
-                  ),
-                  decoration: BoxDecoration(
-                    color: statusColor.withOpacity(0.1),
-                    borderRadius: BorderRadius.circular(8),
-                    border: Border.all(color: statusColor.withOpacity(0.3)),
-                  ),
-                  child: Text(
-                    status.toUpperCase(),
-                    style: TextStyle(
-                      color: statusColor,
-                      fontSize: (isTablet ? 14 : 12) * responsiveFontSize,
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
-                ),
-              ],
-            ),
-
-            SizedBox(height: isTablet ? 16 : 12),
-
-            Container(
-              padding: EdgeInsets.all(isTablet ? 16 : 12),
-              decoration: BoxDecoration(
-                color: statusColor.withOpacity(0.05),
-                borderRadius: BorderRadius.circular(12),
-                border: Border.all(color: statusColor.withOpacity(0.1)),
-              ),
-              child: Column(
-                children: [
-                  Row(
-                    children: [
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              "Duration",
-                              style: TextStyle(
-                                fontSize: (isTablet ? 14 : 12) * responsiveFontSize,
+                                fontSize: (isLargeScreen ? 16 : (isTablet ? 14 : 12)) * responsiveFontSize,
                                 color: _isDarkMode ? Colors.grey.shade400 : Colors.grey.shade600,
                                 fontWeight: FontWeight.w500,
                               ),
                             ),
                             const SizedBox(height: 4),
                             Text(
-                              "$totalDays ${totalDays == 1 ? 'day' : 'days'}",
+                              workStatus,
                               style: TextStyle(
-                                fontSize: (isTablet ? 16 : 14) * responsiveFontSize,
+                                fontWeight: FontWeight.bold,
+                                fontSize: (isLargeScreen ? 22 : (isTablet ? 20 : 18)) * responsiveFontSize,
                                 color: _isDarkMode ? Colors.white : Colors.black87,
-                                fontWeight: FontWeight.w600,
                               ),
                             ),
                           ],
                         ),
                       ),
+                    ],
+                  ),
+                ),
+                Container(
+                  padding: EdgeInsets.symmetric(
+                    horizontal: isTablet ? 12 : 10,
+                    vertical: isTablet ? 8 : 6,
+                  ),
+                  decoration: BoxDecoration(
+                    color: _getCleanStatusColor(workStatus).withOpacity(0.1),
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(color: _getCleanStatusColor(workStatus).withOpacity(0.3)),
+                  ),
+                  child: Text(
+                    hasCheckIn ? (hasCheckOut ? "DONE" : "ACTIVE") : "PENDING",
+                    style: TextStyle(
+                      color: _getCleanStatusColor(workStatus),
+                      fontSize: (isTablet ? 12 : 10) * responsiveFontSize,
+                      fontWeight: FontWeight.bold,
+                      letterSpacing: 0.5,
+                    ),
+                  ),
+                ),
+              ],
+            ),
 
-                      if (appliedAt != null)
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.end,
-                            children: [
-                              Text(
-                                "Applied At",
-                                style: TextStyle(
-                                  fontSize: (isTablet ? 14 : 12) * responsiveFontSize,
-                                  color: _isDarkMode ? Colors.grey.shade400 : Colors.grey.shade600,
-                                  fontWeight: FontWeight.w500,
-                                ),
-                              ),
-                              const SizedBox(height: 4),
-                              Text(
-                                DateFormat('h:mm a').format(appliedAt),
-                                style: TextStyle(
-                                  fontSize: (isTablet ? 16 : 14) * responsiveFontSize,
-                                  color: _isDarkMode ? Colors.white : Colors.black87,
-                                  fontWeight: FontWeight.w600,
-                                ),
-                              ),
-                            ],
-                          ),
+            SizedBox(height: isTablet ? 24 : 20),
+
+            // Time Information Section
+            Container(
+              padding: EdgeInsets.all(isLargeScreen ? 24 : (isTablet ? 20 : 16)),
+              decoration: BoxDecoration(
+                color: _isDarkMode ? Colors.white.withOpacity(0.05) : Colors.grey.withOpacity(0.05),
+                borderRadius: BorderRadius.circular(cardBorderRadius),
+                border: Border.all(
+                  color: _isDarkMode ? Colors.white.withOpacity(0.1) : Colors.grey.withOpacity(0.1),
+                ),
+              ),
+              child: Column(
+                children: [
+                  // Check-in and Check-out Times
+                  Row(
+                    children: [
+                      // Check-in Section
+                      Expanded(
+                        child: _buildTimeSection(
+                          icon: Icons.login_rounded,
+                          label: "Check In",
+                          time: checkInTimeStr,
+                          isRecorded: hasCheckIn,
+                          color: Colors.green,
                         ),
+                      ),
+
+                      // Divider
+                      Container(
+                        width: 1,
+                        height: 60,
+                        margin: EdgeInsets.symmetric(horizontal: isTablet ? 20 : 16),
+                        color: _isDarkMode ? Colors.white.withOpacity(0.1) : Colors.grey.withOpacity(0.3),
+                      ),
+
+                      // Check-out Section
+                      Expanded(
+                        child: _buildTimeSection(
+                          icon: Icons.logout_rounded,
+                          label: "Check Out",
+                          time: checkOutTimeStr,
+                          isRecorded: hasCheckOut,
+                          color: Colors.red,
+                        ),
+                      ),
                     ],
                   ),
 
-                  if (reason.isNotEmpty) ...[
-                    SizedBox(height: isTablet ? 12 : 8),
-                    Container(
-                      width: double.infinity,
-                      padding: EdgeInsets.all(isTablet ? 12 : 10),
-                      decoration: BoxDecoration(
-                        color: _isDarkMode ? Colors.white.withOpacity(0.05) : Colors.grey.withOpacity(0.1),
-                        borderRadius: BorderRadius.circular(8),
-                      ),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            "Reason:",
+                  SizedBox(height: isTablet ? 20 : 16),
+
+                  // Location and Duration Info
+                  Container(
+                    padding: EdgeInsets.all(isLargeScreen ? 16 : (isTablet ? 14 : 12)),
+                    decoration: BoxDecoration(
+                      color: _isDarkMode ? Colors.white.withOpacity(0.03) : Colors.grey.withOpacity(0.03),
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: Row(
+                      children: [
+                        Icon(
+                          Icons.location_on_rounded,
+                          size: 16,
+                          color: _isDarkMode ? Colors.grey.shade400 : Colors.grey.shade600,
+                        ),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: Text(
+                            locationName,
                             style: TextStyle(
-                              fontSize: (isTablet ? 14 : 12) * responsiveFontSize,
+                              fontSize: (isLargeScreen ? 16 : (isTablet ? 14 : 12)) * responsiveFontSize,
                               color: _isDarkMode ? Colors.grey.shade400 : Colors.grey.shade600,
                               fontWeight: FontWeight.w500,
                             ),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
                           ),
-                          const SizedBox(height: 4),
-                          Text(
-                            reason,
-                            style: TextStyle(
-                              fontSize: (isTablet ? 16 : 14) * responsiveFontSize,
-                              color: _isDarkMode ? Colors.white : Colors.black87,
-                              fontWeight: FontWeight.w400,
+                        ),
+                        if (hasCheckIn && hasCheckOut)
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                            decoration: BoxDecoration(
+                              color: Colors.blue.withOpacity(0.1),
+                              borderRadius: BorderRadius.circular(6),
+                            ),
+                            child: Text(
+                              "Work Complete",
+                              style: TextStyle(
+                                color: Colors.blue,
+                                fontSize: (isLargeScreen ? 12 : (isTablet ? 11 : 10)) * responsiveFontSize,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                          )
+                        else if (hasCheckIn)
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                            decoration: BoxDecoration(
+                              color: Colors.orange.withOpacity(0.1),
+                              borderRadius: BorderRadius.circular(6),
+                            ),
+                            child: Text(
+                              "In Progress",
+                              style: TextStyle(
+                                color: Colors.orange,
+                                fontSize: (isLargeScreen ? 12 : (isTablet ? 11 : 10)) * responsiveFontSize,
+                                fontWeight: FontWeight.w600,
+                              ),
                             ),
                           ),
-                        ],
-                      ),
-                    ),
-                  ],
-
-                  if (applicationId.isNotEmpty) ...[
-                    SizedBox(height: isTablet ? 8 : 6),
-                    Row(
-                      children: [
-                        Icon(
-                          Icons.tag,
-                          size: 14,
-                          color: _isDarkMode ? Colors.grey.shade500 : Colors.grey.shade500,
-                        ),
-                        const SizedBox(width: 6),
-                        Text(
-                          "ID: ${applicationId.substring(0, 8)}...",
-                          style: TextStyle(
-                            fontSize: (isTablet ? 12 : 11) * responsiveFontSize,
-                            color: _isDarkMode ? Colors.grey.shade500 : Colors.grey.shade500,
-                            fontWeight: FontWeight.w400,
-                          ),
-                        ),
                       ],
                     ),
-                  ],
+                  ),
                 ],
               ),
             ),
+
+            // Action suggestion (if needed)
+            if (!hasCheckIn) ...[
+              SizedBox(height: isTablet ? 20 : 16),
+              Container(
+                padding: EdgeInsets.all(isLargeScreen ? 16 : (isTablet ? 14 : 12)),
+                decoration: BoxDecoration(
+                  color: Colors.blue.withOpacity(0.1),
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(color: Colors.blue.withOpacity(0.2)),
+                ),
+                child: Row(
+                  children: [
+                    Icon(Icons.info_outline, color: Colors.blue, size: 20),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Text(
+                        "Ready to start your work day? Use the Check In button above.",
+                        style: TextStyle(
+                          color: Colors.blue.shade700,
+                          fontSize: (isLargeScreen ? 14 : (isTablet ? 12 : 11)) * responsiveFontSize,
+                          fontWeight: FontWeight.w500,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
           ],
         ),
       ),
     );
   }
 
-  Widget _buildTimeInfo({
+  Widget _buildTimeSection({
     required IconData icon,
     required String label,
     required String time,
+    required bool isRecorded,
     required Color color,
   }) {
-    return Padding(
-      padding: EdgeInsets.symmetric(horizontal: isTablet ? 16 : 12),
-      child: Column(
-        children: [
-          Icon(
-            icon,
-            color: color,
-            size: isTablet ? 24 : 20,
-          ),
-          const SizedBox(height: 4),
-          Text(
-            label,
-            style: TextStyle(
-              fontSize: (isTablet ? 14 : 12) * responsiveFontSize,
-              color: _isDarkMode ? Colors.grey.shade400 : Colors.grey.shade600,
-              fontWeight: FontWeight.w500,
-            ),
-          ),
-          const SizedBox(height: 2),
-          Text(
-            time,
-            style: TextStyle(
-              fontSize: (isTablet ? 16 : 14) * responsiveFontSize,
-              color: _isDarkMode ? Colors.white : Colors.black87,
-              fontWeight: FontWeight.w600,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  // Modern Floating Action Buttons
-  Widget _buildModernFloatingActionButtons() {
     return Column(
-      mainAxisAlignment: MainAxisAlignment.end,
       children: [
-        // 🐛 DEBUG BUTTON (NEW!)
         Container(
-          margin: const EdgeInsets.only(bottom: 16),
-          child: FloatingActionButton(
-            onPressed: () {
-              Navigator.push(
-                context,
-                MaterialPageRoute(
-                  builder: (context) => DebugDataScreen(employeeId: widget.employeeId),
-                ),
-              );
-            },
-            tooltip: 'Debug Local Data',
-            backgroundColor: Colors.purple,
-            heroTag: 'debugButton',
-            elevation: 8,
-            child: const Icon(Icons.bug_report, color: Colors.white),
+          padding: const EdgeInsets.all(8),
+          decoration: BoxDecoration(
+            color: isRecorded ? color.withOpacity(0.1) : Colors.grey.withOpacity(0.1),
+            borderRadius: BorderRadius.circular(8),
+          ),
+          child: Icon(
+            icon,
+            color: isRecorded ? color : Colors.grey,
+            size: isLargeScreen ? 24 : (isTablet ? 22 : 20),
           ),
         ),
-
-        // Locations FAB
-        Container(
-          margin: const EdgeInsets.only(bottom: 16),
-          child: FloatingActionButton(
-            onPressed: () => _showLocationMenu(context),
-            tooltip: 'View All Locations',
-            backgroundColor: Theme.of(context).colorScheme.secondary,
-            heroTag: 'locationsButton',
-            elevation: 8,
-            child: const Icon(Icons.map_outlined, color: Colors.white),
+        const SizedBox(height: 8),
+        Text(
+          label,
+          style: TextStyle(
+            fontSize: (isLargeScreen ? 14 : (isTablet ? 12 : 11)) * responsiveFontSize,
+            color: _isDarkMode ? Colors.grey.shade400 : Colors.grey.shade600,
+            fontWeight: FontWeight.w500,
           ),
         ),
-
-        // Sync FAB (if needed)
-        if (_needsSync && _connectivityService.currentStatus == ConnectionStatus.online)
-          Container(
-            margin: const EdgeInsets.only(bottom: 16),
-            child: FloatingActionButton(
-              onPressed: _manualSync,
-              tooltip: 'Sync Data',
-              backgroundColor: Colors.orange,
-              heroTag: 'syncButton',
-              elevation: 8,
-              child: const Icon(Icons.sync, color: Colors.white),
-            ),
+        const SizedBox(height: 4),
+        Text(
+          time,
+          style: TextStyle(
+            fontSize: (isLargeScreen ? 18 : (isTablet ? 16 : 14)) * responsiveFontSize,
+            color: isRecorded
+                ? (_isDarkMode ? Colors.white : Colors.black87)
+                : (_isDarkMode ? Colors.grey.shade500 : Colors.grey.shade500),
+            fontWeight: FontWeight.bold,
           ),
-
-        // Location refresh FAB
-        FloatingActionButton(
-          onPressed: _checkGeofenceStatus,
-          tooltip: 'Refresh Location',
-          backgroundColor: Theme.of(context).colorScheme.primary,
-          heroTag: 'locationButton',
-          elevation: 8,
-          child: const Icon(Icons.refresh_rounded, color: Colors.white),
         ),
       ],
     );
   }
 
-  // Helper methods
+  Color _getCleanStatusColor(String status) {
+    switch (status.toLowerCase()) {
+      case 'completed':
+      case 'done':
+        return Colors.green;
+      case 'in progress':
+      case 'active':
+        return Colors.blue;
+      case 'not started':
+      case 'pending':
+        return Colors.grey;
+      default:
+        return Colors.grey;
+    }
+  }
+
+  IconData _getStatusIcon(String status) {
+    switch (status.toLowerCase()) {
+      case 'completed':
+      case 'done':
+        return Icons.check_circle_rounded;
+      case 'in progress':
+      case 'active':
+        return Icons.play_circle_rounded;
+      case 'not started':
+      case 'pending':
+        return Icons.schedule_rounded;
+      default:
+        return Icons.schedule_rounded;
+    }
+  }
+
+
+
+
+
+
+
+
+
+  // Helper Methods for Colors
   Color _getStatusColor(String status) {
     switch (status.toLowerCase()) {
       case 'completed':
@@ -2471,7 +2579,149 @@ class _DashboardViewState extends State<DashboardView>
     }
   }
 
-  // All existing methods - keeping functionality intact
+  // Leave Service Initialization
+  void _initializeLeaveService() {
+    try {
+      final repository = getIt<LeaveApplicationRepository>();
+      final connectivityService = getIt<ConnectivityService>();
+
+      _leaveService = LeaveApplicationService(
+        repository: repository,
+        connectivityService: connectivityService,
+      );
+
+      debugPrint("Leave service initialized successfully");
+    } catch (e) {
+      debugPrint("Error initializing leave service: $e");
+    }
+  }
+
+  Future<void> _loadPendingLeaveApprovals() async {
+    if (!_isLineManager) return;
+
+    try {
+      setState(() => _isLoadingLeaveData = true);
+
+      final pendingApplications = await _leaveService.getPendingApplicationsForManager(widget.employeeId);
+
+      if (mounted) {
+        setState(() {
+          _pendingLeaveApprovals = pendingApplications.length;
+          _isLoadingLeaveData = false;
+        });
+      }
+
+      debugPrint("Loaded ${_pendingLeaveApprovals} pending leave approvals");
+    } catch (e) {
+      if (mounted) {
+        setState(() => _isLoadingLeaveData = false);
+      }
+      debugPrint("Error loading pending leave approvals: $e");
+    }
+  }
+
+  // Activity Fetching - Optimized
+  Future<void> _fetchTodaysActivity() async {
+    try {
+      List<Map<String, dynamic>> todaysActivity = [];
+      String today = DateFormat('yyyy-MM-dd').format(DateTime.now());
+
+      bool hasAttendance = false;
+      bool hasLeaveApplication = false;
+
+      if (_connectivityService.currentStatus == ConnectionStatus.online) {
+        try {
+          // Fetch attendance
+          DocumentSnapshot attendanceDoc = await FirebaseFirestore.instance
+              .collection('employees')
+              .doc(widget.employeeId)
+              .collection('attendance')
+              .doc(today)
+              .get()
+              .timeout(const Duration(seconds: 8));
+
+          if (attendanceDoc.exists) {
+            Map<String, dynamic> data = attendanceDoc.data() as Map<String, dynamic>;
+            todaysActivity.add({
+              'type': 'attendance',
+              'date': data['date'] ?? today,
+              'checkIn': data['checkIn'],
+              'checkOut': data['checkOut'],
+              'workStatus': data['workStatus'] ?? 'In Progress',
+              'totalHours': data['totalHours'],
+              'location': data['location'] ?? 'Unknown',
+              'isSynced': true,
+            });
+            hasAttendance = true;
+            debugPrint("Found today's attendance record");
+          }
+        } catch (e) {
+          debugPrint("Error fetching today's attendance: $e");
+        }
+
+        // Fetch leave applications
+        try {
+          QuerySnapshot leaveSnapshot = await FirebaseFirestore.instance
+              .collection('leave_applications')
+              .where('employeeId', isEqualTo: widget.employeeId)
+              .where('applicationDate', isEqualTo: today)
+              .get()
+              .timeout(const Duration(seconds: 8));
+
+          for (var doc in leaveSnapshot.docs) {
+            Map<String, dynamic> data = doc.data() as Map<String, dynamic>;
+            todaysActivity.add({
+              'type': 'leave',
+              'applicationId': doc.id,
+              'date': today,
+              'leaveType': data['leaveType'] ?? 'Leave',
+              'fromDate': data['fromDate'],
+              'toDate': data['toDate'],
+              'totalDays': data['totalDays'] ?? 0,
+              'status': data['status'] ?? 'pending',
+              'reason': data['reason'] ?? '',
+              'appliedAt': data['appliedAt'],
+              'isSynced': true,
+            });
+            hasLeaveApplication = true;
+            debugPrint("Found today's leave application");
+          }
+        } catch (e) {
+          debugPrint("Error fetching today's leave applications: $e");
+        }
+      } else {
+        // Offline mode
+        final localAttendance = await _attendanceRepository.getTodaysAttendance(widget.employeeId);
+        if (localAttendance != null) {
+          todaysActivity.add(localAttendance.rawData);
+          hasAttendance = true;
+          debugPrint("Using local attendance data");
+        }
+      }
+
+      if (mounted) {
+        setState(() {
+          _todaysActivity = todaysActivity;
+          _hasTodaysAttendance = hasAttendance;
+          _hasTodaysLeaveApplication = hasLeaveApplication;
+          _isAbsentToday = !hasAttendance && !hasLeaveApplication && !_isCheckedIn;
+        });
+      }
+
+      debugPrint("Today's activity loaded: ${todaysActivity.length} items");
+
+    } catch (e) {
+      debugPrint("Error fetching today's activity: $e");
+      if (mounted) {
+        setState(() {
+          _todaysActivity = [];
+          _isAbsentToday = !_isCheckedIn;
+        });
+      }
+    }
+  }
+
+  // Geofence Status Check - Optimized
   Future<void> _checkGeofenceStatus() async {
     if (!mounted) return;
 
@@ -2487,53 +2737,41 @@ class _DashboardViewState extends State<DashboardView>
       String locationType = status['locationType'] as String? ?? 'unknown';
 
       if (locationType == 'polygon') {
-        debugPrint("Using polygon result for UI update");
         final polygonLocation = status['location'] as PolygonLocationModel?;
 
-        setState(() {
-          _isWithinGeofence = withinGeofence;
-          _distanceToOffice = distance;
+        if (mounted) {
+          setState(() {
+            _isWithinGeofence = withinGeofence;
+            _distanceToOffice = distance;
 
-          if (polygonLocation != null) {
-            _nearestLocation = LocationModel(
-              id: polygonLocation.id,
-              name: polygonLocation.name,
-              address: polygonLocation.description,
-              latitude: polygonLocation.centerLatitude,
-              longitude: polygonLocation.centerLongitude,
-              radius: 0,
-              isActive: polygonLocation.isActive,
-            );
+            if (polygonLocation != null) {
+              _nearestLocation = LocationModel(
+                id: polygonLocation.id,
+                name: "${polygonLocation.name} (Polygon Boundary)",
+                address: polygonLocation.description,
+                latitude: polygonLocation.centerLatitude,
+                longitude: polygonLocation.centerLongitude,
+                radius: 0,
+                isActive: polygonLocation.isActive,
+              );
+            } else {
+              _nearestLocation = null;
+            }
 
-            _nearestLocation = LocationModel(
-              id: _nearestLocation!.id,
-              name: "${_nearestLocation!.name} (Polygon Boundary)",
-              address: _nearestLocation!.address,
-              latitude: _nearestLocation!.latitude,
-              longitude: _nearestLocation!.longitude,
-              radius: _nearestLocation!.radius,
-              isActive: _nearestLocation!.isActive,
-            );
-          } else {
-            _nearestLocation = null;
-          }
-
-          _isCheckingLocation = false;
-        });
-
-        debugPrint("Location check result (polygon): within=$withinGeofence, distance=${distance?.toStringAsFixed(1) ?? 'unknown'}m");
+            _isCheckingLocation = false;
+          });
+        }
       } else {
-        debugPrint("Using circular result for UI update");
         final circularLocation = status['location'] as LocationModel?;
 
-        setState(() {
-          _isWithinGeofence = withinGeofence;
-          _nearestLocation = circularLocation;
-          _distanceToOffice = distance;
-          _isCheckingLocation = false;
-        });
-
-        debugPrint("Location check result (circular): within=$withinGeofence, distance=${distance?.toStringAsFixed(1) ?? 'unknown'}m");
+        if (mounted) {
+          setState(() {
+            _isWithinGeofence = withinGeofence;
+            _nearestLocation = circularLocation;
+            _distanceToOffice = distance;
+            _isCheckingLocation = false;
+          });
+        }
       }
 
       if (mounted) {
@@ -2582,24 +2820,353 @@ class _DashboardViewState extends State<DashboardView>
     }
   }
 
-  // FIXED: dashboard_view.dart - _fetchUserData method
-// Replace the existing _fetchUserData method with this corrected version
+  // Work Schedule Methods - Enhanced
+  Future<void> _fetchWorkSchedule() async {
+    if (_userData == null) return;
 
-  Future<void> _fetchUserData() async {
-    setState(() => _isLoading = true);
+    if (mounted) {
+      setState(() => _isLoadingSchedule = true);
+    }
 
     try {
-      debugPrint("=== FETCHING USER DATA (PROPER DATABASE APPROACH) ===");
+      debugPrint("=== FETCHING WORK SCHEDULE ===");
+
+      String? employeePin = _userData!['pin']?.toString();
+      WorkSchedule? schedule = await WorkScheduleService.getEmployeeWorkSchedule(
+          widget.employeeId,
+          employeePin
+      );
+
+      if (mounted) {
+        setState(() {
+          _workSchedule = schedule;
+          _isLoadingSchedule = false;
+        });
+
+        if (schedule != null) {
+          debugPrint("✅ Work schedule loaded successfully");
+          _setupCheckOutReminder();
+          _updateCurrentTimingMessage();
+        } else {
+          debugPrint("⚠️ No work schedule found");
+        }
+      }
+    } catch (e) {
+      debugPrint("❌ Error fetching work schedule: $e");
+      if (mounted) {
+        setState(() => _isLoadingSchedule = false);
+      }
+    }
+  }
+
+  void _setupTimingChecks() {
+    Timer.periodic(const Duration(minutes: 1), (timer) {
+      if (!mounted) {
+        timer.cancel();
+        return;
+      }
+      _updateCurrentTimingMessage();
+    });
+  }
+
+  void _updateCurrentTimingMessage() {
+    if (_workSchedule == null) return;
+
+    DateTime now = DateTime.now();
+    String message = "";
+    Color messageColor = Colors.blue;
+
+    try {
+      if (WorkScheduleService.isInBreakTime(_workSchedule!, now)) {
+        message = "Break Time: ${_workSchedule!.breakStartTime} - ${_workSchedule!.breakEndTime}";
+        messageColor = Colors.orange;
+      } else {
+        DateTime workStart = _parseTimeForToday(_workSchedule!.startTime);
+        DateTime workEnd = _parseTimeForToday(_workSchedule!.endTime);
+
+        if (now.isBefore(workStart)) {
+          Duration timeUntilWork = workStart.difference(now);
+          message = "Work starts in ${_formatDuration(timeUntilWork)} at ${_workSchedule!.startTime}";
+          messageColor = Colors.blue;
+        } else if (now.isAfter(workEnd)) {
+          message = "Work day ended at ${_workSchedule!.endTime}";
+          messageColor = Colors.green;
+        } else if (_isCheckedIn) {
+          Duration timeUntilEnd = workEnd.difference(now);
+          message = "Work ends in ${_formatDuration(timeUntilEnd)} at ${_workSchedule!.endTime}";
+          messageColor = Colors.green;
+        } else {
+          message = "Work hours active: ${_workSchedule!.startTime} - ${_workSchedule!.endTime}";
+          messageColor = Colors.red;
+        }
+      }
+
+      if (mounted && _currentTimingMessage != message) {
+        setState(() {
+          _currentTimingMessage = message;
+          _timingMessageColor = messageColor;
+        });
+      }
+    } catch (e) {
+      debugPrint("Error updating timing message: $e");
+    }
+  }
+
+  void _setupCheckOutReminder() {
+    if (_workSchedule == null || !_isCheckedIn) return;
+
+    _checkOutReminderTimer?.cancel();
+    _hasShownCheckOutReminder = false;
+
+    _checkOutReminderTimer = WorkScheduleService.setupCheckOutReminder(
+      _workSchedule!,
+      _showCheckOutReminder,
+    );
+  }
+
+  void _showCheckOutReminder() {
+    if (!mounted || _hasShownCheckOutReminder || !_isCheckedIn) return;
+
+    _hasShownCheckOutReminder = true;
+
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => AlertDialog(
+        backgroundColor: _isDarkMode ? const Color(0xFF1E293B) : Colors.white,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(cardBorderRadius)),
+        title: Container(
+          padding: EdgeInsets.all(containerSpacing),
+          decoration: BoxDecoration(
+            gradient: const LinearGradient(
+              colors: [Colors.orange, Colors.red],
+              begin: Alignment.centerLeft,
+              end: Alignment.centerRight,
+            ),
+            borderRadius: BorderRadius.circular(cardBorderRadius - 4),
+          ),
+          child: Row(
+            children: [
+              const Icon(Icons.access_time, color: Colors.white, size: 32),
+              SizedBox(width: containerSpacing * 0.75),
+              Expanded(
+                child: Text(
+                  "Check-Out Reminder!",
+                  style: TextStyle(
+                    color: Colors.white,
+                    fontSize: (isLargeScreen ? 22 : (isTablet ? 18 : 16)) * responsiveFontSize,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(
+              "Your work day ends at ${_workSchedule?.endTime ?? 'unknown time'}.",
+              style: TextStyle(
+                fontSize: (isLargeScreen ? 18 : (isTablet ? 16 : 14)) * responsiveFontSize,
+                color: _isDarkMode ? Colors.white : Colors.black87,
+              ),
+            ),
+            SizedBox(height: containerSpacing),
+            Container(
+              padding: EdgeInsets.all(containerSpacing),
+              decoration: BoxDecoration(
+                color: Colors.orange.withOpacity(0.1),
+                borderRadius: BorderRadius.circular(cardBorderRadius - 4),
+                border: Border.all(color: Colors.orange.withOpacity(0.3)),
+              ),
+              child: Row(
+                children: [
+                  const Icon(Icons.info, color: Colors.orange, size: 24),
+                  SizedBox(width: containerSpacing * 0.75),
+                  Expanded(
+                    child: Text(
+                      "Don't forget to check out when leaving the office!",
+                      style: TextStyle(
+                        color: Colors.orange.shade800,
+                        fontWeight: FontWeight.w600,
+                        fontSize: (isLargeScreen ? 16 : (isTablet ? 14 : 12)) * responsiveFontSize,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: Text("Got it!", style: TextStyle(color: Colors.grey.shade600)),
+          ),
+          ElevatedButton.icon(
+            icon: const Icon(Icons.logout),
+            label: const Text("Check Out Now"),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.orange,
+              foregroundColor: Colors.white,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+            ),
+            onPressed: () {
+              Navigator.pop(context);
+              _handleCheckInOut();
+            },
+          ),
+        ],
+      ),
+    );
+  }
+
+  Future<bool> _showTimingValidationDialog(ScheduleCheckResult result) async {
+    if (result.isOnTime) {
+      return true;
+    }
+
+    return await showDialog<bool>(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => AlertDialog(
+        backgroundColor: _isDarkMode ? const Color(0xFF1E293B) : Colors.white,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(cardBorderRadius)),
+        title: Row(
+          children: [
+            Icon(
+              result.isLate ? Icons.schedule : Icons.warning,
+              color: result.isLate ? Colors.red : Colors.orange,
+              size: 32,
+            ),
+            SizedBox(width: containerSpacing * 0.75),
+            Expanded(
+              child: Text(
+                result.isLate
+                    ? "Late ${result.scheduleType == ScheduleEventType.checkIn ? 'Check-In' : 'Check-Out'}"
+                    : "Early Check-Out",
+                style: TextStyle(
+                  color: result.isLate ? Colors.red : Colors.orange,
+                  fontWeight: FontWeight.bold,
+                  fontSize: (isLargeScreen ? 22 : (isTablet ? 18 : 16)) * responsiveFontSize,
+                ),
+              ),
+            ),
+          ],
+        ),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              result.message,
+              style: TextStyle(
+                fontSize: (isLargeScreen ? 18 : (isTablet ? 16 : 14)) * responsiveFontSize,
+                color: _isDarkMode ? Colors.white : Colors.black87,
+              ),
+            ),
+            SizedBox(height: containerSpacing),
+            Container(
+              padding: EdgeInsets.all(containerSpacing),
+              decoration: BoxDecoration(
+                color: (result.isLate ? Colors.red : Colors.orange).withOpacity(0.1),
+                borderRadius: BorderRadius.circular(cardBorderRadius - 4),
+                border: Border.all(
+                  color: (result.isLate ? Colors.red : Colors.orange).withOpacity(0.3),
+                ),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      Icon(
+                        Icons.schedule,
+                        color: result.isLate ? Colors.red : Colors.orange,
+                        size: 20,
+                      ),
+                      const SizedBox(width: 8),
+                      Text(
+                        "Schedule Details:",
+                        style: TextStyle(
+                          fontWeight: FontWeight.bold,
+                          color: (result.isLate ? Colors.red : Colors.orange).shade800,
+                          fontSize: (isLargeScreen ? 16 : (isTablet ? 14 : 12)) * responsiveFontSize,
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(width: 8),
+                  Text(
+                    "Expected: ${DateFormat('h:mm a').format(result.expectedTime)}",
+                    style: TextStyle(
+                      color: (result.isLate ? Colors.red : Colors.orange).shade700,
+                      fontSize: (isLargeScreen ? 16 : (isTablet ? 14 : 12)) * responsiveFontSize,
+                    ),
+                  ),
+                  Text(
+                    "Actual: ${DateFormat('h:mm a').format(result.actualTime)}",
+                    style: TextStyle(
+                      color: (result.isLate ? Colors.red : Colors.orange).shade700,
+                      fontSize: (isLargeScreen ? 16 : (isTablet ? 14 : 12)) * responsiveFontSize,
+                    ),
+                  ),
+                  if (_workSchedule?.workTiming != null)
+                    Text(
+                      "Work Hours: ${_workSchedule!.workTiming}",
+                      style: TextStyle(
+                        color: (result.isLate ? Colors.red : Colors.orange).shade700,
+                        fontSize: (isLargeScreen ? 14 : (isTablet ? 12 : 11)) * responsiveFontSize,
+                      ),
+                    ),
+                ],
+              ),
+            ),
+            SizedBox(height: containerSpacing),
+            Text(
+              "Do you want to proceed with ${result.scheduleType == ScheduleEventType.checkIn ? 'check-in' : 'check-out'}?",
+              style: TextStyle(
+                fontSize: (isLargeScreen ? 16 : (isTablet ? 14 : 12)) * responsiveFontSize,
+                color: _isDarkMode ? Colors.grey.shade400 : Colors.grey.shade600,
+              ),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: Text("Cancel", style: TextStyle(color: Colors.grey.shade600)),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(context, true),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: result.isLate ? Colors.red : Colors.orange,
+              foregroundColor: Colors.white,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+            ),
+            child: const Text("Proceed"),
+          ),
+        ],
+      ),
+    ) ?? false;
+  }
+
+  // Complete User Data Fetching Implementation
+  Future<void> _fetchUserData() async {
+    if (mounted) {
+      setState(() => _isLoading = true);
+    }
+
+    try {
+      debugPrint("=== FETCHING USER DATA (COMPLETE WITH WORK SCHEDULE) ===");
       debugPrint("Dashboard widget.employeeId: ${widget.employeeId}");
       debugPrint("Connectivity: ${_connectivityService.currentStatus}");
 
-      // ✅ STEP 1: Get cached data for immediate display
       Map<String, dynamic>? localData = await _getUserDataLocally();
 
-      if (localData != null) {
+      if (localData != null && mounted) {
         debugPrint("✅ Found local cached data with ${localData.keys.length} fields");
-
-        // Set initial data but FORCE fresh fetch for overtime data
         setState(() {
           _userData = localData;
           _isLoading = false;
@@ -2607,26 +3174,23 @@ class _DashboardViewState extends State<DashboardView>
         _validateFaceDataInBackground();
       }
 
-      // ✅ STEP 2: ALWAYS try to fetch fresh data if online (ignore auth for now)
       if (_connectivityService.currentStatus == ConnectionStatus.online) {
-        debugPrint("🌐 FORCING FRESH DATA FETCH FROM FIRESTORE (ignoring auth for overtime)");
+        debugPrint("🌐 FORCING FRESH DATA FETCH FROM FIRESTORE");
 
         try {
           Map<String, dynamic> combinedData = localData ?? {};
 
-          // ✅ Force fetch employee data
           DocumentSnapshot employeeDoc = await FirebaseFirestore.instance
               .collection('employees')
               .doc(widget.employeeId)
               .get()
-              .timeout(Duration(seconds: 10));
+              .timeout(const Duration(seconds: 10));
 
           if (employeeDoc.exists) {
             Map<String, dynamic> employeeData = employeeDoc.data() as Map<String, dynamic>;
             combinedData.addAll(employeeData);
-            debugPrint("✅ FORCED: Fresh employee data fetched (${employeeData.keys.length} fields)");
+            debugPrint("✅ FRESH: Employee data fetched (${employeeData.keys.length} fields)");
 
-            // ✅ Force fetch MasterSheet data
             String? employeePin = employeeData['pin']?.toString();
             if (employeePin != null && employeePin.isNotEmpty) {
               try {
@@ -2638,88 +3202,110 @@ class _DashboardViewState extends State<DashboardView>
                 int pinNumber = int.parse(masterSheetEmployeeId);
                 masterSheetEmployeeId = 'EMP${pinNumber.toString().padLeft(4, '0')}';
 
+                debugPrint("🔍 Fetching MasterSheet data for: $masterSheetEmployeeId");
+
                 DocumentSnapshot masterSheetDoc = await FirebaseFirestore.instance
                     .collection('MasterSheet')
                     .doc('Employee-Data')
                     .collection('employees')
                     .doc(masterSheetEmployeeId)
                     .get()
-                    .timeout(Duration(seconds: 5));
+                    .timeout(const Duration(seconds: 5));
 
                 if (masterSheetDoc.exists) {
                   Map<String, dynamic> masterSheetData = masterSheetDoc.data() as Map<String, dynamic>;
                   combinedData.addAll(masterSheetData);
-                  debugPrint("✅ FORCED: MasterSheet data fetched (${masterSheetData.keys.length} fields)");
+                  debugPrint("✅ FRESH: MasterSheet data fetched (${masterSheetData.keys.length} fields)");
+
+                  debugPrint("📅 Work Schedule Fields from MasterSheet:");
+                  debugPrint("  - workTiming: ${masterSheetData['workTiming']}");
+                  debugPrint("  - startTime: ${masterSheetData['startTime']}");
+                  debugPrint("  - breakStartTime: ${masterSheetData['breakStartTime']}");
+                  debugPrint("  - breakEndTime: ${masterSheetData['breakEndTime']}");
+                } else {
+                  debugPrint("⚠️ No MasterSheet document found for: $masterSheetEmployeeId");
                 }
               } catch (masterSheetError) {
                 debugPrint("⚠️ Could not fetch MasterSheet data: $masterSheetError");
               }
+            } else {
+              debugPrint("⚠️ No employee PIN found for MasterSheet lookup");
             }
 
-            // ✅ CRITICAL: Now standardize with REAL data (no hardcoding)
             _standardizeOvertimeFieldsFromDatabase(combinedData);
 
-            // Save and update
             await _saveUserDataLocally(combinedData);
-            setState(() {
-              _userData = combinedData;
-              _isLoading = false;
-            });
+            if (mounted) {
+              setState(() {
+                _userData = combinedData;
+                _isLoading = false;
+              });
+            }
 
-            debugPrint("✅ FORCED: User data updated with REAL database values");
+            debugPrint("✅ COMPLETE: User data updated with database values");
 
           } else {
             debugPrint("⚠️ No employee document found in Firestore");
             if (localData != null) {
-              // Even for local data, apply proper standardization
               _standardizeOvertimeFieldsFromDatabase(localData);
+              if (mounted) {
+                setState(() {
+                  _userData = localData;
+                  _isLoading = false;
+                });
+              }
+            }
+          }
+
+        } catch (e) {
+          debugPrint("⚠️ Error in online data fetch: $e");
+          if (localData != null) {
+            _standardizeOvertimeFieldsFromDatabase(localData);
+            if (mounted) {
               setState(() {
                 _userData = localData;
                 _isLoading = false;
               });
             }
           }
-
-        } catch (e) {
-          debugPrint("⚠️ Error in forced fetch: $e");
-          if (localData != null) {
-            _standardizeOvertimeFieldsFromDatabase(localData);
+        }
+      } else {
+        debugPrint("📱 OFFLINE MODE: Using cached data");
+        if (localData != null) {
+          _standardizeOvertimeFieldsFromDatabase(localData);
+          if (mounted) {
             setState(() {
               _userData = localData;
               _isLoading = false;
             });
           }
         }
-      } else {
-        // Offline - still standardize local data properly
-        if (localData != null) {
-          _standardizeOvertimeFieldsFromDatabase(localData);
-          setState(() {
-            _userData = localData;
-            _isLoading = false;
-          });
-        }
       }
 
       _debugOvertimeAccessFromDatabase();
+      _debugUserDataSummary();
 
     } catch (e) {
       debugPrint("❌ Critical error in _fetchUserData: $e");
-      setState(() => _isLoading = false);
+      if (mounted) {
+        setState(() => _isLoading = false);
+      }
     }
 
     await _checkLineManagerStatus();
+
     debugPrint("=== FETCH USER DATA COMPLETE ===");
+
+    debugPrint("🕐 Starting work schedule fetch...");
+    _fetchWorkSchedule();
   }
 
-// ✅ HELPER: Standardize overtime access fields across platforms
   void _standardizeOvertimeFieldsFromDatabase(Map<String, dynamic> data) {
-    debugPrint("🔧 STANDARDIZING OVERTIME FIELDS (DATABASE ONLY - FIXED)");
+    debugPrint("🔧 STANDARDIZING OVERTIME FIELDS (DATABASE ONLY)");
 
-    // ✅ FIXED: Added missing 'hasOvertimeApprovalAccess' field
     List<String> accessFields = [
       'hasOvertimeAccess',
-      'hasOvertimeApprovalAccess',    // ← FIXED: Added this missing field!
+      'hasOvertimeApprovalAccess',
       'overtime_access',
       'overtimeAccess',
       'canRequestOvertime',
@@ -2736,7 +3322,6 @@ class _DashboardViewState extends State<DashboardView>
       'overtimeApprovedDate',
     ];
 
-    // Check for access in any field
     bool hasAccess = false;
     String? foundAccessField;
     for (String field in accessFields) {
@@ -2749,7 +3334,6 @@ class _DashboardViewState extends State<DashboardView>
       }
     }
 
-    // Check for granted date in any field
     bool hasGrantedDate = false;
     dynamic grantedValue;
     String? foundGrantedField;
@@ -2764,15 +3348,13 @@ class _DashboardViewState extends State<DashboardView>
       }
     }
 
-    // Final decision - based on explicit database fields
     bool finalOvertimeAccess = hasAccess || hasGrantedDate;
 
-    debugPrint("  📊 DATABASE-ONLY ACCESS DECISION (FIXED):");
+    debugPrint("  📊 DATABASE ACCESS DECISION:");
     debugPrint("    - hasAccess: $hasAccess ${foundAccessField != null ? '($foundAccessField)' : ''}");
     debugPrint("    - hasGrantedDate: $hasGrantedDate ${foundGrantedField != null ? '($foundGrantedField)' : ''}");
     debugPrint("    - FINAL RESULT: $finalOvertimeAccess");
 
-    // Set standardized fields
     data['hasOvertimeAccess'] = finalOvertimeAccess;
     data['standardizedOvertimeAccess'] = finalOvertimeAccess;
 
@@ -2781,14 +3363,8 @@ class _DashboardViewState extends State<DashboardView>
     }
 
     data['overtimeAccessSource'] = foundAccessField ?? foundGrantedField ?? 'none';
-
-    debugPrint("  🎯 FIXED DATABASE RESULT: $finalOvertimeAccess");
   }
 
-
-
-
-// ✅ FIXED: Database-focused debug
   void _debugOvertimeAccessFromDatabase() {
     if (_userData == null) return;
 
@@ -2803,7 +3379,6 @@ class _DashboardViewState extends State<DashboardView>
     debugPrint("standardizedOvertimeAccess: ${_userData!['standardizedOvertimeAccess']}");
     debugPrint("overtimeAccessSource: ${_userData!['overtimeAccessSource']}");
 
-    // Show ALL overtime-related fields from database
     List<String> allFields = _userData!.keys.where((key) =>
     key.toLowerCase().contains('overtime') ||
         key.toLowerCase().contains('access')).toList();
@@ -2813,7 +3388,6 @@ class _DashboardViewState extends State<DashboardView>
       debugPrint("  $field: ${_userData![field]}");
     }
 
-    // ✅ DIRECT DATABASE CHECK - NO METHOD CALLS
     bool hasAccess = _userData!['hasOvertimeAccess'] == true;
     bool hasGrantedAt = _userData!['overtimeAccessGrantedAt'] != null;
     bool hasStandardized = _userData!['standardizedOvertimeAccess'] == true;
@@ -2826,64 +3400,37 @@ class _DashboardViewState extends State<DashboardView>
     debugPrint("  - standardizedOvertimeAccess: $hasStandardized");
     debugPrint("  - DATABASE RESULT: $databaseResult");
 
-    debugPrint("--- FINAL DATABASE DECISION ---");
-    debugPrint("OVERTIME ACCESS FROM DATABASE: $databaseResult");
     debugPrint("=== END DATABASE DEBUG ===");
   }
 
-// ✅ HELPER: Comprehensive overtime access debugging
-  void _debugOvertimeAccess() {
+  void _debugUserDataSummary() {
     if (_userData == null) return;
 
-    debugPrint("=== 🔍 COMPREHENSIVE OVERTIME ACCESS DEBUG ===");
-    debugPrint("Platform: ${Platform.isIOS ? 'iOS' : 'Android'}");
+    debugPrint("=== 📊 USER DATA SUMMARY ===");
     debugPrint("Employee ID: ${widget.employeeId}");
     debugPrint("Employee PIN: ${_userData!['pin']}");
     debugPrint("Employee Name: ${_userData!['name']}");
     debugPrint("Department: ${_userData!['department'] ?? _userData!['Department']}");
-    debugPrint("Role/Designation: ${_userData!['role'] ?? _userData!['designation']}");
+    debugPrint("Designation: ${_userData!['designation'] ?? _userData!['title']}");
 
-    debugPrint("--- OVERTIME ACCESS FIELDS ---");
-    debugPrint("hasOvertimeAccess: ${_userData!['hasOvertimeAccess']} (${_userData!['hasOvertimeAccess'].runtimeType})");
-    debugPrint("overtimeAccessGrantedAt: ${_userData!['overtimeAccessGrantedAt']} (${_userData!['overtimeAccessGrantedAt'].runtimeType})");
+    debugPrint("--- WORK SCHEDULE FIELDS ---");
+    debugPrint("workTiming: ${_userData!['workTiming']}");
+    debugPrint("startTime: ${_userData!['startTime']}");
+    debugPrint("breakStartTime: ${_userData!['breakStartTime']}");
+    debugPrint("breakEndTime: ${_userData!['breakEndTime']}");
+
+    debugPrint("--- OVERTIME ACCESS ---");
+    debugPrint("hasOvertimeAccess: ${_userData!['hasOvertimeAccess']}");
     debugPrint("standardizedOvertimeAccess: ${_userData!['standardizedOvertimeAccess']}");
-    debugPrint("overtimeAccessSource: ${_userData!['overtimeAccessSource']}");
 
-    // Check all possible overtime-related fields
-    List<String> allPossibleFields = [
-      'hasOvertimeAccess', 'overtime_access', 'overtimeAccess', 'canRequestOvertime',
-      'has_overtime_access', 'allowOvertimeRequests', 'overtimeAccessGrantedAt',
-      'overtime_access_granted_at', 'overtimeGrantedAt', 'granted_at', 'accessGrantedDate'
-    ];
+    debugPrint("--- DATA SOURCES ---");
+    debugPrint("Total fields: ${_userData!.keys.length}");
+    debugPrint("Has image: ${_userData!['image'] != null}");
+    debugPrint("Has PIN: ${_userData!['pin'] != null}");
 
-    debugPrint("--- ALL POSSIBLE OVERTIME FIELDS ---");
-    for (String field in allPossibleFields) {
-      if (_userData!.containsKey(field)) {
-        debugPrint("  $field: ${_userData![field]} (${_userData![field].runtimeType})");
-      }
-    }
-
-    // Test the UI condition
-    bool uiCondition1 = _userData!['hasOvertimeAccess'] == true;
-    bool uiCondition2 = _userData!['overtimeAccessGrantedAt'] != null;
-    bool shouldShowOvertime = uiCondition1 || uiCondition2;
-
-    debugPrint("--- UI CONDITION RESULTS ---");
-    debugPrint("hasOvertimeAccess == true: $uiCondition1");
-    debugPrint("overtimeAccessGrantedAt != null: $uiCondition2");
-    debugPrint("SHOULD SHOW OVERTIME CARD: $shouldShowOvertime");
-
-    // Test the robust condition
-    bool robustCondition = _userData!['standardizedOvertimeAccess'] == true;
-    debugPrint("ROBUST CONDITION RESULT: $robustCondition");
-
-    debugPrint("=== END OVERTIME ACCESS DEBUG ===");
+    debugPrint("=== END USER DATA SUMMARY ===");
   }
 
-// ✅ HELPER: Robust overtime access check (add this method to your class)
-
-
-// ✅ HELPER: Background validation of face data (unchanged)
   Future<void> _validateFaceDataInBackground() async {
     try {
       debugPrint("🔍 Validating face data in background...");
@@ -2911,52 +3458,6 @@ class _DashboardViewState extends State<DashboardView>
     }
   }
 
-
-
-  // ✅ NEW: Background validation of face data
-
-
-  // ✅ NEW: Force face data recovery (for manual trigger)
-  Future<void> _forceFaceDataRecovery() async {
-    try {
-      debugPrint("🔄 Forcing face data recovery...");
-
-      setState(() => _isLoading = true);
-
-      final secureFaceStorage = getIt<SecureFaceStorageService>();
-      bool recovered = await secureFaceStorage.downloadFaceDataFromCloud(widget.employeeId);
-
-      setState(() => _isLoading = false);
-
-      if (recovered) {
-        CustomSnackBar.successSnackBar("Face data successfully recovered from cloud");
-      } else {
-        CustomSnackBar.errorSnackBar("Failed to recover face data. Please check your connection.");
-      }
-
-    } catch (e) {
-      setState(() => _isLoading = false);
-      CustomSnackBar.errorSnackBar("Error recovering face data: $e");
-    }
-  }
-
-// ✅ NEW: Helper method to redirect to login
-  void _redirectToLogin() {
-    setState(() => _isLoading = false);
-
-    Future.delayed(Duration(milliseconds: 500), () {
-      if (mounted) {
-        Navigator.of(context).pushAndRemoveUntil(
-          MaterialPageRoute(
-            builder: (context) => const PinEntryView(),
-          ),
-              (route) => false,
-        );
-      }
-    });
-  }
-
-// ✅ NEW: Separate line manager checking logic
   Future<void> _checkLineManagerStatus() async {
     try {
       String? employeePin = _userData?['pin']?.toString() ?? widget.employeeId;
@@ -2990,20 +3491,24 @@ class _DashboardViewState extends State<DashboardView>
         }
       }
 
-      setState(() {
-        _isLineManager = isLineManager;
-        _lineManagerDocumentId = lineManagerDocId;
-        _lineManagerData = foundLineManagerData;
-      });
+      if (mounted) {
+        setState(() {
+          _isLineManager = isLineManager;
+          _lineManagerDocumentId = lineManagerDocId;
+          _lineManagerData = foundLineManagerData;
+        });
+      }
 
       _handleLineManagerStatusDetermined(_isLineManager);
 
     } catch (e) {
       debugPrint("❌ ERROR checking line manager status: $e");
-      setState(() {
-        _isLineManager = false;
-        _lineManagerData = null;
-      });
+      if (mounted) {
+        setState(() {
+          _isLineManager = false;
+          _lineManagerData = null;
+        });
+      }
     }
   }
 
@@ -3021,19 +3526,9 @@ class _DashboardViewState extends State<DashboardView>
       await prefs.setString('user_data_${widget.employeeId}', jsonEncode(dataCopy));
       await prefs.setString('user_name_${widget.employeeId}', userData['name'] ?? '');
 
-      debugPrint("User data saved locally for ID: ${widget.employeeId}");
+      debugPrint("💾 User data saved locally for ID: ${widget.employeeId}");
     } catch (e) {
-      debugPrint('Error saving user data locally: $e');
-    }
-  }
-
-  Future<void> _saveEmployeeImageLocally(String employeeId, String imageBase64) async {
-    try {
-      final prefs = await SharedPreferences.getInstance();
-      await prefs.setString('employee_image_$employeeId', imageBase64);
-      debugPrint("Employee image saved locally for ID: $employeeId");
-    } catch (e) {
-      debugPrint("Error saving employee image locally: $e");
+      debugPrint('❌ Error saving user data locally: $e');
     }
   }
 
@@ -3044,7 +3539,7 @@ class _DashboardViewState extends State<DashboardView>
 
       if (userData != null) {
         Map<String, dynamic> data = jsonDecode(userData) as Map<String, dynamic>;
-        debugPrint("Retrieved complete user data from local storage");
+        debugPrint("📱 Retrieved complete user data from local storage");
         return data;
       }
 
@@ -3053,10 +3548,10 @@ class _DashboardViewState extends State<DashboardView>
         return {'name': userName};
       }
 
-      debugPrint("No local user data found for ID: ${widget.employeeId}");
+      debugPrint("📱 No local user data found for ID: ${widget.employeeId}");
       return null;
     } catch (e) {
-      debugPrint('Error getting user data locally: $e');
+      debugPrint('❌ Error getting user data locally: $e');
       return null;
     }
   }
@@ -3065,9 +3560,10 @@ class _DashboardViewState extends State<DashboardView>
     try {
       String today = DateFormat('yyyy-MM-dd').format(DateTime.now());
 
+      // ✅ STEP 1: Always check local data first
       final localAttendance = await _attendanceRepository.getTodaysAttendance(widget.employeeId);
 
-      if (localAttendance != null) {
+      if (localAttendance != null && mounted) {
         setState(() {
           _isCheckedIn = localAttendance.checkIn != null && localAttendance.checkOut == null;
           if (_isCheckedIn && localAttendance.checkIn != null) {
@@ -3077,44 +3573,114 @@ class _DashboardViewState extends State<DashboardView>
           }
         });
 
-        debugPrint("Loaded attendance from local database: CheckedIn=$_isCheckedIn");
+        debugPrint("📱 Local attendance status: CheckedIn=$_isCheckedIn, CheckOut=${localAttendance.checkOut}");
       }
 
+      // ✅ STEP 2: If online, force refresh from the CORRECT Firestore path
       if (_connectivityService.currentStatus == ConnectionStatus.online) {
         try {
+          // 🔥 FIXED: Use the same path as the repository
           DocumentSnapshot attendanceDoc = await FirebaseFirestore.instance
-              .collection('employees')
-              .doc(widget.employeeId)
-              .collection('attendance')
-              .doc(today)
+              .collection('Attendance_Records')
+              .doc('PTSEmployees')
+              .collection('Records')
+              .doc('${widget.employeeId}-$today')
               .get()
               .timeout(const Duration(seconds: 5));
 
-          if (attendanceDoc.exists) {
+          if (attendanceDoc.exists && mounted) {
             Map<String, dynamic> data = attendanceDoc.data() as Map<String, dynamic>;
 
+            debugPrint("🌐 Fresh Firestore data: $data");
+
+            // Convert Timestamp to DateTime for state management
+            DateTime? firestoreCheckIn;
+            DateTime? firestoreCheckOut;
+
+            if (data['checkIn'] != null && data['checkIn'] is Timestamp) {
+              firestoreCheckIn = (data['checkIn'] as Timestamp).toDate();
+            }
+
+            if (data['checkOut'] != null && data['checkOut'] is Timestamp) {
+              firestoreCheckOut = (data['checkOut'] as Timestamp).toDate();
+            }
+
             setState(() {
-              _isCheckedIn = data['checkIn'] != null && data['checkOut'] == null;
-              if (_isCheckedIn && data['checkIn'] != null) {
-                _checkInTime = (data['checkIn'] as Timestamp).toDate();
+              _isCheckedIn = firestoreCheckIn != null && firestoreCheckOut == null;
+              if (_isCheckedIn && firestoreCheckIn != null) {
+                _checkInTime = firestoreCheckIn;
               } else {
                 _checkInTime = null;
               }
             });
 
+            debugPrint("🔄 Updated dashboard state: CheckedIn=$_isCheckedIn, CheckIn=$firestoreCheckIn, CheckOut=$firestoreCheckOut");
+
+            // ✅ STEP 3: Update local cache with fresh Firestore data
             await _saveAttendanceStatusLocally(today, data);
-            debugPrint("Fetched and cached fresh attendance status from Firestore");
+
+            // ✅ STEP 4: Also update the repository's local cache
+            await _updateRepositoryCache(data, today);
+
+          } else {
+            debugPrint("📭 No attendance record found in Firestore for today");
           }
         } catch (e) {
-          debugPrint("Network error fetching attendance status: $e");
+          debugPrint("❌ Network error fetching from correct Firestore path: $e");
         }
       }
     } catch (e) {
-      debugPrint("Error fetching attendance: $e");
-      setState(() {
-        _isCheckedIn = false;
-        _checkInTime = null;
-      });
+      debugPrint("❌ Error in _fetchAttendanceStatus: $e");
+      if (mounted) {
+        setState(() {
+          _isCheckedIn = false;
+          _checkInTime = null;
+        });
+      }
+    }
+  }
+
+
+  Future<void> _updateRepositoryCache(Map<String, dynamic> firestoreData, String date) async {
+    try {
+      // Convert Timestamps to ISO strings
+      Map<String, dynamic> localData = Map<String, dynamic>.from(firestoreData);
+
+      if (localData['checkIn'] != null && localData['checkIn'] is Timestamp) {
+        localData['checkIn'] = (localData['checkIn'] as Timestamp).toDate().toIso8601String();
+      }
+      if (localData['checkOut'] != null && localData['checkOut'] is Timestamp) {
+        localData['checkOut'] = (localData['checkOut'] as Timestamp).toDate().toIso8601String();
+      }
+
+      // Create/update local record through repository
+      LocalAttendanceRecord record = LocalAttendanceRecord(
+        employeeId: widget.employeeId,
+        date: date,
+        checkIn: localData['checkIn'],
+        checkOut: localData['checkOut'],
+        locationId: localData['locationId'] ?? 'unknown',
+        isSynced: true,
+        rawData: localData,
+      );
+
+      // Update local database directly
+      final dbHelper = getIt<DatabaseHelper>();
+
+      // Delete existing record for today
+      await dbHelper.delete(
+        'attendance',
+        where: 'employee_id = ? AND date = ?',
+        whereArgs: [widget.employeeId, date],
+      );
+
+      // Insert fresh record
+      await dbHelper.insert('attendance', record.toMap());
+
+      debugPrint("✅ Repository cache updated with fresh Firestore data");
+
+    } catch (e) {
+      debugPrint("❌ Error updating repository cache: $e");
     }
   }
 
@@ -3134,192 +3700,388 @@ class _DashboardViewState extends State<DashboardView>
     }
   }
 
+
+
+
+  // lib/dashboard/dashboard_view.dart - REQUIRED CHANGES ONLY
+
+// ================ REPLACE THE _handleCheckInOut METHOD ================
+
+  /// Enhanced check in/out handler with proper authentication flow
   Future<void> _handleCheckInOut() async {
     if (_isAuthenticating || !mounted) {
+      debugPrint("⚠️ Already authenticating or widget unmounted");
       return;
     }
+
+    debugPrint("🔄 Starting ${_isCheckedIn ? 'check-out' : 'check-in'} process...");
 
     await _checkGeofenceStatus();
 
     if (!_isCheckedIn) {
-      // Check In Flow
-      if (!mounted) return;
-      setState(() {
-        _isAuthenticating = true;
-      });
+      // ================ CHECK-IN FLOW ================
+      debugPrint("✅ Starting check-in process...");
 
-      // Navigate to full screen authentication
-      final result = await Navigator.of(context).push<bool>(
-        MaterialPageRoute(
-          builder: (context) => AuthenticateFaceView(
-            employeeId: widget.employeeId,
-            actionType: 'check_in',
-            onAuthenticationComplete: (bool success) {
-              // Don't pop here - let the authentication screen handle its own navigation
-              if (success) {
-                // Handle success in the then() block below
-              }
-            },
-          ),
-        ),
-      );
-
-      // Handle result after navigation completes
-      if (!mounted) return;
-
-      setState(() {
-        _isAuthenticating = false;
-      });
-
-      if (result == true) {
-        // Authentication was successful
-        Position? currentPosition = await GeofenceUtil.getCurrentPosition();
-
-        await CheckInOutHandler.handleOffLocationAction(
-          context: context,
-          employeeId: widget.employeeId,
-          employeeName: _userData?['name'] ?? 'Employee',
-          isWithinGeofence: _isWithinGeofence,
-          currentPosition: currentPosition,
-          isCheckIn: true,
-          onRegularAction: () async {
-            bool checkInSuccess = await _attendanceRepository.recordCheckIn(
-              employeeId: widget.employeeId,
-              checkInTime: DateTime.now(),
-              locationId: _nearestLocation?.id ?? 'default',
-              locationName: _nearestLocation?.name ?? 'Unknown',
-              locationLat: currentPosition?.latitude ?? _nearestLocation!.latitude,
-              locationLng: currentPosition?.longitude ?? _nearestLocation!.longitude,
-            );
-
-            if (checkInSuccess && mounted) {
-              setState(() {
-                _isCheckedIn = true;
-                _checkInTime = DateTime.now();
-
-                if (_connectivityService.currentStatus == ConnectionStatus.offline) {
-                  _needsSync = true;
-                }
-              });
-
-              // Show success screen
-              Navigator.of(context).push(
-                MaterialPageRoute(
-                  builder: (context) => AuthenticationSuccessScreen(
-                    employeeName: _userData?['name'] ?? 'Employee',
-                    employeeId: widget.employeeId,
-                    actionType: 'check_in',
-                    similarityScore: '95.0',
-                  ),
-                ),
-              );
-
-              CustomSnackBar.successSnackBar("Checked in successfully at $_currentTime");
-              _fetchTodaysActivity();
-            } else if (mounted) {
-              CustomSnackBar.errorSnackBar("Failed to record check-in. Please try again.");
-            }
-          },
-        );
+      // Validate work schedule timing if available
+      if (_workSchedule != null) {
+        DateTime checkInTime = DateTime.now();
+        ScheduleCheckResult result = WorkScheduleService.checkCheckInTiming(_workSchedule!, checkInTime);
+        bool shouldProceed = await _showTimingValidationDialog(result);
+        if (!shouldProceed) return;
       }
-    } else {
-      // Check Out Flow
+
       if (!mounted) return;
-      setState(() {
-        _isAuthenticating = true;
-      });
+      setState(() => _isAuthenticating = true);
 
-      // Navigate to full screen authentication
-      final result = await Navigator.of(context).push<bool>(
-        MaterialPageRoute(
-          builder: (context) => AuthenticateFaceView(
-            employeeId: widget.employeeId,
-            actionType: 'check_out',
-            onAuthenticationComplete: (bool success) {
-              // Don't pop here - let the authentication screen handle its own navigation
-              if (success) {
-                // Handle success in the then() block below
-              }
-            },
-          ),
-        ),
-      );
-
-      // Handle result after navigation completes
-      if (!mounted) return;
-
-      setState(() {
-        _isAuthenticating = false;
-      });
-
-      if (result == true) {
-        // Authentication was successful
-        Position? currentPosition = await GeofenceUtil.getCurrentPosition();
-
-        await CheckInOutHandler.handleOffLocationAction(
-          context: context,
-          employeeId: widget.employeeId,
-          employeeName: _userData?['name'] ?? 'Employee',
-          isWithinGeofence: _isWithinGeofence,
-          currentPosition: currentPosition,
-          isCheckIn: false,
-          onRegularAction: () async {
-            bool checkOutSuccess = await _attendanceRepository.recordCheckOut(
+      try {
+        // Navigate to face authentication
+        final result = await Navigator.of(context).push<bool>(
+          MaterialPageRoute(
+            builder: (context) => AuthenticateFaceView(
               employeeId: widget.employeeId,
-              checkOutTime: DateTime.now(),
-            );
-
-            if (checkOutSuccess && mounted) {
-              setState(() {
-                _isCheckedIn = false;
-                _checkInTime = null;
-
-                if (_connectivityService.currentStatus == ConnectionStatus.offline) {
-                  _needsSync = true;
-                }
-              });
-
-              // Show success screen
-              Navigator.of(context).push(
-                MaterialPageRoute(
-                  builder: (context) => AuthenticationSuccessScreen(
-                    employeeName: _userData?['name'] ?? 'Employee',
-                    employeeId: widget.employeeId,
-                    actionType: 'check_out',
-                    similarityScore: '95.0',
-                  ),
-                ),
-              );
-
-              CustomSnackBar.successSnackBar("Checked out successfully at $_currentTime");
-
-              await _fetchAttendanceStatus();
-              await _fetchTodaysActivity();
-            } else if (mounted) {
-              CustomSnackBar.errorSnackBar("Failed to record check-out. Please try again.");
-            }
-          },
+              actionType: 'check_in',
+              onAuthenticationComplete: (bool success) {
+                debugPrint("📞 Check-in authentication callback: $success");
+              },
+            ),
+          ),
         );
+
+        if (!mounted) return;
+
+        setState(() => _isAuthenticating = false);
+
+        debugPrint("🔍 Check-in authentication result: $result");
+
+        if (result == true) {
+          debugPrint("✅ Face authentication successful for check-in");
+          await _processCheckIn();
+        } else {
+          debugPrint("❌ Face authentication failed for check-in");
+          CustomSnackBar.errorSnackBar("Face authentication failed. Please try again.");
+        }
+      } catch (e) {
+        setState(() => _isAuthenticating = false);
+        debugPrint("❌ Error during check-in: $e");
+        CustomSnackBar.errorSnackBar("Check-in failed: $e");
+      }
+
+    } else {
+      // ================ CHECK-OUT FLOW ================
+      debugPrint("✅ Starting check-out process...");
+
+      // Validate work schedule timing if available
+      if (_workSchedule != null) {
+        DateTime checkOutTime = DateTime.now();
+        ScheduleCheckResult result = WorkScheduleService.checkCheckOutTiming(_workSchedule!, checkOutTime);
+        bool shouldProceed = await _showTimingValidationDialog(result);
+        if (!shouldProceed) return;
+      }
+
+      if (!mounted) return;
+      setState(() => _isAuthenticating = true);
+
+      try {
+        // Navigate to face authentication
+        final result = await Navigator.of(context).push<bool>(
+          MaterialPageRoute(
+            builder: (context) => AuthenticateFaceView(
+              employeeId: widget.employeeId,
+              actionType: 'check_out',
+              onAuthenticationComplete: (bool success) {
+                debugPrint("📞 Check-out authentication callback: $success");
+              },
+            ),
+          ),
+        );
+
+        if (!mounted) return;
+
+        setState(() => _isAuthenticating = false);
+
+        debugPrint("🔍 Check-out authentication result: $result");
+
+        if (result == true) {
+          debugPrint("✅ Face authentication successful for check-out");
+          await _processCheckOut();
+        } else {
+          debugPrint("❌ Face authentication failed for check-out");
+          CustomSnackBar.errorSnackBar("Face authentication failed. Please try again.");
+        }
+      } catch (e) {
+        setState(() => _isAuthenticating = false);
+        debugPrint("❌ Error during check-out: $e");
+        CustomSnackBar.errorSnackBar("Check-out failed: $e");
       }
     }
   }
+
+// ================ ADD THESE NEW METHODS ================
+
+  /// Process check-in after successful authentication
+  Future<void> _processCheckIn() async {
+    try {
+      Position? currentPosition = await GeofenceUtil.getCurrentPosition();
+
+      await CheckInOutHandler.handleOffLocationAction(
+        context: context,
+        employeeId: widget.employeeId,
+        employeeName: _userData?['name'] ?? 'Employee',
+        isWithinGeofence: _isWithinGeofence,
+        currentPosition: currentPosition,
+        isCheckIn: true,
+        onRegularAction: () async {
+          debugPrint("🏢 Recording check-in...");
+
+          bool checkInSuccess = await _attendanceRepository.recordCheckIn(
+            employeeId: widget.employeeId,
+            checkInTime: DateTime.now(),
+            locationId: _nearestLocation?.id ?? 'default',
+            locationName: _nearestLocation?.name ?? 'Unknown',
+            locationLat: currentPosition?.latitude ?? _nearestLocation!.latitude,
+            locationLng: currentPosition?.longitude ?? _nearestLocation!.longitude,
+          );
+
+          if (checkInSuccess && mounted) {
+            // ✅ Update state immediately
+            setState(() {
+              _isCheckedIn = true;
+              _checkInTime = DateTime.now();
+              if (_connectivityService.currentStatus == ConnectionStatus.offline) {
+                _needsSync = true;
+              }
+            });
+
+            _setupCheckOutReminder();
+
+            // ✅ Force refresh dashboard state
+            await Future.delayed(const Duration(milliseconds: 500));
+            await _fetchAttendanceStatus();
+            await _fetchTodaysActivity();
+
+            CustomSnackBar.successSnackBar("✅ Checked in successfully at $_currentTime");
+
+            // Final verification
+            Timer(const Duration(seconds: 2), () async {
+              if (mounted) {
+                await _fetchAttendanceStatus();
+                debugPrint("✅ Check-in state verified: _isCheckedIn = $_isCheckedIn");
+              }
+            });
+
+          } else if (mounted) {
+            CustomSnackBar.errorSnackBar("❌ Failed to record check-in. Please try again.");
+          }
+        },
+      );
+    } catch (e) {
+      debugPrint("❌ Error processing check-in: $e");
+      CustomSnackBar.errorSnackBar("Check-in error: $e");
+    }
+  }
+
+  /// Process check-out after successful authentication
+  Future<void> _processCheckOut() async {
+    try {
+      Position? currentPosition = await GeofenceUtil.getCurrentPosition();
+
+      await CheckInOutHandler.handleOffLocationAction(
+        context: context,
+        employeeId: widget.employeeId,
+        employeeName: _userData?['name'] ?? 'Employee',
+        isWithinGeofence: _isWithinGeofence,
+        currentPosition: currentPosition,
+        isCheckIn: false,
+        onRegularAction: () async {
+          debugPrint("🏃‍♂️ Recording check-out...");
+
+          bool checkOutSuccess = await _attendanceRepository.recordCheckOut(
+            employeeId: widget.employeeId,
+            checkOutTime: DateTime.now(),
+          );
+
+          if (checkOutSuccess && mounted) {
+            // ✅ Update state immediately
+            setState(() {
+              _isCheckedIn = false;
+              _checkInTime = null;
+              if (_connectivityService.currentStatus == ConnectionStatus.offline) {
+                _needsSync = true;
+              }
+            });
+
+            _checkOutReminderTimer?.cancel();
+
+            // ✅ Force refresh dashboard state
+            await Future.delayed(const Duration(milliseconds: 500));
+            await _fetchAttendanceStatus();
+            await _fetchTodaysActivity();
+
+            CustomSnackBar.successSnackBar("✅ Checked out successfully at $_currentTime");
+
+            // Enhanced verification for Android
+            Timer(const Duration(seconds: 2), () async {
+              if (mounted) {
+                await _fetchAttendanceStatus();
+                if (_isCheckedIn) {
+                  debugPrint("⚠️ Check-out state inconsistency detected, forcing refresh...");
+
+                  // Force refresh from Firestore
+                  await _attendanceRepository.forceRefreshTodayFromFirestore(widget.employeeId);
+                  await _fetchAttendanceStatus();
+
+                  if (_isCheckedIn) {
+                    debugPrint("🚨 State still inconsistent after force refresh!");
+                    CustomSnackBar.errorSnackBar("⚠️ Check-out recorded but state inconsistent. Please sync manually.");
+                  } else {
+                    debugPrint("✅ Check-out state corrected after force refresh");
+                  }
+                }
+                debugPrint("✅ Check-out state verified: _isCheckedIn = $_isCheckedIn");
+              }
+            });
+
+            // ✅ Additional verification after longer delay
+            Timer(const Duration(seconds: 5), () async {
+              if (mounted) {
+                await _fetchAttendanceStatus();
+                debugPrint("✅ Check-out state final verification: _isCheckedIn = $_isCheckedIn");
+
+                // If still showing as checked in, show manual sync option
+                if (_isCheckedIn) {
+                  _showCheckOutSyncDialog();
+                }
+              }
+            });
+
+          } else if (mounted) {
+            CustomSnackBar.errorSnackBar("❌ Failed to record check-out. Please try again.");
+          }
+        },
+      );
+    } catch (e) {
+      debugPrint("❌ Error processing check-out: $e");
+      CustomSnackBar.errorSnackBar("Check-out error: $e");
+    }
+  }
+
+  /// Show sync dialog for check-out state issues
+  void _showCheckOutSyncDialog() {
+    if (!mounted) return;
+
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        backgroundColor: _isDarkMode ? const Color(0xFF1E293B) : Colors.white,
+        title: Row(
+          children: [
+            Icon(Icons.sync_problem, color: Colors.orange, size: 24),
+            SizedBox(width: 8),
+            Text(
+              "Sync Issue",
+              style: TextStyle(
+                color: _isDarkMode ? Colors.white : Colors.black87,
+                fontSize: 18,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+          ],
+        ),
+        content: Text(
+          "Your check-out was recorded but the app state needs to be synced. Would you like to sync now?",
+          style: TextStyle(
+            color: _isDarkMode ? Colors.grey.shade300 : Colors.grey.shade700,
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: Text("Later", style: TextStyle(color: Colors.grey.shade600)),
+          ),
+          ElevatedButton.icon(
+            onPressed: () async {
+              Navigator.pop(context);
+              await _forceAttendanceSync();
+            },
+            icon: Icon(Icons.sync, size: 16),
+            label: Text("Sync Now"),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.green,
+              foregroundColor: Colors.white,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+
+
+
+  // Check In/Out Handler - Optimized
+
+
+  Future<void> _forceAttendanceSync() async {
+    if (_connectivityService.currentStatus == ConnectionStatus.offline) {
+      CustomSnackBar.errorSnackBar("Cannot sync while offline. Please check your connection.");
+      return;
+    }
+
+    setState(() => _isLoading = true); // Only show loading for manual actions
+
+    try {
+      debugPrint("🔄 Starting force attendance sync...");
+
+      await _attendanceRepository.forceRefreshTodayFromFirestore(widget.employeeId);
+      await _fetchAttendanceStatus();
+      await _fetchTodaysActivity();
+      await _attendanceRepository.syncPendingRecords();
+
+      await Future.delayed(const Duration(milliseconds: 500));
+      await _fetchAttendanceStatus();
+
+      setState(() {
+        _needsSync = false;
+        _isLoading = false;
+      });
+
+      debugPrint("✅ Force attendance sync completed");
+      CustomSnackBar.successSnackBar("Attendance data synchronized successfully!");
+
+    } catch (e) {
+      setState(() => _isLoading = false);
+      debugPrint("❌ Error during force attendance sync: $e");
+      CustomSnackBar.errorSnackBar("Sync failed: $e");
+    }
+  }
+
   Future<void> _refreshDashboard() async {
-    await _fetchUserData();
+    debugPrint("🔄 Starting dashboard refresh...");
+
+    // Force refresh attendance status first
     await _fetchAttendanceStatus();
-    await _fetchTodaysActivity(); // Changed from _fetchRecentActivity
+
+    // Then refresh other data
+    await _fetchUserData();
+    await _fetchTodaysActivity();
+    await _fetchOvertimeAssignments(); // ✅ ADD THIS LINE
     await _checkGeofenceStatus();
 
     if (_connectivityService.currentStatus == ConnectionStatus.online) {
       final pendingRecords = await _attendanceRepository.getPendingRecords();
-      setState(() {
-        _needsSync = pendingRecords.isNotEmpty;
-      });
+      if (mounted) {
+        setState(() {
+          _needsSync = pendingRecords.isNotEmpty;
+        });
+      }
     }
 
     if (_isLineManager) {
       await _loadPendingApprovalRequests();
       await _loadPendingLeaveApprovals();
     }
+
+    debugPrint("Enhanced dashboard refresh completed");
   }
 
   Future<void> _manualSync() async {
@@ -3328,33 +4090,42 @@ class _DashboardViewState extends State<DashboardView>
       return;
     }
 
-    setState(() => _isLoading = true);
+    if (mounted) {
+      setState(() => _isLoading = true);
+    }
 
     try {
       await _syncService.manualSync();
 
       await _fetchUserData();
       await _fetchAttendanceStatus();
-      await _fetchTodaysActivity(); // Changed from _fetchRecentActivity
+      await _fetchTodaysActivity();
 
-      setState(() {
-        _needsSync = false;
-        _isLoading = false;
-      });
+      if (mounted) {
+        setState(() {
+          _needsSync = false;
+          _isLoading = false;
+        });
+      }
 
       CustomSnackBar.successSnackBar("Data synchronized successfully");
     } catch (e) {
-      setState(() => _isLoading = false);
+      if (mounted) {
+        setState(() => _isLoading = false);
+      }
       CustomSnackBar.errorSnackBar("Error during sync: $e");
     }
   }
+
+
+
 
   Future<void> _logout() async {
     bool confirm = await showDialog(
       context: context,
       builder: (context) => AlertDialog(
         backgroundColor: _isDarkMode ? const Color(0xFF1E293B) : Colors.white,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(cardBorderRadius)),
         title: Text(
           "Logout",
           style: TextStyle(
@@ -3393,7 +4164,7 @@ class _DashboardViewState extends State<DashboardView>
             context: context,
             builder: (context) => AlertDialog(
               backgroundColor: _isDarkMode ? const Color(0xFF1E293B) : Colors.white,
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(cardBorderRadius)),
               title: Text(
                 "Unsynchronized Data",
                 style: TextStyle(
@@ -3447,980 +4218,8 @@ class _DashboardViewState extends State<DashboardView>
     }
   }
 
-  // Settings Menu
-  void _showSettingsMenu(BuildContext context) {
-    showModalBottomSheet(
-      context: context,
-      backgroundColor: Colors.transparent,
-      isScrollControlled: true,
-      builder: (context) => Container(
-        height: MediaQuery.of(context).size.height * 0.75,
-        decoration: BoxDecoration(
-          color: _isDarkMode ? const Color(0xFF1E293B) : Colors.white,
-          borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withOpacity(0.1),
-              blurRadius: 20,
-              offset: const Offset(0, -5),
-            ),
-          ],
-        ),
-        child: Column(
-          children: [
-            // Handle bar
-            Container(
-              margin: const EdgeInsets.only(top: 12),
-              width: 40,
-              height: 4,
-              decoration: BoxDecoration(
-                color: Colors.grey.shade300,
-                borderRadius: BorderRadius.circular(2),
-              ),
-            ),
+  // Complete Implementation of All Remaining Methods
 
-            // Header
-            Padding(
-              padding: EdgeInsets.all(isTablet ? 28 : 24),
-              child: Row(
-                children: [
-                  Container(
-                    padding: const EdgeInsets.all(8),
-                    decoration: BoxDecoration(
-                      color: Theme.of(context).colorScheme.primary.withOpacity(0.1),
-                      borderRadius: BorderRadius.circular(8),
-                    ),
-                    child: Icon(
-                      Icons.settings,
-                      color: Theme.of(context).colorScheme.primary,
-                      size: 24,
-                    ),
-                  ),
-                  const SizedBox(width: 16),
-                  Text(
-                    'Settings',
-                    style: TextStyle(
-                      fontSize: (isTablet ? 28 : 24) * responsiveFontSize,
-                      fontWeight: FontWeight.bold,
-                      color: _isDarkMode ? Colors.white : Colors.black87,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-
-            // Settings options
-            Expanded(
-              child: SingleChildScrollView(
-                padding: EdgeInsets.symmetric(horizontal: isTablet ? 28 : 24),
-                child: Column(
-                  children: [
-                    _buildModernSettingsOption(
-                      icon: Icons.calendar_view_month,
-                      title: 'My Attendance',
-                      subtitle: 'View your attendance history and overtime records',
-                      onTap: () {
-                        Navigator.pop(context);
-                        Navigator.push(
-                          context,
-                          MaterialPageRoute(
-                            builder: (context) => MyAttendanceView(
-                              employeeId: widget.employeeId,
-                              userData: _userData ?? {},
-                            ),
-                          ),
-                        );
-                      },
-                    ),
-
-                    _buildModernSettingsOption(
-                      icon: Icons.cloud_download,
-                      title: 'Recover Face Data',
-                      subtitle: 'Download face authentication data from cloud',
-                      iconColor: Colors.blue,
-                      onTap: () {
-                        Navigator.pop(context);
-                        _forceFaceDataRecovery();
-                      },
-                    ),
-
-                    _buildModernSettingsOption(
-                      icon: Icons.event_note,
-                      title: 'Leave Management',
-                      subtitle: 'View leave balance, history, and apply for leave',
-                      onTap: () {
-                        Navigator.pop(context);
-                        Navigator.push(
-                          context,
-                          MaterialPageRoute(
-                            builder: (context) => LeaveHistoryView(
-                              employeeId: widget.employeeId,
-                              employeeName: _userData?['name'] ?? 'Employee',
-                              employeePin: _userData?['pin'] ?? widget.employeeId,
-                              userData: _userData ?? {},
-                            ),
-                          ),
-                        ).then((_) => _refreshDashboard());
-                      },
-                    ),
-
-                    _buildModernSettingsOption(
-                      icon: Icons.dark_mode_outlined,
-                      title: 'Dark mode',
-                      subtitle: 'Switch between light and dark themes',
-                      hasToggle: true,
-                      toggleValue: _isDarkMode,
-                      onToggleChanged: (value) {
-                        setState(() {
-                          _isDarkMode = value;
-                          _saveDarkModePreference(value);
-                        });
-                      },
-                    ),
-
-                    if (_userData != null &&
-                        (_userData!['hasOvertimeAccess'] == true ||
-                            _userData!['overtimeAccessGrantedAt'] != null))
-                      _buildModernSettingsOption(
-                        icon: Icons.people_outline,
-                        title: 'Manage Employee List',
-                        subtitle: 'Create custom employee list for overtime requests',
-                        onTap: () {
-                          Navigator.pop(context);
-                          Navigator.push(
-                            context,
-                            MaterialPageRoute(
-                              builder: (context) => EmployeeListManagementView(
-                                requesterId: widget.employeeId,
-                              ),
-                            ),
-                          );
-                        },
-                      ),
-
-                    _buildModernSettingsOption(
-                      icon: Icons.history,
-                      title: 'Check-Out Request History',
-                      subtitle: 'View your remote check-out requests',
-                      onTap: () {
-                        Navigator.pop(context);
-                        Navigator.of(context).push(
-                          MaterialPageRoute(
-                            builder: (context) => CheckOutRequestHistoryView(
-                              employeeId: widget.employeeId,
-                            ),
-                          ),
-                        );
-                      },
-                    ),
-
-                    if (widget.employeeId == 'EMP1289')
-                      _buildModernSettingsOption(
-                        icon: Icons.admin_panel_settings,
-                        title: 'Admin Panel',
-                        subtitle: 'Administrative controls',
-                        onTap: () {
-                          Navigator.pop(context);
-                          Navigator.push(
-                            context,
-                            MaterialPageRoute(
-                              builder: (context) => NotificationAdminView(
-                                userId: widget.employeeId,
-                              ),
-                            ),
-                          );
-                        },
-                      ),
-
-                    const SizedBox(height: 20),
-
-                    _buildModernSettingsOption(
-                      icon: Icons.logout,
-                      title: 'Log out',
-                      subtitle: 'Sign out of your account',
-                      textColor: Colors.red,
-                      iconColor: Colors.red,
-                      onTap: () {
-                        Navigator.pop(context);
-                        _logout();
-                      },
-                    ),
-
-                    SizedBox(height: MediaQuery.of(context).padding.bottom + 20),
-                  ],
-                ),
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildModernSettingsOption({
-    required IconData icon,
-    required String title,
-    String? subtitle,
-    VoidCallback? onTap,
-    bool hasToggle = false,
-    bool toggleValue = false,
-    Function(bool)? onToggleChanged,
-    Color? iconColor,
-    Color? textColor,
-  }) {
-    final effectiveIconColor = iconColor ?? (_isDarkMode ? Colors.white70 : Colors.black54);
-    final effectiveTextColor = textColor ?? (_isDarkMode ? Colors.white : Colors.black87);
-
-    return Container(
-      margin: const EdgeInsets.only(bottom: 12),
-      decoration: BoxDecoration(
-        color: _isDarkMode ? const Color(0xFF334155) : Colors.grey.shade50,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(
-          color: _isDarkMode ? Colors.white.withOpacity(0.1) : Colors.grey.withOpacity(0.2),
-        ),
-      ),
-      child: Material(
-        color: Colors.transparent,
-        child: InkWell(
-          onTap: hasToggle ? null : onTap,
-          borderRadius: BorderRadius.circular(16),
-          child: Padding(
-            padding: EdgeInsets.all(isTablet ? 20 : 16),
-            child: Row(
-              children: [
-                Container(
-                  padding: const EdgeInsets.all(8),
-                  decoration: BoxDecoration(
-                    color: effectiveIconColor.withOpacity(0.1),
-                    borderRadius: BorderRadius.circular(8),
-                  ),
-                  child: Icon(icon, color: effectiveIconColor, size: 20),
-                ),
-
-                const SizedBox(width: 16),
-
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        title,
-                        style: TextStyle(
-                          fontSize: (isTablet ? 18 : 16) * responsiveFontSize,
-                          fontWeight: FontWeight.w600,
-                          color: effectiveTextColor,
-                        ),
-                      ),
-                      if (subtitle != null) ...[
-                        const SizedBox(height: 4),
-                        Text(
-                          subtitle,
-                          style: TextStyle(
-                            fontSize: (isTablet ? 14 : 12) * responsiveFontSize,
-                            color: _isDarkMode ? Colors.grey.shade400 : Colors.grey.shade600,
-                          ),
-                        ),
-                      ],
-                    ],
-                  ),
-                ),
-
-                if (hasToggle)
-                  Switch.adaptive(
-                    value: toggleValue,
-                    onChanged: onToggleChanged,
-                    activeColor: Theme.of(context).colorScheme.primary,
-                  )
-                else if (onTap != null)
-                  Icon(
-                    Icons.arrow_forward_ios,
-                    size: 16,
-                    color: _isDarkMode ? Colors.grey.shade500 : Colors.grey.shade400,
-                  ),
-              ],
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-
-  // Notification Menu
-  void _showNotificationMenu(BuildContext context) {
-    showModalBottomSheet(
-      context: context,
-      backgroundColor: Colors.transparent,
-      isScrollControlled: true,
-      builder: (context) => Container(
-        height: MediaQuery.of(context).size.height * 0.75,
-        decoration: BoxDecoration(
-          color: _isDarkMode ? const Color(0xFF1E293B) : Colors.white,
-          borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withOpacity(0.1),
-              blurRadius: 20,
-              offset: const Offset(0, -5),
-            ),
-          ],
-        ),
-        child: Column(
-          children: [
-            // Handle bar
-            Container(
-              margin: const EdgeInsets.only(top: 12),
-              width: 40,
-              height: 4,
-              decoration: BoxDecoration(
-                color: Colors.grey.shade300,
-                borderRadius: BorderRadius.circular(2),
-              ),
-            ),
-
-            // Header
-            Padding(
-              padding: EdgeInsets.all(isTablet ? 28 : 24),
-              child: Row(
-                children: [
-                  Container(
-                    padding: const EdgeInsets.all(8),
-                    decoration: BoxDecoration(
-                      color: Theme.of(context).colorScheme.primary.withOpacity(0.1),
-                      borderRadius: BorderRadius.circular(8),
-                    ),
-                    child: Icon(
-                      Icons.notifications,
-                      color: Theme.of(context).colorScheme.primary,
-                      size: 24,
-                    ),
-                  ),
-                  const SizedBox(width: 16),
-                  Text(
-                    'Notifications & Actions',
-                    style: TextStyle(
-                      fontSize: (isTablet ? 28 : 24) * responsiveFontSize,
-                      fontWeight: FontWeight.bold,
-                      color: _isDarkMode ? Colors.white : Colors.black87,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-
-            // Notification options
-            Expanded(
-              child: SingleChildScrollView(
-                padding: EdgeInsets.symmetric(horizontal: isTablet ? 28 : 24),
-                child: Column(
-                  children: [
-                    // Leave management section
-                    _buildNotificationOption(
-                      icon: Icons.event_available,
-                      title: 'Apply for Leave',
-                      subtitle: 'Submit a new leave application',
-                      onTap: () {
-                        Navigator.pop(context);
-                        Navigator.push(
-                          context,
-                          MaterialPageRoute(
-                            builder: (context) => ApplyLeaveView(
-                              employeeId: widget.employeeId,
-                              employeeName: _userData?['name'] ?? 'Employee',
-                              employeePin: _userData?['pin'] ?? widget.employeeId,
-                              userData: _userData ?? {},
-                            ),
-                          ),
-                        ).then((_) => _refreshDashboard());
-                      },
-                    ),
-
-                    _buildNotificationOption(
-                      icon: Icons.history,
-                      title: 'Leave History',
-                      subtitle: 'View your leave applications and balance',
-                      onTap: () {
-                        Navigator.pop(context);
-                        Navigator.push(
-                          context,
-                          MaterialPageRoute(
-                            builder: (context) => LeaveHistoryView(
-                              employeeId: widget.employeeId,
-                              employeeName: _userData?['name'] ?? 'Employee',
-                              employeePin: _userData?['pin'] ?? widget.employeeId,
-                              userData: _userData ?? {},
-                            ),
-                          ),
-                        ).then((_) => _refreshDashboard());
-                      },
-                    ),
-
-                    // Leave approvals for line managers
-                    if (_isLineManager)
-                      _buildNotificationOption(
-                        icon: Icons.approval,
-                        title: 'Leave Approvals',
-                        subtitle: _pendingLeaveApprovals > 0
-                            ? '$_pendingLeaveApprovals applications waiting'
-                            : 'No pending leave applications',
-                        showBadge: _pendingLeaveApprovals > 0,
-                        badgeCount: _pendingLeaveApprovals,
-                        onTap: () {
-                          Navigator.pop(context);
-                          Navigator.push(
-                            context,
-                            MaterialPageRoute(
-                              builder: (context) => ManagerLeaveApprovalView(
-                                managerId: widget.employeeId,
-                                managerName: _userData?['name'] ?? 'Manager',
-                              ),
-                            ),
-                          ).then((_) => _loadPendingLeaveApprovals());
-                        },
-                      ),
-
-                    // Overtime section
-                    if (_isOvertimeApprover && _approverInfo != null)
-                      Container(
-                        margin: const EdgeInsets.only(bottom: 16),
-                        padding: EdgeInsets.all(isTablet ? 20 : 16),
-                        decoration: BoxDecoration(
-                          gradient: LinearGradient(
-                            colors: [Colors.orange.withOpacity(0.8), Colors.red.withOpacity(0.8)],
-                            begin: Alignment.centerLeft,
-                            end: Alignment.centerRight,
-                          ),
-                          borderRadius: BorderRadius.circular(16),
-                          boxShadow: [
-                            BoxShadow(
-                              color: Colors.orange.withOpacity(0.3),
-                              blurRadius: 8,
-                              offset: const Offset(0, 4),
-                            ),
-                          ],
-                        ),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Row(
-                              children: [
-                                Icon(Icons.admin_panel_settings, color: Colors.white, size: 24),
-                                const SizedBox(width: 12),
-                                Expanded(
-                                  child: Text(
-                                    "OVERTIME APPROVER",
-                                    style: TextStyle(
-                                      color: Colors.white,
-                                      fontSize: (isTablet ? 18 : 16) * responsiveFontSize,
-                                      fontWeight: FontWeight.bold,
-                                    ),
-                                  ),
-                                ),
-                                if (_pendingOvertimeRequests > 0)
-                                  Container(
-                                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                                    decoration: BoxDecoration(
-                                      color: Colors.white,
-                                      borderRadius: BorderRadius.circular(12),
-                                    ),
-                                    child: Text(
-                                      _pendingOvertimeRequests.toString(),
-                                      style: TextStyle(
-                                        color: Colors.red,
-                                        fontWeight: FontWeight.bold,
-                                        fontSize: (isTablet ? 14 : 12) * responsiveFontSize,
-                                      ),
-                                    ),
-                                  ),
-                              ],
-                            ),
-                            const SizedBox(height: 16),
-                            SizedBox(
-                              width: double.infinity,
-                              child: ElevatedButton.icon(
-                                onPressed: () {
-                                  Navigator.pop(context);
-                                  Navigator.push(
-                                    context,
-                                    MaterialPageRoute(
-                                      builder: (context) => PendingOvertimeView(
-                                        approverId: widget.employeeId,
-                                      ),
-                                    ),
-                                  ).then((_) => _loadPendingOvertimeRequests());
-                                },
-                                icon: const Icon(Icons.visibility),
-                                label: Text("Review $_pendingOvertimeRequests Pending Requests"),
-                                style: ElevatedButton.styleFrom(
-                                  backgroundColor: Colors.white,
-                                  foregroundColor: Colors.red,
-                                  padding: EdgeInsets.symmetric(vertical: isTablet ? 16 : 12),
-                                  shape: RoundedRectangleBorder(
-                                    borderRadius: BorderRadius.circular(12),
-                                  ),
-                                ),
-                              ),
-                            ),
-                          ],
-                        ),
-                      )
-                    else if (_userData != null &&
-                        (_userData!['hasOvertimeAccess'] == true ||
-                            _userData!['overtimeAccessGrantedAt'] != null))
-                      _buildNotificationOption(
-                        icon: Icons.access_time,
-                        title: 'Request Overtime',
-                        subtitle: 'Create new overtime request',
-                        onTap: () {
-                          Navigator.pop(context);
-                          Navigator.push(
-                            context,
-                            MaterialPageRoute(
-                              builder: (context) => CreateOvertimeView(
-                                requesterId: widget.employeeId,
-                              ),
-                            ),
-                          );
-                        },
-                      ),
-
-                    // Line manager options
-                    if (_isLineManager) ...[
-                      _buildNotificationOption(
-                        icon: Icons.people_outline,
-                        title: 'My Team',
-                        subtitle: 'View team members and attendance',
-                        onTap: () {
-                          Navigator.pop(context);
-                          if (_lineManagerData != null) {
-                            String managerId = _lineManagerData!['managerId'] ?? '';
-                            if (managerId.isNotEmpty) {
-                              Navigator.of(context).push(
-                                MaterialPageRoute(
-                                  builder: (context) => TeamManagementView(
-                                    managerId: managerId,
-                                    managerData: _userData!,
-                                  ),
-                                ),
-                              );
-                            } else {
-                              CustomSnackBar.errorSnackBar(context, "Manager ID not found");
-                            }
-                          }
-                        },
-                      ),
-
-                      _buildNotificationOption(
-                        icon: Icons.approval,
-                        title: 'Pending Check-Out Requests',
-                        subtitle: _pendingApprovalRequests > 0
-                            ? '$_pendingApprovalRequests requests waiting'
-                            : 'No pending requests',
-                        showBadge: _pendingApprovalRequests > 0,
-                        badgeCount: _pendingApprovalRequests,
-                        onTap: () {
-                          Navigator.pop(context);
-                          Navigator.of(context).push(
-                            MaterialPageRoute(
-                              builder: (context) => ManagerPendingRequestsView(
-                                managerId: widget.employeeId,
-                              ),
-                            ),
-                          ).then((_) => _loadPendingApprovalRequests());
-                        },
-                      ),
-                    ],
-
-                    SizedBox(height: MediaQuery.of(context).padding.bottom + 20),
-                  ],
-                ),
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildNotificationOption({
-    required IconData icon,
-    required String title,
-    String? subtitle,
-    VoidCallback? onTap,
-    bool showBadge = false,
-    int badgeCount = 0,
-  }) {
-    return Container(
-      margin: const EdgeInsets.only(bottom: 12),
-      decoration: BoxDecoration(
-        color: _isDarkMode ? const Color(0xFF334155) : Colors.grey.shade50,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(
-          color: _isDarkMode ? Colors.white.withOpacity(0.1) : Colors.grey.withOpacity(0.2),
-        ),
-      ),
-      child: Material(
-        color: Colors.transparent,
-        child: InkWell(
-          onTap: onTap,
-          borderRadius: BorderRadius.circular(16),
-          child: Padding(
-            padding: EdgeInsets.all(isTablet ? 20 : 16),
-            child: Row(
-              children: [
-                Stack(
-                  children: [
-                    Container(
-                      padding: const EdgeInsets.all(8),
-                      decoration: BoxDecoration(
-                        color: Theme.of(context).colorScheme.primary.withOpacity(0.1),
-                        borderRadius: BorderRadius.circular(8),
-                      ),
-                      child: Icon(
-                        icon,
-                        color: Theme.of(context).colorScheme.primary,
-                        size: 20,
-                      ),
-                    ),
-                    if (showBadge && badgeCount > 0)
-                      Positioned(
-                        right: -2,
-                        top: -2,
-                        child: Container(
-                          padding: const EdgeInsets.all(4),
-                          decoration: BoxDecoration(
-                            color: Colors.red,
-                            shape: BoxShape.circle,
-                            border: Border.all(color: Colors.white, width: 1),
-                          ),
-                          constraints: const BoxConstraints(
-                            minWidth: 16,
-                            minHeight: 16,
-                          ),
-                          child: Text(
-                            badgeCount > 99 ? '99+' : badgeCount.toString(),
-                            style: const TextStyle(
-                              color: Colors.white,
-                              fontSize: 9,
-                              fontWeight: FontWeight.bold,
-                            ),
-                            textAlign: TextAlign.center,
-                          ),
-                        ),
-                      ),
-                  ],
-                ),
-
-                const SizedBox(width: 16),
-
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        title,
-                        style: TextStyle(
-                          fontSize: (isTablet ? 18 : 16) * responsiveFontSize,
-                          fontWeight: FontWeight.w600,
-                          color: _isDarkMode ? Colors.white : Colors.black87,
-                        ),
-                      ),
-                      if (subtitle != null) ...[
-                        const SizedBox(height: 4),
-                        Text(
-                          subtitle,
-                          style: TextStyle(
-                            fontSize: (isTablet ? 14 : 12) * responsiveFontSize,
-                            color: _isDarkMode ? Colors.grey.shade400 : Colors.grey.shade600,
-                          ),
-                        ),
-                      ],
-                    ],
-                  ),
-                ),
-
-                if (onTap != null)
-                  Icon(
-                    Icons.arrow_forward_ios,
-                    size: 16,
-                    color: _isDarkMode ? Colors.grey.shade500 : Colors.grey.shade400,
-                  ),
-              ],
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-
-  // Location Menu
-  void _showLocationMenu(BuildContext context) {
-    showModalBottomSheet(
-      context: context,
-      backgroundColor: Colors.transparent,
-      isScrollControlled: true,
-      builder: (context) => DraggableScrollableSheet(
-        initialChildSize: 0.6,
-        maxChildSize: 0.9,
-        minChildSize: 0.3,
-        expand: false,
-        builder: (context, scrollController) => Container(
-          decoration: BoxDecoration(
-            color: _isDarkMode ? const Color(0xFF1E293B) : Colors.white,
-            borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
-            boxShadow: [
-              BoxShadow(
-                color: Colors.black.withOpacity(0.1),
-                blurRadius: 20,
-                offset: const Offset(0, -5),
-              ),
-            ],
-          ),
-          child: Column(
-            children: [
-              // Handle bar
-              Container(
-                margin: const EdgeInsets.only(top: 12),
-                width: 40,
-                height: 4,
-                decoration: BoxDecoration(
-                  color: Colors.grey.shade300,
-                  borderRadius: BorderRadius.circular(2),
-                ),
-              ),
-
-              // Header
-              Padding(
-                padding: EdgeInsets.all(isTablet ? 28 : 24),
-                child: Row(
-                  children: [
-                    Container(
-                      padding: const EdgeInsets.all(8),
-                      decoration: BoxDecoration(
-                        color: Theme.of(context).colorScheme.primary.withOpacity(0.1),
-                        borderRadius: BorderRadius.circular(8),
-                      ),
-                      child: Icon(
-                        Icons.location_on,
-                        color: Theme.of(context).colorScheme.primary,
-                        size: 24,
-                      ),
-                    ),
-                    const SizedBox(width: 16),
-                    Expanded(
-                      child: Text(
-                        'Available Locations',
-                        style: TextStyle(
-                          fontSize: (isTablet ? 28 : 24) * responsiveFontSize,
-                          fontWeight: FontWeight.bold,
-                          color: _isDarkMode ? Colors.white : Colors.black87,
-                        ),
-                      ),
-                    ),
-                    IconButton(
-                      onPressed: () {
-                        _checkGeofenceStatus();
-                        CustomSnackBar.successSnackBar(context, "Locations refreshed");
-                      },
-                      icon: Icon(
-                        Icons.refresh,
-                        color: _isDarkMode ? Colors.white : Colors.black87,
-                      ),
-                      style: IconButton.styleFrom(
-                        backgroundColor: _isDarkMode ? Colors.white.withOpacity(0.1) : Colors.grey.withOpacity(0.1),
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-
-              // Locations list
-              Expanded(
-                child: _availableLocations.isEmpty
-                    ? Center(
-                  child: Column(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      Container(
-                        padding: EdgeInsets.all(isTablet ? 24 : 20),
-                        decoration: BoxDecoration(
-                          color: _isDarkMode ? Colors.white.withOpacity(0.05) : Colors.grey.withOpacity(0.1),
-                          shape: BoxShape.circle,
-                        ),
-                        child: Icon(
-                          Icons.location_off,
-                          size: isTablet ? 64 : 48,
-                          color: _isDarkMode ? Colors.grey.shade600 : Colors.grey.shade400,
-                        ),
-                      ),
-                      const SizedBox(height: 16),
-                      Text(
-                        "No locations available",
-                        style: TextStyle(
-                          color: _isDarkMode ? Colors.grey.shade400 : Colors.grey.shade600,
-                          fontSize: (isTablet ? 20 : 18) * responsiveFontSize,
-                          fontWeight: FontWeight.w600,
-                        ),
-                      ),
-                    ],
-                  ),
-                )
-                    : ListView.builder(
-                  controller: scrollController,
-                  padding: EdgeInsets.symmetric(horizontal: isTablet ? 28 : 24),
-                  itemCount: _availableLocations.length,
-                  itemBuilder: (context, index) {
-                    final location = _availableLocations[index];
-                    final isNearest = _nearestLocation?.id == location.id;
-                    final isWithin = _isWithinGeofence && isNearest;
-
-                    return Container(
-                      margin: const EdgeInsets.only(bottom: 12),
-                      decoration: BoxDecoration(
-                        color: isWithin
-                            ? Colors.green.withOpacity(0.1)
-                            : (_isDarkMode ? const Color(0xFF334155) : Colors.grey.shade50),
-                        borderRadius: BorderRadius.circular(16),
-                        border: Border.all(
-                          color: isWithin
-                              ? Colors.green
-                              : (_isDarkMode ? Colors.white.withOpacity(0.1) : Colors.grey.withOpacity(0.2)),
-                        ),
-                      ),
-                      child: Padding(
-                        padding: EdgeInsets.all(isTablet ? 20 : 16),
-                        child: Row(
-                          children: [
-                            Container(
-                              padding: const EdgeInsets.all(12),
-                              decoration: BoxDecoration(
-                                color: isWithin
-                                    ? Colors.green.withOpacity(0.2)
-                                    : (_isDarkMode ? Colors.white.withOpacity(0.1) : Colors.grey.withOpacity(0.1)),
-                                borderRadius: BorderRadius.circular(12),
-                              ),
-                              child: Icon(
-                                isWithin
-                                    ? Icons.location_on
-                                    : isNearest
-                                    ? Icons.location_searching
-                                    : Icons.location_on_outlined,
-                                color: isWithin
-                                    ? Colors.green
-                                    : (_isDarkMode ? Colors.white70 : Colors.grey.shade600),
-                                size: 24,
-                              ),
-                            ),
-
-                            const SizedBox(width: 16),
-
-                            Expanded(
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Text(
-                                    location.name,
-                                    style: TextStyle(
-                                      fontWeight: isNearest ? FontWeight.bold : FontWeight.w600,
-                                      fontSize: (isTablet ? 18 : 16) * responsiveFontSize,
-                                      color: _isDarkMode ? Colors.white : Colors.black87,
-                                    ),
-                                  ),
-                                  const SizedBox(height: 4),
-                                  Text(
-                                    location.address,
-                                    style: TextStyle(
-                                      color: _isDarkMode ? Colors.grey.shade400 : Colors.grey.shade600,
-                                      fontSize: (isTablet ? 14 : 12) * responsiveFontSize,
-                                    ),
-                                    maxLines: 2,
-                                    overflow: TextOverflow.ellipsis,
-                                  ),
-                                  if (location.radius > 0) ...[
-                                    const SizedBox(height: 4),
-                                    Text(
-                                      'Radius: ${location.radius.toInt()}m',
-                                      style: TextStyle(
-                                        color: _isDarkMode ? Colors.grey.shade500 : Colors.grey.shade500,
-                                        fontSize: (isTablet ? 12 : 11) * responsiveFontSize,
-                                      ),
-                                    ),
-                                  ],
-                                ],
-                              ),
-                            ),
-
-                            Column(
-                              crossAxisAlignment: CrossAxisAlignment.end,
-                              children: [
-                                if (isWithin)
-                                  Container(
-                                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                                    decoration: BoxDecoration(
-                                      color: Colors.green,
-                                      borderRadius: BorderRadius.circular(12),
-                                    ),
-                                    child: Text(
-                                      'CURRENT',
-                                      style: TextStyle(
-                                        color: Colors.white,
-                                        fontSize: (isTablet ? 12 : 10) * responsiveFontSize,
-                                        fontWeight: FontWeight.bold,
-                                      ),
-                                    ),
-                                  )
-                                else if (isNearest)
-                                  Container(
-                                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                                    decoration: BoxDecoration(
-                                      color: Colors.orange,
-                                      borderRadius: BorderRadius.circular(12),
-                                    ),
-                                    child: Text(
-                                      'NEAREST',
-                                      style: TextStyle(
-                                        color: Colors.white,
-                                        fontSize: (isTablet ? 12 : 10) * responsiveFontSize,
-                                        fontWeight: FontWeight.bold,
-                                      ),
-                                    ),
-                                  ),
-                                if (_distanceToOffice != null && isNearest) ...[
-                                  const SizedBox(height: 8),
-                                  Container(
-                                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                                    decoration: BoxDecoration(
-                                      color: _isDarkMode ? Colors.white.withOpacity(0.1) : Colors.grey.withOpacity(0.1),
-                                      borderRadius: BorderRadius.circular(8),
-                                    ),
-                                    child: Text(
-                                      '${_distanceToOffice!.toStringAsFixed(0)}m',
-                                      style: TextStyle(
-                                        color: _isDarkMode ? Colors.grey.shade400 : Colors.grey.shade600,
-                                        fontSize: (isTablet ? 12 : 11) * responsiveFontSize,
-                                        fontWeight: FontWeight.w500,
-                                      ),
-                                    ),
-                                  ),
-                                ],
-                              ],
-                            ),
-                          ],
-                        ),
-                      ),
-                    );
-                  },
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-
-  // All existing notification and overtime methods remain the same
   Future<void> _initializeNotifications() async {
     try {
       final notificationService = getIt<NotificationService>();
@@ -4459,17 +4258,20 @@ class _DashboardViewState extends State<DashboardView>
       final repository = getIt<CheckOutRequestRepository>();
       final requests = await repository.getPendingRequestsForManager(widget.employeeId);
 
-      setState(() {
-        _pendingApprovalRequests = requests.length;
-      });
+      if (mounted) {
+        setState(() {
+          _pendingApprovalRequests = requests.length;
+        });
+      }
     } catch (e) {
       debugPrint('Error loading pending approval requests: $e');
     }
   }
 
-  // All existing overtime methods
   Future<void> _checkOvertimeApproverStatus() async {
-    setState(() => _checkingApproverStatus = true);
+    if (mounted) {
+      setState(() => _checkingApproverStatus = true);
+    }
 
     try {
       debugPrint("=== DASHBOARD: CHECKING OVERTIME APPROVER STATUS ===");
@@ -4477,7 +4279,6 @@ class _DashboardViewState extends State<DashboardView>
       debugPrint("Employee Name: ${_userData?['name']}");
       debugPrint("Employee PIN: ${_userData?['pin']}");
 
-      // ✅ STEP 1: Call the enhanced service
       bool isApprover = await OvertimeApproverService.isApprover(widget.employeeId);
 
       debugPrint("🎯 APPROVER SERVICE RESULT: $isApprover");
@@ -4485,7 +4286,6 @@ class _DashboardViewState extends State<DashboardView>
       if (isApprover) {
         debugPrint("✅ User IS an overtime approver");
 
-        // ✅ STEP 2: Get approver info
         Map<String, dynamic>? approverInfo = await OvertimeApproverService.getCurrentApprover();
 
         if (approverInfo != null) {
@@ -4495,22 +4295,20 @@ class _DashboardViewState extends State<DashboardView>
           debugPrint("  - Source: ${approverInfo['source']}");
         }
 
-        // ✅ STEP 3: Setup notifications
         await _setupApproverNotifications();
 
-        // ✅ STEP 4: Update state
-        setState(() {
-          _isOvertimeApprover = true;
-          _approverInfo = approverInfo;
-          _checkingApproverStatus = false;
-        });
+        if (mounted) {
+          setState(() {
+            _isOvertimeApprover = true;
+            _approverInfo = approverInfo;
+            _checkingApproverStatus = false;
+          });
+        }
 
-        // ✅ STEP 5: Load pending requests
         await _loadPendingOvertimeRequests();
 
         debugPrint("✅ DASHBOARD: Approver setup completed successfully");
 
-        // Show success message
         if (mounted) {
           CustomSnackBar.successSnackBar("You are now set up as an overtime approver!");
         }
@@ -4518,7 +4316,6 @@ class _DashboardViewState extends State<DashboardView>
       } else {
         debugPrint("❌ User is NOT an overtime approver");
 
-        // ✅ STEP 6: Check if we should force setup (for testing)
         if (widget.employeeId == 'scvCD591SEspd8jKuIGZ' && _userData?['pin'] == '1289') {
           debugPrint("🔧 FORCE SETUP: This user has PIN 1289, setting up as approver...");
 
@@ -4529,28 +4326,29 @@ class _DashboardViewState extends State<DashboardView>
 
           if (forceSetup) {
             debugPrint("✅ Force setup successful, rechecking...");
-            // Recheck after force setup
             await _checkOvertimeApproverStatus();
             return;
           }
         }
 
+        if (mounted) {
+          setState(() {
+            _isOvertimeApprover = false;
+            _approverInfo = null;
+            _checkingApproverStatus = false;
+          });
+        }
+      }
+
+    } catch (e) {
+      debugPrint("❌ Error checking approver status: $e");
+      if (mounted) {
         setState(() {
           _isOvertimeApprover = false;
           _approverInfo = null;
           _checkingApproverStatus = false;
         });
-      }
 
-    } catch (e) {
-      debugPrint("❌ Error checking approver status: $e");
-      setState(() {
-        _isOvertimeApprover = false;
-        _approverInfo = null;
-        _checkingApproverStatus = false;
-      });
-
-      if (mounted) {
         CustomSnackBar.errorSnackBar("Error checking overtime approver status: $e");
       }
     }
@@ -4781,7 +4579,6 @@ class _DashboardViewState extends State<DashboardView>
       debugPrint("=== LOADING PENDING OVERTIME REQUESTS ===");
       debugPrint("Loading for approver: ${widget.employeeId}");
 
-      // Use all possible approver ID variants
       List<String> approverIds = [
         widget.employeeId,
         'EMP${widget.employeeId}',
@@ -4793,7 +4590,7 @@ class _DashboardViewState extends State<DashboardView>
       QuerySnapshot snapshot = await FirebaseFirestore.instance
           .collection('overtime_requests')
           .where('status', isEqualTo: 'pending')
-          .get(); // Get all pending first, then filter
+          .get();
 
       int matchingRequests = 0;
       for (var doc in snapshot.docs) {
@@ -4803,7 +4600,6 @@ class _DashboardViewState extends State<DashboardView>
 
           debugPrint("Request ${doc.id}: approverEmpId = '$docApproverId'");
 
-          // Check if any of our approver IDs match
           for (String approverId in approverIds) {
             if (docApproverId == approverId) {
               matchingRequests++;
@@ -4818,15 +4614,19 @@ class _DashboardViewState extends State<DashboardView>
 
       debugPrint("Found $matchingRequests pending overtime requests");
 
-      setState(() {
-        _pendingOvertimeRequests = matchingRequests;
-      });
+      if (mounted) {
+        setState(() {
+          _pendingOvertimeRequests = matchingRequests;
+        });
+      }
 
     } catch (e) {
       debugPrint("❌ Error loading pending overtime requests: $e");
-      setState(() {
-        _pendingOvertimeRequests = 0;
-      });
+      if (mounted) {
+        setState(() {
+          _pendingOvertimeRequests = 0;
+        });
+      }
     }
   }
 
@@ -4871,7 +4671,7 @@ class _DashboardViewState extends State<DashboardView>
     debugPrint("Data: $data");
     debugPrint("Current Employee: ${widget.employeeId}");
 
-    // ===== REST TIMING SCHEDULE NOTIFICATIONS =====
+    // REST TIMING SCHEDULE NOTIFICATIONS
     if (notificationType == 'rest_timing_schedule') {
       debugPrint("⚠️ REST TIMING SCHEDULE NOTIFICATION RECEIVED");
 
@@ -4884,7 +4684,6 @@ class _DashboardViewState extends State<DashboardView>
       final String status = data['status'] ?? '';
       final String scheduleId = data['scheduleId'] ?? '';
 
-      // Show different messages based on status
       String title, message;
       Color backgroundColor;
       IconData iconData;
@@ -4906,21 +4705,23 @@ class _DashboardViewState extends State<DashboardView>
         iconData = Icons.update;
       }
 
+
+
       showDialog(
         context: context,
         barrierDismissible: false,
         builder: (context) => AlertDialog(
           backgroundColor: _isDarkMode ? const Color(0xFF1E293B) : Colors.white,
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(cardBorderRadius)),
           title: Container(
-            padding: const EdgeInsets.all(16),
+            padding: EdgeInsets.all(containerSpacing),
             decoration: BoxDecoration(
               gradient: LinearGradient(
                 colors: [backgroundColor, backgroundColor.withOpacity(0.8)],
                 begin: Alignment.centerLeft,
                 end: Alignment.centerRight,
               ),
-              borderRadius: BorderRadius.circular(12),
+              borderRadius: BorderRadius.circular(cardBorderRadius - 4),
             ),
             child: Row(
               children: [
@@ -4929,13 +4730,13 @@ class _DashboardViewState extends State<DashboardView>
                   color: Colors.white,
                   size: 32,
                 ),
-                const SizedBox(width: 12),
+                SizedBox(width: containerSpacing * 0.75),
                 Expanded(
                   child: Text(
                     title,
                     style: TextStyle(
                       color: Colors.white,
-                      fontSize: (isTablet ? 20 : 18) * responsiveFontSize,
+                      fontSize: (isLargeScreen ? 22 : (isTablet ? 20 : 18)) * responsiveFontSize,
                       fontWeight: FontWeight.bold,
                     ),
                   ),
@@ -4949,7 +4750,7 @@ class _DashboardViewState extends State<DashboardView>
               mainAxisSize: MainAxisSize.min,
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                const SizedBox(height: 16),
+                SizedBox(height: containerSpacing),
                 _buildNotificationDetailRow("Schedule:", scheduleTitle),
                 if (scheduleReason.isNotEmpty)
                   _buildNotificationDetailRow("Reason:", scheduleReason),
@@ -4958,13 +4759,13 @@ class _DashboardViewState extends State<DashboardView>
                 _buildNotificationDetailRow("Status:", status.toUpperCase()),
                 if (scheduleId.isNotEmpty)
                   _buildNotificationDetailRow("Schedule ID:", scheduleId.substring(0, 8) + "..."),
-                const SizedBox(height: 16),
+                SizedBox(height: containerSpacing),
                 Container(
                   width: double.infinity,
-                  padding: const EdgeInsets.all(16),
+                  padding: EdgeInsets.all(containerSpacing),
                   decoration: BoxDecoration(
                     color: backgroundColor.withOpacity(0.1),
-                    borderRadius: BorderRadius.circular(12),
+                    borderRadius: BorderRadius.circular(cardBorderRadius - 4),
                     border: Border.all(color: backgroundColor.withOpacity(0.3)),
                   ),
                   child: Column(
@@ -4979,7 +4780,7 @@ class _DashboardViewState extends State<DashboardView>
                             style: TextStyle(
                               fontWeight: FontWeight.bold,
                               color: Colors.blue.shade800,
-                              fontSize: (isTablet ? 16 : 14) * responsiveFontSize,
+                              fontSize: (isLargeScreen ? 18 : (isTablet ? 16 : 14)) * responsiveFontSize,
                             ),
                           ),
                         ],
@@ -4991,7 +4792,7 @@ class _DashboardViewState extends State<DashboardView>
                             : "This rest timing schedule will be effective from the start date. You'll be notified when it becomes active.",
                         style: TextStyle(
                           color: Colors.blue.shade700,
-                          fontSize: (isTablet ? 14 : 12) * responsiveFontSize,
+                          fontSize: (isLargeScreen ? 16 : (isTablet ? 14 : 12)) * responsiveFontSize,
                         ),
                       ),
                     ],
@@ -5022,11 +4823,127 @@ class _DashboardViewState extends State<DashboardView>
         ),
       );
 
-      // Refresh dashboard to show updated data
       _refreshDashboard();
     }
 
-    // ===== LEAVE APPLICATION NOTIFICATIONS =====
+    // Add this case to the _handleNotification method
+    else if (notificationType == 'overtime_approved') {
+      debugPrint("⚠️ OVERTIME APPROVED NOTIFICATION RECEIVED");
+
+      final String projectName = data['projectName'] ?? 'Project';
+      final String totalHours = data['totalHours'] ?? '0';
+      final String requestId = data['requestId'] ?? '';
+
+      showDialog(
+        context: context,
+        barrierDismissible: false,
+        builder: (context) => AlertDialog(
+          backgroundColor: _isDarkMode ? const Color(0xFF1E293B) : Colors.white,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(cardBorderRadius)),
+          title: Container(
+            padding: EdgeInsets.all(containerSpacing),
+            decoration: BoxDecoration(
+              gradient: LinearGradient(
+                colors: [Colors.green, Colors.green.withOpacity(0.8)],
+                begin: Alignment.centerLeft,
+                end: Alignment.centerRight,
+              ),
+              borderRadius: BorderRadius.circular(cardBorderRadius - 4),
+            ),
+            child: Row(
+              children: [
+                const Icon(Icons.check_circle, color: Colors.white, size: 32),
+                SizedBox(width: containerSpacing * 0.75),
+                Expanded(
+                  child: Text(
+                    "Overtime Approved!",
+                    style: TextStyle(
+                      color: Colors.white,
+                      fontSize: (isLargeScreen ? 22 : (isTablet ? 20 : 18)) * responsiveFontSize,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          content: Container(
+            width: double.maxFinite,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                SizedBox(height: containerSpacing),
+                _buildNotificationDetailRow("Project:", projectName),
+                _buildNotificationDetailRow("Duration:", "${totalHours}h"),
+                _buildNotificationDetailRow("Request ID:", requestId.substring(0, 8) + "..."),
+                SizedBox(height: containerSpacing),
+                Container(
+                  width: double.infinity,
+                  padding: EdgeInsets.all(containerSpacing),
+                  decoration: BoxDecoration(
+                    color: Colors.green.withOpacity(0.1),
+                    borderRadius: BorderRadius.circular(cardBorderRadius - 4),
+                    border: Border.all(color: Colors.green.withOpacity(0.3)),
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        children: [
+                          Icon(Icons.info, color: Colors.green, size: 20),
+                          const SizedBox(width: 8),
+                          Text(
+                            "You're Approved for Overtime!",
+                            style: TextStyle(
+                              fontWeight: FontWeight.bold,
+                              color: Colors.green.shade800,
+                              fontSize: (isLargeScreen ? 18 : (isTablet ? 16 : 14)) * responsiveFontSize,
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 8),
+                      Text(
+                        "You have been approved for overtime work. The overtime details will appear on your dashboard during the scheduled hours.",
+                        style: TextStyle(
+                          color: Colors.green.shade700,
+                          fontSize: (isLargeScreen ? 16 : (isTablet ? 14 : 12)) * responsiveFontSize,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: Text("Later", style: TextStyle(color: Colors.grey.shade600)),
+            ),
+            ElevatedButton.icon(
+              icon: const Icon(Icons.refresh),
+              label: const Text("Refresh Dashboard"),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Colors.green,
+                foregroundColor: Colors.white,
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+              ),
+              onPressed: () {
+                Navigator.pop(context);
+                _refreshDashboard();
+              },
+            ),
+          ],
+        ),
+      );
+
+      // Refresh overtime assignments
+      _fetchOvertimeAssignments();
+    }
+
+    // LEAVE APPLICATION NOTIFICATIONS
     else if (notificationType == 'leave_application') {
       debugPrint("⚠️ LEAVE APPLICATION NOTIFICATION RECEIVED");
 
@@ -5041,27 +4958,27 @@ class _DashboardViewState extends State<DashboardView>
           barrierDismissible: false,
           builder: (context) => AlertDialog(
             backgroundColor: _isDarkMode ? const Color(0xFF1E293B) : Colors.white,
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(cardBorderRadius)),
             title: Container(
-              padding: const EdgeInsets.all(16),
+              padding: EdgeInsets.all(containerSpacing),
               decoration: BoxDecoration(
-                gradient: LinearGradient(
+                gradient: const LinearGradient(
                   colors: [Colors.blue, Colors.green],
                   begin: Alignment.centerLeft,
                   end: Alignment.centerRight,
                 ),
-                borderRadius: BorderRadius.circular(12),
+                borderRadius: BorderRadius.circular(cardBorderRadius - 4),
               ),
               child: Row(
                 children: [
                   const Icon(Icons.event_available, color: Colors.white, size: 32),
-                  const SizedBox(width: 12),
+                  SizedBox(width: containerSpacing * 0.75),
                   Expanded(
                     child: Text(
                       "New Leave Application!",
                       style: TextStyle(
                         color: Colors.white,
-                        fontSize: (isTablet ? 20 : 18) * responsiveFontSize,
+                        fontSize: (isLargeScreen ? 22 : (isTablet ? 20 : 18)) * responsiveFontSize,
                         fontWeight: FontWeight.bold,
                       ),
                     ),
@@ -5075,18 +4992,18 @@ class _DashboardViewState extends State<DashboardView>
                 mainAxisSize: MainAxisSize.min,
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  const SizedBox(height: 16),
+                  SizedBox(height: containerSpacing),
                   _buildNotificationDetailRow("Employee:", employeeName),
                   _buildNotificationDetailRow("Leave Type:", leaveType),
                   _buildNotificationDetailRow("Duration:", "$totalDays days"),
                   _buildNotificationDetailRow("Application ID:", applicationId),
-                  const SizedBox(height: 16),
+                  SizedBox(height: containerSpacing),
                   Container(
                     width: double.infinity,
-                    padding: const EdgeInsets.all(16),
+                    padding: EdgeInsets.all(containerSpacing),
                     decoration: BoxDecoration(
                       color: Colors.blue.withOpacity(0.1),
-                      borderRadius: BorderRadius.circular(12),
+                      borderRadius: BorderRadius.circular(cardBorderRadius - 4),
                       border: Border.all(color: Colors.blue.withOpacity(0.3)),
                     ),
                     child: Column(
@@ -5101,7 +5018,7 @@ class _DashboardViewState extends State<DashboardView>
                               style: TextStyle(
                                 fontWeight: FontWeight.bold,
                                 color: Colors.blue.shade800,
-                                fontSize: (isTablet ? 16 : 14) * responsiveFontSize,
+                                fontSize: (isLargeScreen ? 18 : (isTablet ? 16 : 14)) * responsiveFontSize,
                               ),
                             ),
                           ],
@@ -5111,7 +5028,7 @@ class _DashboardViewState extends State<DashboardView>
                           "This leave application needs your approval. Please review the details carefully before making a decision.",
                           style: TextStyle(
                             color: Colors.blue.shade700,
-                            fontSize: (isTablet ? 14 : 12) * responsiveFontSize,
+                            fontSize: (isLargeScreen ? 16 : (isTablet ? 14 : 12)) * responsiveFontSize,
                           ),
                         ),
                       ],
@@ -5154,7 +5071,7 @@ class _DashboardViewState extends State<DashboardView>
       }
     }
 
-    // ===== LEAVE APPLICATION STATUS UPDATE =====
+    // LEAVE APPLICATION STATUS UPDATE
     else if (notificationType == 'leave_application_update') {
       debugPrint("⚠️ LEAVE STATUS UPDATE NOTIFICATION RECEIVED");
 
@@ -5168,7 +5085,7 @@ class _DashboardViewState extends State<DashboardView>
         context: context,
         builder: (context) => AlertDialog(
           backgroundColor: _isDarkMode ? const Color(0xFF1E293B) : Colors.white,
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(cardBorderRadius)),
           title: Row(
             children: [
               Icon(
@@ -5176,14 +5093,14 @@ class _DashboardViewState extends State<DashboardView>
                 color: isApproved ? Colors.green : Colors.red,
                 size: 32,
               ),
-              const SizedBox(width: 12),
+              SizedBox(width: containerSpacing * 0.75),
               Expanded(
                 child: Text(
                   isApproved ? "Leave Application Approved!" : "Leave Application Rejected",
                   style: TextStyle(
                     color: isApproved ? Colors.green : Colors.red,
                     fontWeight: FontWeight.bold,
-                    fontSize: (isTablet ? 18 : 16) * responsiveFontSize,
+                    fontSize: (isLargeScreen ? 20 : (isTablet ? 18 : 16)) * responsiveFontSize,
                   ),
                 ),
               ),
@@ -5198,18 +5115,18 @@ class _DashboardViewState extends State<DashboardView>
                     ? "Your $leaveType application has been approved."
                     : "Your $leaveType application has been rejected.",
                 style: TextStyle(
-                  fontSize: (isTablet ? 16 : 14) * responsiveFontSize,
+                  fontSize: (isLargeScreen ? 18 : (isTablet ? 16 : 14)) * responsiveFontSize,
                   color: _isDarkMode ? Colors.grey.shade300 : Colors.grey.shade700,
                 ),
               ),
               if (comments.isNotEmpty) ...[
-                const SizedBox(height: 16),
+                SizedBox(height: containerSpacing),
                 Container(
                   width: double.infinity,
-                  padding: const EdgeInsets.all(12),
+                  padding: EdgeInsets.all(containerSpacing * 0.75),
                   decoration: BoxDecoration(
                     color: (isApproved ? Colors.green : Colors.red).withOpacity(0.1),
-                    borderRadius: BorderRadius.circular(12),
+                    borderRadius: BorderRadius.circular(cardBorderRadius - 4),
                     border: Border.all(
                       color: (isApproved ? Colors.green : Colors.red).withOpacity(0.3),
                     ),
@@ -5222,7 +5139,7 @@ class _DashboardViewState extends State<DashboardView>
                         style: TextStyle(
                           fontWeight: FontWeight.bold,
                           color: isApproved ? Colors.green.shade800 : Colors.red.shade800,
-                          fontSize: (isTablet ? 14 : 12) * responsiveFontSize,
+                          fontSize: (isLargeScreen ? 16 : (isTablet ? 14 : 12)) * responsiveFontSize,
                         ),
                       ),
                       const SizedBox(height: 8),
@@ -5230,7 +5147,7 @@ class _DashboardViewState extends State<DashboardView>
                         comments,
                         style: TextStyle(
                           color: isApproved ? Colors.green.shade700 : Colors.red.shade700,
-                          fontSize: (isTablet ? 14 : 12) * responsiveFontSize,
+                          fontSize: (isLargeScreen ? 16 : (isTablet ? 14 : 12)) * responsiveFontSize,
                         ),
                       ),
                     ],
@@ -5253,7 +5170,7 @@ class _DashboardViewState extends State<DashboardView>
       );
     }
 
-    // ===== CHECK-OUT REQUEST NOTIFICATIONS =====
+    // CHECK-OUT REQUEST NOTIFICATIONS
     else if (notificationType == 'check_out_request_update') {
       final String status = data['status'] ?? '';
       final String requestType = data['requestType'] ?? 'check-out';
@@ -5286,7 +5203,7 @@ class _DashboardViewState extends State<DashboardView>
       }
     }
 
-    // ===== OVERTIME NOTIFICATIONS =====
+    // OVERTIME NOTIFICATIONS
     else if (notificationType == 'overtime_request') {
       debugPrint("⚠️ OVERTIME REQUEST NOTIFICATION RECEIVED");
 
@@ -5315,22 +5232,16 @@ class _DashboardViewState extends State<DashboardView>
       );
     }
 
-    // Refresh dashboard for all notifications
     _refreshDashboard();
     debugPrint("=== NOTIFICATION HANDLED ===");
   }
 
-
-
-
-
-// Helper method to show rest timing details
   void _showRestTimingDetails(Map<String, dynamic> scheduleData) {
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
         backgroundColor: _isDarkMode ? const Color(0xFF1E293B) : Colors.white,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(cardBorderRadius)),
         title: Row(
           children: [
             Container(
@@ -5341,14 +5252,14 @@ class _DashboardViewState extends State<DashboardView>
               ),
               child: const Icon(Icons.schedule, color: Colors.blue, size: 24),
             ),
-            const SizedBox(width: 12),
+            SizedBox(width: containerSpacing * 0.75),
             Expanded(
               child: Text(
                 "Rest Timing Schedule Details",
                 style: TextStyle(
                   fontWeight: FontWeight.bold,
                   color: _isDarkMode ? Colors.white : Colors.black87,
-                  fontSize: (isTablet ? 20 : 18) * responsiveFontSize,
+                  fontSize: (isLargeScreen ? 22 : (isTablet ? 20 : 18)) * responsiveFontSize,
                 ),
               ),
             ),
@@ -5407,7 +5318,7 @@ class _DashboardViewState extends State<DashboardView>
               style: TextStyle(
                 fontWeight: FontWeight.bold,
                 color: _isDarkMode ? Colors.grey.shade400 : Colors.grey.shade700,
-                fontSize: (isTablet ? 14 : 12) * responsiveFontSize,
+                fontSize: (isLargeScreen ? 16 : (isTablet ? 14 : 12)) * responsiveFontSize,
               ),
             ),
           ),
@@ -5416,7 +5327,7 @@ class _DashboardViewState extends State<DashboardView>
               value.isEmpty ? 'Not specified' : value,
               style: TextStyle(
                 color: _isDarkMode ? Colors.white : Colors.black87,
-                fontSize: (isTablet ? 14 : 12) * responsiveFontSize,
+                fontSize: (isLargeScreen ? 16 : (isTablet ? 14 : 12)) * responsiveFontSize,
               ),
             ),
           ),
@@ -5438,7 +5349,7 @@ class _DashboardViewState extends State<DashboardView>
               style: TextStyle(
                 fontWeight: FontWeight.bold,
                 color: _isDarkMode ? Colors.grey.shade400 : Colors.grey.shade700,
-                fontSize: (isTablet ? 14 : 12) * responsiveFontSize,
+                fontSize: (isLargeScreen ? 16 : (isTablet ? 14 : 12)) * responsiveFontSize,
               ),
             ),
           ),
@@ -5448,7 +5359,7 @@ class _DashboardViewState extends State<DashboardView>
               style: TextStyle(
                 fontWeight: FontWeight.w500,
                 color: _isDarkMode ? Colors.white : Colors.black87,
-                fontSize: (isTablet ? 14 : 12) * responsiveFontSize,
+                fontSize: (isLargeScreen ? 16 : (isTablet ? 14 : 12)) * responsiveFontSize,
               ),
             ),
           ),
@@ -5468,6 +5379,1132 @@ class _DashboardViewState extends State<DashboardView>
       ).then((_) => _loadPendingApprovalRequests());
     }
   }
+
+  // Settings Menu - Complete Implementation
+  void _showSettingsMenu(BuildContext context) {
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.transparent,
+      isScrollControlled: true,
+      builder: (context) => Container(
+        height: MediaQuery.of(context).size.height * 0.85, // Increased height
+        decoration: BoxDecoration(
+          color: _isDarkMode ? const Color(0xFF1E293B) : Colors.white,
+          borderRadius: BorderRadius.vertical(top: Radius.circular(cardBorderRadius + 12)),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withOpacity(0.1),
+              blurRadius: 20,
+              offset: const Offset(0, -5),
+            ),
+          ],
+        ),
+        child: Column(
+          children: [
+            // Handle bar
+            Container(
+              margin: EdgeInsets.only(top: containerSpacing * 0.75),
+              width: 40,
+              height: 4,
+              decoration: BoxDecoration(
+                color: Colors.grey.shade300,
+                borderRadius: BorderRadius.circular(2),
+              ),
+            ),
+
+            // Header
+            Padding(
+              padding: EdgeInsets.all(isLargeScreen ? 32 : (isTablet ? 28 : 24)),
+              child: Row(
+                children: [
+                  Container(
+                    padding: const EdgeInsets.all(8),
+                    decoration: BoxDecoration(
+                      color: Theme.of(context).colorScheme.primary.withOpacity(0.1),
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: Icon(
+                      Icons.settings,
+                      color: Theme.of(context).colorScheme.primary,
+                      size: 24,
+                    ),
+                  ),
+                  SizedBox(width: containerSpacing),
+                  Text(
+                    'Settings & Tools',
+                    style: TextStyle(
+                      fontSize: (isLargeScreen ? 32 : (isTablet ? 28 : 24)) * responsiveFontSize,
+                      fontWeight: FontWeight.bold,
+                      color: _isDarkMode ? Colors.white : Colors.black87,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+
+            // Settings options with NEW DEBUG & SYNC OPTIONS
+            Expanded(
+              child: SingleChildScrollView(
+                padding: EdgeInsets.symmetric(horizontal: isLargeScreen ? 32 : (isTablet ? 28 : 24)),
+                child: Column(
+                  children: [
+                    // ======= MAIN SETTINGS =======
+                    _buildSettingsSection("Main Settings", [
+                      _buildModernSettingsOption(
+                        icon: Icons.calendar_view_month,
+                        title: 'My Attendance',
+                        subtitle: 'View your attendance history and overtime records',
+                        onTap: () {
+                          Navigator.pop(context);
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (context) => MyAttendanceView(
+                                employeeId: widget.employeeId,
+                                userData: _userData ?? {},
+                              ),
+                            ),
+                          );
+                        },
+                      ),
+
+                      _buildModernSettingsOption(
+                        icon: Icons.event_note,
+                        title: 'Leave Management',
+                        subtitle: 'View leave balance, history, and apply for leave',
+                        onTap: () {
+                          Navigator.pop(context);
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (context) => LeaveHistoryView(
+                                employeeId: widget.employeeId,
+                                employeeName: _userData?['name'] ?? 'Employee',
+                                employeePin: _userData?['pin'] ?? widget.employeeId,
+                                userData: _userData ?? {},
+                              ),
+                            ),
+                          ).then((_) => _refreshDashboard());
+                        },
+                      ),
+
+                      _buildModernSettingsOption(
+                        icon: Icons.history,
+                        title: 'Check-Out Request History',
+                        subtitle: 'View your remote check-out requests',
+                        onTap: () {
+                          Navigator.pop(context);
+                          Navigator.of(context).push(
+                            MaterialPageRoute(
+                              builder: (context) => CheckOutRequestHistoryView(
+                                employeeId: widget.employeeId,
+                              ),
+                            ),
+                          );
+                        },
+                      ),
+                    ]),
+
+                    // ======= SYSTEM TOOLS (NEW SECTION) =======
+                    _buildSettingsSection("System Tools", [
+                      _buildModernSettingsOption(
+                        icon: Icons.sync_rounded,
+                        title: 'Force Attendance Sync',
+                        subtitle: 'Sync attendance data across all devices',
+                        iconColor: Colors.green,
+                        onTap: () async {
+                          Navigator.pop(context);
+                          await _forceAttendanceSync();
+                        },
+                      ),
+
+                      _buildModernSettingsOption(
+                        icon: Icons.cloud_sync,
+                        title: 'Manual Data Sync',
+                        subtitle: 'Sync all pending data to cloud',
+                        iconColor: Colors.orange,
+                        isEnabled: _needsSync && _connectivityService.currentStatus == ConnectionStatus.online,
+                        onTap: () async {
+                          Navigator.pop(context);
+                          await _manualSync();
+                        },
+                      ),
+
+                      _buildModernSettingsOption(
+                        icon: Icons.location_searching,
+                        title: 'View All Locations',
+                        subtitle: 'See available office locations and distances',
+                        iconColor: Colors.blue,
+                        onTap: () {
+                          Navigator.pop(context);
+                          _showLocationMenu(context);
+                        },
+                      ),
+
+                      _buildModernSettingsOption(
+                        icon: Icons.cloud_download,
+                        title: 'Recover Face Data',
+                        subtitle: 'Download face authentication data from cloud',
+                        iconColor: Colors.purple,
+                        onTap: () {
+                          Navigator.pop(context);
+                          _forceFaceDataRecovery();
+                        },
+                      ),
+                    ]),
+
+                    // ======= DEVELOPER TOOLS (NEW SECTION) =======
+                    if (kDebugMode || widget.employeeId == 'EMP1289')
+                      _buildSettingsSection("Developer Tools", [
+                        _buildModernSettingsOption(
+                          icon: Icons.bug_report,
+                          title: 'Debug Local Data',
+                          subtitle: 'View local database and cache information',
+                          iconColor: Colors.red,
+                          onTap: () {
+                            Navigator.pop(context);
+                            Navigator.push(
+                              context,
+                              MaterialPageRoute(
+                                builder: (context) => DebugDataScreen(employeeId: widget.employeeId),
+                              ),
+                            );
+                          },
+                        ),
+
+                        _buildModernSettingsOption(
+                          icon: Icons.refresh,
+                          title: 'Force Dashboard Refresh',
+                          subtitle: 'Reload all dashboard data from server',
+                          iconColor: Colors.indigo,
+                          onTap: () async {
+                            Navigator.pop(context);
+                            await _refreshDashboard();
+                          },
+                        ),
+
+                        if (widget.employeeId == 'EMP1289')
+                          _buildModernSettingsOption(
+                            icon: Icons.science,
+                            title: 'Offline Test Mode',
+                            subtitle: 'Test offline functionality',
+                            iconColor: Colors.teal,
+                            onTap: () {
+                              Navigator.pop(context);
+                              Navigator.push(
+                                context,
+                                MaterialPageRoute(
+                                  builder: (context) => OfflineTestView(
+                                    employeeId: widget.employeeId,
+                                  ),
+                                ),
+                              );
+                            },
+                          ),
+                      ]),
+
+                    // ======= ADVANCED SETTINGS =======
+                    _buildSettingsSection("Advanced", [
+                      if (_userData != null &&
+                          (_userData!['hasOvertimeAccess'] == true ||
+                              _userData!['overtimeAccessGrantedAt'] != null))
+                        _buildModernSettingsOption(
+                          icon: Icons.people_outline,
+                          title: 'Manage Employee List',
+                          subtitle: 'Create custom employee list for overtime requests',
+                          onTap: () {
+                            Navigator.pop(context);
+                            Navigator.push(
+                              context,
+                              MaterialPageRoute(
+                                builder: (context) => EmployeeListManagementView(
+                                  requesterId: widget.employeeId,
+                                ),
+                              ),
+                            );
+                          },
+                        ),
+
+                      if (widget.employeeId == 'EMP1289')
+                        _buildModernSettingsOption(
+                          icon: Icons.admin_panel_settings,
+                          title: 'Admin Panel',
+                          subtitle: 'Administrative controls',
+                          onTap: () {
+                            Navigator.pop(context);
+                            Navigator.push(
+                              context,
+                              MaterialPageRoute(
+                                builder: (context) => NotificationAdminView(
+                                  userId: widget.employeeId,
+                                ),
+                              ),
+                            );
+                          },
+                        ),
+
+                      _buildModernSettingsOption(
+                        icon: Icons.dark_mode_outlined,
+                        title: 'Dark mode',
+                        subtitle: 'Switch between light and dark themes',
+                        hasToggle: true,
+                        toggleValue: _isDarkMode,
+                        onToggleChanged: (value) {
+                          setState(() {
+                            _isDarkMode = value;
+                            _saveDarkModePreference(value);
+                          });
+                        },
+                      ),
+                    ]),
+
+                    // ======= LOGOUT =======
+                    SizedBox(height: containerSpacing),
+
+                    _buildModernSettingsOption(
+                      icon: Icons.logout,
+                      title: 'Log out',
+                      subtitle: 'Sign out of your account',
+                      textColor: Colors.red,
+                      iconColor: Colors.red,
+                      onTap: () {
+                        Navigator.pop(context);
+                        _logout();
+                      },
+                    ),
+
+                    SizedBox(height: MediaQuery.of(context).padding.bottom + 20),
+                  ],
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildSettingsSection(String title, List<Widget> options) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Padding(
+          padding: EdgeInsets.only(
+            left: 8,
+            bottom: containerSpacing * 0.75,
+            top: containerSpacing,
+          ),
+          child: Text(
+            title,
+            style: TextStyle(
+              fontSize: (isLargeScreen ? 18 : (isTablet ? 16 : 14)) * responsiveFontSize,
+              fontWeight: FontWeight.bold,
+              color: Theme.of(context).colorScheme.primary,
+            ),
+          ),
+        ),
+        ...options,
+      ],
+    );
+  }
+
+  Widget _buildModernSettingsOption({
+    required IconData icon,
+    required String title,
+    String? subtitle,
+    VoidCallback? onTap,
+    bool hasToggle = false,
+    bool toggleValue = false,
+    Function(bool)? onToggleChanged,
+    Color? iconColor,
+    Color? textColor,
+    bool isEnabled = true, // NEW PARAMETER
+  }) {
+    final effectiveIconColor = iconColor ?? (_isDarkMode ? Colors.white70 : Colors.black54);
+    final effectiveTextColor = textColor ?? (_isDarkMode ? Colors.white : Colors.black87);
+    final opacity = isEnabled ? 1.0 : 0.5;
+
+    return Container(
+      margin: EdgeInsets.only(bottom: containerSpacing * 0.75),
+      decoration: BoxDecoration(
+        color: _isDarkMode ? const Color(0xFF334155) : Colors.grey.shade50,
+        borderRadius: BorderRadius.circular(cardBorderRadius),
+        border: Border.all(
+          color: _isDarkMode ? Colors.white.withOpacity(0.1) : Colors.grey.withOpacity(0.2),
+        ),
+      ),
+      child: Opacity(
+        opacity: opacity,
+        child: Material(
+          color: Colors.transparent,
+          child: InkWell(
+            onTap: isEnabled ? (hasToggle ? null : onTap) : null,
+            borderRadius: BorderRadius.circular(cardBorderRadius),
+            child: Padding(
+              padding: EdgeInsets.all(isLargeScreen ? 24 : (isTablet ? 20 : 16)),
+              child: Row(
+                children: [
+                  Container(
+                    padding: const EdgeInsets.all(8),
+                    decoration: BoxDecoration(
+                      color: effectiveIconColor.withOpacity(0.1),
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: Icon(icon, color: effectiveIconColor, size: 20),
+                  ),
+
+                  SizedBox(width: containerSpacing),
+
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          title,
+                          style: TextStyle(
+                            fontSize: (isLargeScreen ? 20 : (isTablet ? 18 : 16)) * responsiveFontSize,
+                            fontWeight: FontWeight.w600,
+                            color: effectiveTextColor,
+                          ),
+                        ),
+                        if (subtitle != null) ...[
+                          const SizedBox(height: 4),
+                          Text(
+                            subtitle,
+                            style: TextStyle(
+                              fontSize: (isLargeScreen ? 16 : (isTablet ? 14 : 12)) * responsiveFontSize,
+                              color: _isDarkMode ? Colors.grey.shade400 : Colors.grey.shade600,
+                            ),
+                          ),
+                        ],
+                      ],
+                    ),
+                  ),
+
+                  if (hasToggle)
+                    Switch.adaptive(
+                      value: toggleValue,
+                      onChanged: isEnabled ? onToggleChanged : null,
+                      activeColor: Theme.of(context).colorScheme.primary,
+                    )
+                  else if (onTap != null && isEnabled)
+                    Icon(
+                      Icons.arrow_forward_ios,
+                      size: 16,
+                      color: _isDarkMode ? Colors.grey.shade500 : Colors.grey.shade400,
+                    ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  // Notification Menu - Complete Implementation
+  void _showNotificationMenu(BuildContext context) {
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.transparent,
+      isScrollControlled: true,
+      builder: (context) => Container(
+        height: MediaQuery.of(context).size.height * 0.75,
+        decoration: BoxDecoration(
+          color: _isDarkMode ? const Color(0xFF1E293B) : Colors.white,
+          borderRadius: BorderRadius.vertical(top: Radius.circular(cardBorderRadius + 12)),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withOpacity(0.1),
+              blurRadius: 20,
+              offset: const Offset(0, -5),
+            ),
+          ],
+        ),
+        child: Column(
+          children: [
+            // Handle bar
+            Container(
+              margin: EdgeInsets.only(top: containerSpacing * 0.75),
+              width: 40,
+              height: 4,
+              decoration: BoxDecoration(
+                color: Colors.grey.shade300,
+                borderRadius: BorderRadius.circular(2),
+              ),
+            ),
+
+            // Header
+            Padding(
+              padding: EdgeInsets.all(isLargeScreen ? 32 : (isTablet ? 28 : 24)),
+              child: Row(
+                children: [
+                  Container(
+                    padding: const EdgeInsets.all(8),
+                    decoration: BoxDecoration(
+                      color: Theme.of(context).colorScheme.primary.withOpacity(0.1),
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: Icon(
+                      Icons.notifications,
+                      color: Theme.of(context).colorScheme.primary,
+                      size: 24,
+                    ),
+                  ),
+                  SizedBox(width: containerSpacing),
+                  Text(
+                    'Notifications & Actions',
+                    style: TextStyle(
+                      fontSize: (isLargeScreen ? 32 : (isTablet ? 28 : 24)) * responsiveFontSize,
+                      fontWeight: FontWeight.bold,
+                      color: _isDarkMode ? Colors.white : Colors.black87,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+
+            // Notification options
+            Expanded(
+              child: SingleChildScrollView(
+                padding: EdgeInsets.symmetric(horizontal: isLargeScreen ? 32 : (isTablet ? 28 : 24)),
+                child: Column(
+                  children: [
+                    // Leave management section
+                    _buildNotificationOption(
+                      icon: Icons.event_available,
+                      title: 'Apply for Leave',
+                      subtitle: 'Submit a new leave application',
+                      onTap: () {
+                        Navigator.pop(context);
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (context) => ApplyLeaveView(
+                              employeeId: widget.employeeId,
+                              employeeName: _userData?['name'] ?? 'Employee',
+                              employeePin: _userData?['pin'] ?? widget.employeeId,
+                              userData: _userData ?? {},
+                            ),
+                          ),
+                        ).then((_) => _refreshDashboard());
+                      },
+                    ),
+
+                    _buildNotificationOption(
+                      icon: Icons.history,
+                      title: 'Leave History',
+                      subtitle: 'View your leave applications and balance',
+                      onTap: () {
+                        Navigator.pop(context);
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (context) => LeaveHistoryView(
+                              employeeId: widget.employeeId,
+                              employeeName: _userData?['name'] ?? 'Employee',
+                              employeePin: _userData?['pin'] ?? widget.employeeId,
+                              userData: _userData ?? {},
+                            ),
+                          ),
+                        ).then((_) => _refreshDashboard());
+                      },
+                    ),
+
+                    // Leave approvals for line managers
+                    if (_isLineManager)
+                      _buildNotificationOption(
+                        icon: Icons.approval,
+                        title: 'Leave Approvals',
+                        subtitle: _pendingLeaveApprovals > 0
+                            ? '$_pendingLeaveApprovals applications waiting'
+                            : 'No pending leave applications',
+                        showBadge: _pendingLeaveApprovals > 0,
+                        badgeCount: _pendingLeaveApprovals,
+                        onTap: () {
+                          Navigator.pop(context);
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (context) => ManagerLeaveApprovalView(
+                                managerId: widget.employeeId,
+                                managerName: _userData?['name'] ?? 'Manager',
+                              ),
+                            ),
+                          ).then((_) => _loadPendingLeaveApprovals());
+                        },
+                      ),
+
+                    // Overtime section
+                    if (_isOvertimeApprover && _approverInfo != null)
+                      Container(
+                        margin: EdgeInsets.only(bottom: containerSpacing),
+                        padding: EdgeInsets.all(isLargeScreen ? 24 : (isTablet ? 20 : 16)),
+                        decoration: BoxDecoration(
+                          gradient: LinearGradient(
+                            colors: [Colors.orange.withOpacity(0.8), Colors.red.withOpacity(0.8)],
+                            begin: Alignment.centerLeft,
+                            end: Alignment.centerRight,
+                          ),
+                          borderRadius: BorderRadius.circular(cardBorderRadius),
+                          boxShadow: [
+                            BoxShadow(
+                              color: Colors.orange.withOpacity(0.3),
+                              blurRadius: 8,
+                              offset: const Offset(0, 4),
+                            ),
+                          ],
+                        ),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Row(
+                              children: [
+                                Icon(Icons.admin_panel_settings, color: Colors.white, size: 24),
+                                SizedBox(width: containerSpacing * 0.75),
+                                Expanded(
+                                  child: Text(
+                                    "OVERTIME APPROVER",
+                                    style: TextStyle(
+                                      color: Colors.white,
+                                      fontSize: (isLargeScreen ? 20 : (isTablet ? 18 : 16)) * responsiveFontSize,
+                                      fontWeight: FontWeight.bold,
+                                    ),
+                                  ),
+                                ),
+                                if (_pendingOvertimeRequests > 0)
+                                  Container(
+                                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                                    decoration: BoxDecoration(
+                                      color: Colors.white,
+                                      borderRadius: BorderRadius.circular(12),
+                                    ),
+                                    child: Text(
+                                      _pendingOvertimeRequests.toString(),
+                                      style: TextStyle(
+                                        color: Colors.red,
+                                        fontWeight: FontWeight.bold,
+                                        fontSize: (isLargeScreen ? 16 : (isTablet ? 14 : 12)) * responsiveFontSize,
+                                      ),
+                                    ),
+                                  ),
+                              ],
+                            ),
+                            SizedBox(height: containerSpacing),
+                            SizedBox(
+                              width: double.infinity,
+                              child: ElevatedButton.icon(
+                                onPressed: () {
+                                  Navigator.pop(context);
+                                  Navigator.push(
+                                    context,
+                                    MaterialPageRoute(
+                                      builder: (context) => PendingOvertimeView(
+                                        approverId: widget.employeeId,
+                                      ),
+                                    ),
+                                  ).then((_) => _loadPendingOvertimeRequests());
+                                },
+                                icon: const Icon(Icons.visibility),
+                                label: Text("Review $_pendingOvertimeRequests Pending Requests"),
+                                style: ElevatedButton.styleFrom(
+                                  backgroundColor: Colors.white,
+                                  foregroundColor: Colors.red,
+                                  padding: EdgeInsets.symmetric(vertical: isTablet ? 16 : 12),
+                                  shape: RoundedRectangleBorder(
+                                    borderRadius: BorderRadius.circular(12),
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      )
+                    else if (_userData != null &&
+                        (_userData!['hasOvertimeAccess'] == true ||
+                            _userData!['overtimeAccessGrantedAt'] != null))
+                      _buildNotificationOption(
+                        icon: Icons.access_time,
+                        title: 'Request Overtime',
+                        subtitle: 'Create new overtime request',
+                        onTap: () {
+                          Navigator.pop(context);
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (context) => CreateOvertimeView(
+                                requesterId: widget.employeeId,
+                              ),
+                            ),
+                          );
+                        },
+                      ),
+
+                    // Line manager options
+                    if (_isLineManager) ...[
+                      _buildNotificationOption(
+                        icon: Icons.people_outline,
+                        title: 'My Team',
+                        subtitle: 'View team members and attendance',
+                        onTap: () {
+                          Navigator.pop(context);
+                          if (_lineManagerData != null) {
+                            String managerId = _lineManagerData!['managerId'] ?? '';
+                            if (managerId.isNotEmpty) {
+                              Navigator.of(context).push(
+                                MaterialPageRoute(
+                                  builder: (context) => TeamManagementView(
+                                    managerId: managerId,
+                                    managerData: _userData!,
+                                  ),
+                                ),
+                              );
+                            } else {
+                              CustomSnackBar.errorSnackBar(context, "Manager ID not found");
+                            }
+                          }
+                        },
+                      ),
+
+                      _buildNotificationOption(
+                        icon: Icons.approval,
+                        title: 'Pending Check-Out Requests',
+                        subtitle: _pendingApprovalRequests > 0
+                            ? '$_pendingApprovalRequests requests waiting'
+                            : 'No pending requests',
+                        showBadge: _pendingApprovalRequests > 0,
+                        badgeCount: _pendingApprovalRequests,
+                        onTap: () {
+                          Navigator.pop(context);
+                          Navigator.of(context).push(
+                            MaterialPageRoute(
+                              builder: (context) => ManagerPendingRequestsView(
+                                managerId: widget.employeeId,
+                              ),
+                            ),
+                          ).then((_) => _loadPendingApprovalRequests());
+                        },
+                      ),
+                    ],
+
+                    SizedBox(height: MediaQuery.of(context).padding.bottom + 20),
+                  ],
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildNotificationOption({
+    required IconData icon,
+    required String title,
+    String? subtitle,
+    VoidCallback? onTap,
+    bool showBadge = false,
+    int badgeCount = 0,
+  }) {
+    return Container(
+      margin: EdgeInsets.only(bottom: containerSpacing * 0.75),
+      decoration: BoxDecoration(
+        color: _isDarkMode ? const Color(0xFF334155) : Colors.grey.shade50,
+        borderRadius: BorderRadius.circular(cardBorderRadius),
+        border: Border.all(
+          color: _isDarkMode ? Colors.white.withOpacity(0.1) : Colors.grey.withOpacity(0.2),
+        ),
+      ),
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          onTap: onTap,
+          borderRadius: BorderRadius.circular(cardBorderRadius),
+          child: Padding(
+            padding: EdgeInsets.all(isLargeScreen ? 24 : (isTablet ? 20 : 16)),
+            child: Row(
+              children: [
+                Stack(
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.all(8),
+                      decoration: BoxDecoration(
+                        color: Theme.of(context).colorScheme.primary.withOpacity(0.1),
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: Icon(
+                        icon,
+                        color: Theme.of(context).colorScheme.primary,
+                        size: 20,
+                      ),
+                    ),
+                    if (showBadge && badgeCount > 0)
+                      Positioned(
+                        right: -2,
+                        top: -2,
+                        child: Container(
+                          padding: const EdgeInsets.all(4),
+                          decoration: BoxDecoration(
+                            color: Colors.red,
+                            shape: BoxShape.circle,
+                            border: Border.all(color: Colors.white, width: 1),
+                          ),
+                          constraints: const BoxConstraints(
+                            minWidth: 16,
+                            minHeight: 16,
+                          ),
+                          child: Text(
+                            badgeCount > 99 ? '99+' : badgeCount.toString(),
+                            style: const TextStyle(
+                              color: Colors.white,
+                              fontSize: 9,
+                              fontWeight: FontWeight.bold,
+                            ),
+                            textAlign: TextAlign.center,
+                          ),
+                        ),
+                      ),
+                  ],
+                ),
+
+                SizedBox(width: containerSpacing),
+
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        title,
+                        style: TextStyle(
+                          fontSize: (isLargeScreen ? 20 : (isTablet ? 18 : 16)) * responsiveFontSize,
+                          fontWeight: FontWeight.w600,
+                          color: _isDarkMode ? Colors.white : Colors.black87,
+                        ),
+                      ),
+                      if (subtitle != null) ...[
+                        const SizedBox(height: 4),
+                        Text(
+                          subtitle,
+                          style: TextStyle(
+                            fontSize: (isLargeScreen ? 16 : (isTablet ? 14 : 12)) * responsiveFontSize,
+                            color: _isDarkMode ? Colors.grey.shade400 : Colors.grey.shade600,
+                          ),
+                        ),
+                      ],
+                    ],
+                  ),
+                ),
+
+                if (onTap != null)
+                  Icon(
+                    Icons.arrow_forward_ios,
+                    size: 16,
+                    color: _isDarkMode ? Colors.grey.shade500 : Colors.grey.shade400,
+                  ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  // Location Menu - Complete Implementation
+  void _showLocationMenu(BuildContext context) {
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.transparent,
+      isScrollControlled: true,
+      builder: (context) => DraggableScrollableSheet(
+        initialChildSize: 0.6,
+        maxChildSize: 0.9,
+        minChildSize: 0.3,
+        expand: false,
+        builder: (context, scrollController) => Container(
+          decoration: BoxDecoration(
+            color: _isDarkMode ? const Color(0xFF1E293B) : Colors.white,
+            borderRadius: BorderRadius.vertical(top: Radius.circular(cardBorderRadius + 12)),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withOpacity(0.1),
+                blurRadius: 20,
+                offset: const Offset(0, -5),
+              ),
+            ],
+          ),
+          child: Column(
+            children: [
+              // Handle bar
+              Container(
+                margin: EdgeInsets.only(top: containerSpacing * 0.75),
+                width: 40,
+                height: 4,
+                decoration: BoxDecoration(
+                  color: Colors.grey.shade300,
+                  borderRadius: BorderRadius.circular(2),
+                ),
+              ),
+
+              // Header
+              Padding(
+                padding: EdgeInsets.all(isLargeScreen ? 32 : (isTablet ? 28 : 24)),
+                child: Row(
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.all(8),
+                      decoration: BoxDecoration(
+                        color: Theme.of(context).colorScheme.primary.withOpacity(0.1),
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: Icon(
+                        Icons.location_on,
+                        color: Theme.of(context).colorScheme.primary,
+                        size: 24,
+                      ),
+                    ),
+                    SizedBox(width: containerSpacing),
+                    Expanded(
+                      child: Text(
+                        'Available Locations',
+                        style: TextStyle(
+                          fontSize: (isLargeScreen ? 32 : (isTablet ? 28 : 24)) * responsiveFontSize,
+                          fontWeight: FontWeight.bold,
+                          color: _isDarkMode ? Colors.white : Colors.black87,
+                        ),
+                      ),
+                    ),
+                    IconButton(
+                      onPressed: () {
+                        _checkGeofenceStatus();
+                        CustomSnackBar.successSnackBar(context, "Locations refreshed");
+                      },
+                      icon: Icon(
+                        Icons.refresh,
+                        color: _isDarkMode ? Colors.white : Colors.black87,
+                      ),
+                      style: IconButton.styleFrom(
+                        backgroundColor: _isDarkMode ? Colors.white.withOpacity(0.1) : Colors.grey.withOpacity(0.1),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+
+              // Locations list
+              Expanded(
+                child: _availableLocations.isEmpty
+                    ? Center(
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Container(
+                        padding: EdgeInsets.all(isLargeScreen ? 28 : (isTablet ? 24 : 20)),
+                        decoration: BoxDecoration(
+                          color: _isDarkMode ? Colors.white.withOpacity(0.05) : Colors.grey.withOpacity(0.1),
+                          shape: BoxShape.circle,
+                        ),
+                        child: Icon(
+                          Icons.location_off,
+                          size: isLargeScreen ? 72 : (isTablet ? 64 : 48),
+                          color: _isDarkMode ? Colors.grey.shade600 : Colors.grey.shade400,
+                        ),
+                      ),
+                      SizedBox(height: containerSpacing),
+                      Text(
+                        "No locations available",
+                        style: TextStyle(
+                          color: _isDarkMode ? Colors.grey.shade400 : Colors.grey.shade600,
+                          fontSize: (isLargeScreen ? 24 : (isTablet ? 20 : 18)) * responsiveFontSize,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ],
+                  ),
+                )
+                    : ListView.builder(
+                  controller: scrollController,
+                  padding: EdgeInsets.symmetric(horizontal: isLargeScreen ? 32 : (isTablet ? 28 : 24)),
+                  itemCount: _availableLocations.length,
+                  itemBuilder: (context, index) {
+                    final location = _availableLocations[index];
+                    final isNearest = _nearestLocation?.id == location.id;
+                    final isWithin = _isWithinGeofence && isNearest;
+
+                    return Container(
+                      margin: EdgeInsets.only(bottom: containerSpacing * 0.75),
+                      decoration: BoxDecoration(
+                        color: isWithin
+                            ? Colors.green.withOpacity(0.1)
+                            : (_isDarkMode ? const Color(0xFF334155) : Colors.grey.shade50),
+                        borderRadius: BorderRadius.circular(cardBorderRadius),
+                        border: Border.all(
+                          color: isWithin
+                              ? Colors.green
+                              : (_isDarkMode ? Colors.white.withOpacity(0.1) : Colors.grey.withOpacity(0.2)),
+                        ),
+                      ),
+                      child: Padding(
+                        padding: EdgeInsets.all(isLargeScreen ? 24 : (isTablet ? 20 : 16)),
+                        child: Row(
+                          children: [
+                            Container(
+                              padding: EdgeInsets.all(isTablet ? 12 : 10),
+                              decoration: BoxDecoration(
+                                color: isWithin
+                                    ? Colors.green.withOpacity(0.2)
+                                    : (_isDarkMode ? Colors.white.withOpacity(0.1) : Colors.grey.withOpacity(0.1)),
+                                borderRadius: BorderRadius.circular(12),
+                              ),
+                              child: Icon(
+                                isWithin
+                                    ? Icons.location_on_rounded
+                                    : isNearest
+                                    ? Icons.location_searching
+                                    : Icons.location_on_outlined,
+                                color: isWithin
+                                    ? Colors.green
+                                    : (_isDarkMode ? Colors.white70 : Colors.grey.shade600),
+                                size: 24,
+                              ),
+                            ),
+
+                            SizedBox(width: containerSpacing),
+
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    location.name,
+                                    style: TextStyle(
+                                      fontWeight: isNearest ? FontWeight.bold : FontWeight.w600,
+                                      fontSize: (isLargeScreen ? 20 : (isTablet ? 18 : 16)) * responsiveFontSize,
+                                      color: _isDarkMode ? Colors.white : Colors.black87,
+                                    ),
+                                  ),
+                                  const SizedBox(height: 4),
+                                  Text(
+                                    location.address,
+                                    style: TextStyle(
+                                      color: _isDarkMode ? Colors.grey.shade400 : Colors.grey.shade600,
+                                      fontSize: (isLargeScreen ? 16 : (isTablet ? 14 : 12)) * responsiveFontSize,
+                                    ),
+                                    maxLines: 2,
+                                    overflow: TextOverflow.ellipsis,
+                                  ),
+                                  if (location.radius > 0) ...[
+                                    const SizedBox(height: 4),
+                                    Text(
+                                      'Radius: ${location.radius.toInt()}m',
+                                      style: TextStyle(
+                                        color: _isDarkMode ? Colors.grey.shade500 : Colors.grey.shade500,
+                                        fontSize: (isLargeScreen ? 14 : (isTablet ? 12 : 11)) * responsiveFontSize,
+                                      ),
+                                    ),
+                                  ],
+                                ],
+                              ),
+                            ),
+
+                            Column(
+                              crossAxisAlignment: CrossAxisAlignment.end,
+                              children: [
+                                if (isWithin)
+                                  Container(
+                                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                                    decoration: BoxDecoration(
+                                      color: Colors.green,
+                                      borderRadius: BorderRadius.circular(12),
+                                    ),
+                                    child: Text(
+                                      'CURRENT',
+                                      style: TextStyle(
+                                        color: Colors.white,
+                                        fontSize: (isLargeScreen ? 14 : (isTablet ? 12 : 10)) * responsiveFontSize,
+                                        fontWeight: FontWeight.bold,
+                                      ),
+                                    ),
+                                  )
+                                else if (isNearest)
+                                  Container(
+                                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                                    decoration: BoxDecoration(
+                                      color: Colors.orange,
+                                      borderRadius: BorderRadius.circular(12),
+                                    ),
+                                    child: Text(
+                                      'NEAREST',
+                                      style: TextStyle(
+                                        color: Colors.white,
+                                        fontSize: (isLargeScreen ? 14 : (isTablet ? 12 : 10)) * responsiveFontSize,
+                                        fontWeight: FontWeight.bold,
+                                      ),
+                                    ),
+                                  ),
+                                if (_distanceToOffice != null && isNearest) ...[
+                                  const SizedBox(height: 8),
+                                  Container(
+                                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                                    decoration: BoxDecoration(
+                                      color: _isDarkMode ? Colors.white.withOpacity(0.1) : Colors.grey.withOpacity(0.1),
+                                      borderRadius: BorderRadius.circular(8),
+                                    ),
+                                    child: Text(
+                                      '${_distanceToOffice!.toStringAsFixed(0)}m',
+                                      style: TextStyle(
+                                        color: _isDarkMode ? Colors.grey.shade400 : Colors.grey.shade600,
+                                        fontSize: (isLargeScreen ? 14 : (isTablet ? 12 : 11)) * responsiveFontSize,
+                                        fontWeight: FontWeight.w500,
+                                      ),
+                                    ),
+                                  ),
+                                ],
+                              ],
+                            ),
+                          ],
+                        ),
+                      ),
+                    );
+                  },
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  // Force Face Data Recovery
+  Future<void> _forceFaceDataRecovery() async {
+    try {
+      debugPrint("🔄 Forcing face data recovery...");
+
+      if (mounted) {
+        setState(() => _isLoading = true);
+      }
+
+      final secureFaceStorage = getIt<SecureFaceStorageService>();
+      bool recovered = await secureFaceStorage.downloadFaceDataFromCloud(widget.employeeId);
+
+      if (mounted) {
+        setState(() => _isLoading = false);
+      }
+
+      if (recovered) {
+        CustomSnackBar.successSnackBar("Face data successfully recovered from cloud");
+      } else {
+        CustomSnackBar.errorSnackBar("Failed to recover face data. Please check your connection.");
+      }
+
+    } catch (e) {
+      if (mounted) {
+        setState(() => _isLoading = false);
+      }
+      CustomSnackBar.errorSnackBar("Error recovering face data: $e");
+    }
+  }
 }
 
 // App lifecycle observer class
@@ -5479,6 +6516,7 @@ class AppLifecycleObserver extends WidgetsBindingObserver {
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
     if (state == AppLifecycleState.resumed && onResume != null) {
+      debugPrint("📱 App resumed - forcing attendance sync for cross-device compatibility");
       onResume!();
     }
   }

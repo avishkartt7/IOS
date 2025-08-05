@@ -1,3 +1,6 @@
+
+// lib/pin_entry/user_profile_view.dart - CLEAN WHITE DESIGN
+
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:face_auth/common/utils/custom_snackbar.dart';
 import 'package:face_auth/common/views/custom_button.dart';
@@ -5,8 +8,8 @@ import 'package:face_auth/constants/theme.dart';
 import 'package:face_auth/model/user_model.dart';
 import 'package:face_auth/register_face/register_face_view.dart';
 import 'package:flutter/material.dart';
-import 'package:shared_preferences/shared_preferences.dart';
-import 'dart:convert'; // ✅ ADD THIS IMPORT
+import 'package:flutter/services.dart';
+
 class UserProfileView extends StatefulWidget {
   final String employeePin;
   final UserModel user;
@@ -27,20 +30,46 @@ class _UserProfileViewState extends State<UserProfileView> {
   late TextEditingController _nameController;
   late TextEditingController _designationController;
   late TextEditingController _departmentController;
+  late TextEditingController _birthdateController;
+  late TextEditingController _countryController;
   late TextEditingController _emailController;
-  late TextEditingController _phoneController;
+
+  // Add break time controllers
+  late TextEditingController _breakStartTimeController;
+  late TextEditingController _breakEndTimeController;
+  late TextEditingController _jummaBreakStartController;
+  late TextEditingController _jummaBreakEndController;
 
   bool _isLoading = false;
   bool _isEditing = false;
+  bool _hasJummaBreak = false;
 
   @override
   void initState() {
     super.initState();
+
+    // Set clean white status bar
+    SystemChrome.setSystemUIOverlayStyle(
+      const SystemUiOverlayStyle(
+        statusBarColor: Colors.transparent,
+        statusBarIconBrightness: Brightness.dark,
+        systemNavigationBarColor: Colors.white,
+        systemNavigationBarIconBrightness: Brightness.dark,
+      ),
+    );
+
     _nameController = TextEditingController(text: widget.user.name ?? '');
     _designationController = TextEditingController(text: '');
     _departmentController = TextEditingController(text: '');
+    _birthdateController = TextEditingController(text: '');
+    _countryController = TextEditingController(text: '');
     _emailController = TextEditingController(text: '');
-    _phoneController = TextEditingController(text: '');
+
+    // Initialize break time controllers
+    _breakStartTimeController = TextEditingController(text: '');
+    _breakEndTimeController = TextEditingController(text: '');
+    _jummaBreakStartController = TextEditingController(text: '');
+    _jummaBreakEndController = TextEditingController(text: '');
 
     // If new user, enable editing by default
     _isEditing = widget.isNewUser;
@@ -59,15 +88,29 @@ class _UserProfileViewState extends State<UserProfileView> {
       if (doc.exists) {
         Map<String, dynamic> data = doc.data() as Map<String, dynamic>;
         setState(() {
-          _nameController.text = data['name'] ?? '';
           _designationController.text = data['designation'] ?? '';
           _departmentController.text = data['department'] ?? '';
+          _birthdateController.text = data['birthdate'] ?? '';
+          _countryController.text = data['country'] ?? '';
           _emailController.text = data['email'] ?? '';
-          _phoneController.text = data['phone'] ?? '';
+
+          // Load break time data
+          _breakStartTimeController.text = data['breakStartTime'] ?? '';
+          _breakEndTimeController.text = data['breakEndTime'] ?? '';
+          _hasJummaBreak = data['hasJummaBreak'] ?? false;
+          _jummaBreakStartController.text = data['jummaBreakStart'] ?? '';
+          _jummaBreakEndController.text = data['jummaBreakEnd'] ?? '';
         });
       }
     } catch (e) {
-      debugPrint("Error loading profile: $e");
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text("Error loading profile: $e"),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
     }
   }
 
@@ -76,24 +119,69 @@ class _UserProfileViewState extends State<UserProfileView> {
     _nameController.dispose();
     _designationController.dispose();
     _departmentController.dispose();
+    _birthdateController.dispose();
+    _countryController.dispose();
     _emailController.dispose();
-    _phoneController.dispose();
+    _breakStartTimeController.dispose();
+    _breakEndTimeController.dispose();
+    _jummaBreakStartController.dispose();
+    _jummaBreakEndController.dispose();
     super.dispose();
+  }
+
+  Future<void> _selectTime(TextEditingController controller) async {
+    final TimeOfDay? picked = await showTimePicker(
+      context: context,
+      initialTime: TimeOfDay.now(),
+      builder: (context, child) {
+        return Theme(
+          data: Theme.of(context).copyWith(
+            colorScheme: const ColorScheme.light(
+              primary: Color(0xFF2E7D4B),
+            ),
+          ),
+          child: child!,
+        );
+      },
+    );
+
+    if (picked != null) {
+      setState(() {
+        controller.text = picked.format(context);
+      });
+    }
   }
 
   @override
   Widget build(BuildContext context) {
+    final screenWidth = MediaQuery.of(context).size.width;
+    final isTablet = screenWidth > 600;
+
     return Scaffold(
-      extendBodyBehindAppBar: true,
+      backgroundColor: Colors.white,
       appBar: AppBar(
-        centerTitle: true,
-        backgroundColor: appBarColor,
-        title: Text(widget.isNewUser ? "Complete Your Profile" : "Your Profile"),
+        backgroundColor: Colors.white,
         elevation: 0,
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back, color: Color(0xFF2E7D4B)),
+          onPressed: () => Navigator.of(context).pop(),
+        ),
+        title: Text(
+          widget.isNewUser ? "Complete Your Profile" : "Your Profile",
+          style: TextStyle(
+            color: const Color(0xFF2E7D4B),
+            fontSize: isTablet ? 20 : 18,
+            fontWeight: FontWeight.bold,
+          ),
+        ),
+        centerTitle: true,
         actions: [
           if (!widget.isNewUser)
             IconButton(
-              icon: Icon(_isEditing ? Icons.check : Icons.edit),
+              icon: Icon(
+                _isEditing ? Icons.check : Icons.edit,
+                color: const Color(0xFF2E7D4B),
+              ),
               onPressed: () {
                 setState(() {
                   if (_isEditing) {
@@ -106,95 +194,315 @@ class _UserProfileViewState extends State<UserProfileView> {
             ),
         ],
       ),
-      body: Container(
-        decoration: const BoxDecoration(
-          gradient: LinearGradient(
-            begin: Alignment.topCenter,
-            end: Alignment.bottomCenter,
-            colors: [
-              scaffoldTopGradientClr,
-              scaffoldBottomGradientClr,
-            ],
-          ),
-        ),
-        child: _isLoading
-            ? const Center(
-                child: CircularProgressIndicator(color: accentColor),
-              )
-            : SingleChildScrollView(
-                padding: const EdgeInsets.fromLTRB(20, 100, 20, 20),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    // Profile Picture
-                    Center(
-                      child: CircleAvatar(
-                        radius: 60,
-                        backgroundColor: primaryWhite.withOpacity(0.2),
-                        child: const Icon(
-                          Icons.person,
-                          size: 80,
-                          color: primaryWhite,
-                        ),
-                      ),
-                    ),
-                    const SizedBox(height: 32),
-
-                    // Name Field
-                    _buildProfileField(
-                      label: "Full Name",
-                      controller: _nameController,
-                      enabled: _isEditing,
-                      isRequired: true,
-                    ),
-
-                    // Designation Field
-                    _buildProfileField(
-                      label: "Designation",
-                      controller: _designationController,
-                      enabled: _isEditing,
-                      isRequired: true,
-                    ),
-
-                    // Department Field
-                    _buildProfileField(
-                      label: "Department",
-                      controller: _departmentController,
-                      enabled: _isEditing,
-                      isRequired: true,
-                    ),
-
-                    // Email Field
-                    _buildProfileField(
-                      label: "Email",
-                      controller: _emailController,
-                      enabled: _isEditing,
-                      isRequired: false,
-                      hint: "your.email@company.com",
-                    ),
-
-                    // Phone Field
-                    _buildProfileField(
-                      label: "Phone Number",
-                      controller: _phoneController,
-                      enabled: _isEditing,
-                      isRequired: false,
-                      hint: "+1 234 567 8900",
-                    ),
-
-                    const SizedBox(height: 32),
-
-                    // Save/Continue Button
-                    if (widget.isNewUser || _isEditing)
-                      Center(
-                        child: CustomButton(
-                          text: widget.isNewUser ? "Save & Continue" : "Save Changes",
-                          onTap: _saveProfile,
-                        ),
-                      ),
-                  ],
-                ),
+      body: _isLoading
+          ? const Center(
+              child: CircularProgressIndicator(
+                color: Color(0xFF2E7D4B),
+                strokeWidth: 3,
               ),
+            )
+          : SingleChildScrollView(
+              padding: EdgeInsets.symmetric(
+                horizontal: isTablet ? 40.0 : 24.0,
+                vertical: isTablet ? 32.0 : 24.0,
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  // Profile Header
+                  Center(
+                    child: Column(
+                      children: [
+                        // Profile Avatar
+                        Container(
+                          width: isTablet ? 120 : 100,
+                          height: isTablet ? 120 : 100,
+                          decoration: BoxDecoration(
+                            color: const Color(0xFF2E7D4B).withOpacity(0.1),
+                            shape: BoxShape.circle,
+                            border: Border.all(
+                              color: const Color(0xFF2E7D4B).withOpacity(0.3),
+                              width: 2,
+                            ),
+                          ),
+                          child: Icon(
+                            Icons.person,
+                            size: isTablet ? 60 : 50,
+                            color: const Color(0xFF2E7D4B),
+                          ),
+                        ),
+                        
+                        SizedBox(height: isTablet ? 24 : 20),
+
+                        // Company Info
+                        Text(
+                          "PHOENICIAN TECHNICAL SERVICES",
+                          style: TextStyle(
+                            color: const Color(0xFF2E7D4B),
+                            fontSize: isTablet ? 16 : 14,
+                            fontWeight: FontWeight.bold,
+                            letterSpacing: 1.0,
+                          ),
+                          textAlign: TextAlign.center,
+                        ),
+
+                        SizedBox(height: isTablet ? 6 : 4),
+
+                        Text(
+                          "Employee Profile Setup",
+                          style: TextStyle(
+                            color: Colors.grey[600],
+                            fontSize: isTablet ? 14 : 12,
+                            fontWeight: FontWeight.w500,
+                          ),
+                          textAlign: TextAlign.center,
+                        ),
+                      ],
+                    ),
+                  ),
+
+                  SizedBox(height: isTablet ? 40 : 32),
+
+                  // Basic Information Section
+                  _buildSectionHeader("Basic Information", isTablet),
+                  SizedBox(height: isTablet ? 20 : 16),
+
+                  _buildProfileField(
+                    label: "Full Name",
+                    controller: _nameController,
+                    enabled: _isEditing,
+                    isTablet: isTablet,
+                    icon: Icons.person_outline,
+                  ),
+
+                  _buildProfileField(
+                    label: "Designation",
+                    controller: _designationController,
+                    enabled: _isEditing,
+                    isTablet: isTablet,
+                    icon: Icons.work_outline,
+                  ),
+
+                  _buildProfileField(
+                    label: "Department",
+                    controller: _departmentController,
+                    enabled: _isEditing,
+                    isTablet: isTablet,
+                    icon: Icons.business_outlined,
+                  ),
+
+                  _buildProfileField(
+                    label: "Birthdate",
+                    controller: _birthdateController,
+                    enabled: _isEditing,
+                    hint: "DD/MM/YYYY",
+                    isTablet: isTablet,
+                    icon: Icons.cake_outlined,
+                  ),
+
+                  _buildProfileField(
+                    label: "Country",
+                    controller: _countryController,
+                    enabled: _isEditing,
+                    isTablet: isTablet,
+                    icon: Icons.public_outlined,
+                  ),
+
+                  _buildProfileField(
+                    label: "Email (Optional)",
+                    controller: _emailController,
+                    enabled: _isEditing,
+                    hint: "your.email@example.com",
+                    isTablet: isTablet,
+                    icon: Icons.email_outlined,
+                  ),
+
+                  SizedBox(height: isTablet ? 32 : 24),
+
+                  // Break Time Settings Section
+                  _buildSectionHeader("Break Time Settings", isTablet),
+                  SizedBox(height: isTablet ? 20 : 16),
+
+                  Container(
+                    padding: EdgeInsets.all(isTablet ? 24.0 : 20.0),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFF2E7D4B).withOpacity(0.05),
+                      borderRadius: BorderRadius.circular(16),
+                      border: Border.all(
+                        color: const Color(0xFF2E7D4B).withOpacity(0.2),
+                        width: 1,
+                      ),
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        // Daily break time
+                        Row(
+                          children: [
+                            Expanded(
+                              child: _buildTimeField(
+                                label: "Break Start Time",
+                                controller: _breakStartTimeController,
+                                enabled: _isEditing,
+                                isRequired: true,
+                                isTablet: isTablet,
+                              ),
+                            ),
+                            SizedBox(width: isTablet ? 20 : 16),
+                            Expanded(
+                              child: _buildTimeField(
+                                label: "Break End Time",
+                                controller: _breakEndTimeController,
+                                enabled: _isEditing,
+                                isRequired: true,
+                                isTablet: isTablet,
+                              ),
+                            ),
+                          ],
+                        ),
+
+                        SizedBox(height: isTablet ? 24 : 20),
+
+                        // Friday Prayer Break Toggle
+                        Container(
+                          padding: EdgeInsets.all(isTablet ? 16.0 : 12.0),
+                          decoration: BoxDecoration(
+                            color: Colors.white,
+                            borderRadius: BorderRadius.circular(12),
+                            border: Border.all(
+                              color: Colors.grey[200]!,
+                              width: 1,
+                            ),
+                          ),
+                          child: Row(
+                            children: [
+                              Icon(
+                                Icons.mosque_outlined,
+                                color: const Color(0xFF2E7D4B),
+                                size: isTablet ? 24 : 20,
+                              ),
+                              SizedBox(width: isTablet ? 16 : 12),
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text(
+                                      "Friday Prayer Break",
+                                      style: TextStyle(
+                                        color: Colors.grey[800],
+                                        fontSize: isTablet ? 16 : 14,
+                                        fontWeight: FontWeight.w600,
+                                      ),
+                                    ),
+                                    SizedBox(height: isTablet ? 4 : 2),
+                                    Text(
+                                      "Enable if you take Friday prayer break",
+                                      style: TextStyle(
+                                        color: Colors.grey[600],
+                                        fontSize: isTablet ? 12 : 11,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                              Switch(
+                                value: _hasJummaBreak,
+                                onChanged: _isEditing ? (value) {
+                                  setState(() {
+                                    _hasJummaBreak = value;
+                                    if (!value) {
+                                      _jummaBreakStartController.clear();
+                                      _jummaBreakEndController.clear();
+                                    }
+                                  });
+                                } : null,
+                                activeColor: const Color(0xFF2E7D4B),
+                              ),
+                            ],
+                          ),
+                        ),
+
+                        // Friday Prayer Break Times
+                        if (_hasJummaBreak) ...[
+                          SizedBox(height: isTablet ? 20 : 16),
+                          Row(
+                            children: [
+                              Expanded(
+                                child: _buildTimeField(
+                                  label: "Friday Prayer Start",
+                                  controller: _jummaBreakStartController,
+                                  enabled: _isEditing,
+                                  isRequired: true,
+                                  isTablet: isTablet,
+                                ),
+                              ),
+                              SizedBox(width: isTablet ? 20 : 16),
+                              Expanded(
+                                child: _buildTimeField(
+                                  label: "Friday Prayer End",
+                                  controller: _jummaBreakEndController,
+                                  enabled: _isEditing,
+                                  isRequired: true,
+                                  isTablet: isTablet,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ],
+                      ],
+                    ),
+                  ),
+
+                  SizedBox(height: isTablet ? 40 : 32),
+
+                  // Action Button
+                  if (widget.isNewUser || _isEditing)
+                    Center(
+                      child: GestureDetector(
+                        onTap: _saveProfile,
+                        child: Container(
+                          width: isTablet ? 200 : 160,
+                          height: isTablet ? 56 : 50,
+                          decoration: BoxDecoration(
+                            color: const Color(0xFF2E7D4B),
+                            borderRadius: BorderRadius.circular(25),
+                            boxShadow: [
+                              BoxShadow(
+                                color: const Color(0xFF2E7D4B).withOpacity(0.3),
+                                spreadRadius: 0,
+                                blurRadius: 10,
+                                offset: const Offset(0, 5),
+                              ),
+                            ],
+                          ),
+                          child: Center(
+                            child: Text(
+                              widget.isNewUser ? "Continue" : "Save Changes",
+                              style: TextStyle(
+                                color: Colors.white,
+                                fontWeight: FontWeight.w600,
+                                fontSize: isTablet ? 16 : 14,
+                              ),
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
+
+                  SizedBox(height: isTablet ? 24 : 20),
+                ],
+              ),
+            ),
+    );
+  }
+
+  Widget _buildSectionHeader(String title, bool isTablet) {
+    return Text(
+      title,
+      style: TextStyle(
+        color: const Color(0xFF2E7D4B),
+        fontSize: isTablet ? 20 : 18,
+        fontWeight: FontWeight.bold,
       ),
     );
   }
@@ -203,59 +511,59 @@ class _UserProfileViewState extends State<UserProfileView> {
     required String label,
     required TextEditingController controller,
     bool enabled = false,
-    bool isRequired = false,
     String? hint,
+    required bool isTablet,
+    IconData? icon,
   }) {
     return Padding(
-      padding: const EdgeInsets.only(bottom: 16),
+      padding: EdgeInsets.only(bottom: isTablet ? 20 : 16),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(
-            "$label${isRequired ? ' *' : ''}",
+            label,
             style: TextStyle(
-              color: primaryWhite.withOpacity(0.8),
-              fontSize: 16,
-              fontWeight: FontWeight.w500,
+              color: Colors.grey[700],
+              fontSize: isTablet ? 14 : 12,
+              fontWeight: FontWeight.w600,
             ),
           ),
-          const SizedBox(height: 8),
-          TextField(
-            controller: controller,
-            enabled: enabled,
-            style: const TextStyle(
-              color: primaryWhite,
-              fontSize: 18,
+          SizedBox(height: isTablet ? 8 : 6),
+          Container(
+            decoration: BoxDecoration(
+              color: enabled ? Colors.white : Colors.grey[50],
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(
+                color: enabled 
+                    ? const Color(0xFF2E7D4B).withOpacity(0.3)
+                    : Colors.grey[300]!,
+                width: 1,
+              ),
             ),
-            decoration: InputDecoration(
-              hintText: hint,
-              hintStyle: TextStyle(
-                color: primaryWhite.withOpacity(0.4),
-                fontSize: 16,
+            child: TextField(
+              controller: controller,
+              enabled: enabled,
+              style: TextStyle(
+                color: Colors.grey[800],
+                fontSize: isTablet ? 16 : 14,
               ),
-              filled: true,
-              fillColor: Colors.white.withOpacity(enabled ? 0.1 : 0.05),
-              border: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(8),
-                borderSide: BorderSide.none,
-              ),
-              disabledBorder: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(8),
-                borderSide: BorderSide(
-                  color: primaryWhite.withOpacity(0.1),
+              decoration: InputDecoration(
+                hintText: hint,
+                hintStyle: TextStyle(
+                  color: Colors.grey[500],
+                  fontSize: isTablet ? 14 : 12,
                 ),
-              ),
-              enabledBorder: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(8),
-                borderSide: BorderSide(
-                  color: primaryWhite.withOpacity(0.3),
-                ),
-              ),
-              focusedBorder: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(8),
-                borderSide: const BorderSide(
-                  color: accentColor,
-                  width: 2,
+                prefixIcon: icon != null 
+                    ? Icon(
+                        icon,
+                        color: const Color(0xFF2E7D4B).withOpacity(0.7),
+                        size: isTablet ? 22 : 20,
+                      )
+                    : null,
+                border: InputBorder.none,
+                contentPadding: EdgeInsets.symmetric(
+                  horizontal: icon != null ? 16 : 16,
+                  vertical: isTablet ? 16 : 14,
                 ),
               ),
             ),
@@ -265,12 +573,95 @@ class _UserProfileViewState extends State<UserProfileView> {
     );
   }
 
+  Widget _buildTimeField({
+    required String label,
+    required TextEditingController controller,
+    bool enabled = false,
+    bool isRequired = false,
+    required bool isTablet,
+  }) {
+    return GestureDetector(
+      onTap: enabled ? () => _selectTime(controller) : null,
+      child: Container(
+        decoration: BoxDecoration(
+          color: enabled ? Colors.white : Colors.grey[50],
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(
+            color: enabled 
+                ? const Color(0xFF2E7D4B).withOpacity(0.3)
+                : Colors.grey[300]!,
+            width: 1,
+          ),
+        ),
+        padding: EdgeInsets.all(isTablet ? 16.0 : 14.0),
+        child: Row(
+          children: [
+            Icon(
+              Icons.access_time,
+              color: const Color(0xFF2E7D4B).withOpacity(0.7),
+              size: isTablet ? 22 : 20,
+            ),
+            SizedBox(width: isTablet ? 12 : 10),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    "$label${isRequired ? ' *' : ''}",
+                    style: TextStyle(
+                      color: Colors.grey[700],
+                      fontSize: isTablet ? 12 : 11,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                  SizedBox(height: isTablet ? 6 : 4),
+                  Text(
+                    controller.text.isNotEmpty ? controller.text : "Tap to select",
+                    style: TextStyle(
+                      color: controller.text.isNotEmpty
+                          ? Colors.grey[800]
+                          : Colors.grey[500],
+                      fontSize: isTablet ? 14 : 13,
+                      fontWeight: controller.text.isNotEmpty 
+                          ? FontWeight.w500 
+                          : FontWeight.w400,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   void _saveProfile() async {
-    // Validate required fields
+    // Validate fields
     if (_nameController.text.trim().isEmpty ||
         _designationController.text.trim().isEmpty ||
-        _departmentController.text.trim().isEmpty) {
-      CustomSnackBar.errorSnackBar("Please fill in all required fields");
+        _departmentController.text.trim().isEmpty ||
+        _breakStartTimeController.text.trim().isEmpty ||
+        _breakEndTimeController.text.trim().isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text("Please fill in all required fields"),
+          backgroundColor: Colors.red,
+        ),
+      );
+      return;
+    }
+
+    // Validate Friday Prayer break times if enabled
+    if (_hasJummaBreak &&
+        (_jummaBreakStartController.text.trim().isEmpty ||
+            _jummaBreakEndController.text.trim().isEmpty)) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text("Please fill in Friday Prayer break times"),
+          backgroundColor: Colors.red,
+        ),
+      );
       return;
     }
 
@@ -285,14 +676,16 @@ class _UserProfileViewState extends State<UserProfileView> {
         'name': _nameController.text.trim(),
         'designation': _designationController.text.trim(),
         'department': _departmentController.text.trim(),
+        'birthdate': _birthdateController.text.trim(),
+        'country': _countryController.text.trim(),
         'email': _emailController.text.trim(),
-        'phone': _phoneController.text.trim(),
+        'breakStartTime': _breakStartTimeController.text.trim(),
+        'breakEndTime': _breakEndTimeController.text.trim(),
+        'hasJummaBreak': _hasJummaBreak,
+        'jummaBreakStart': _jummaBreakStartController.text.trim(),
+        'jummaBreakEnd': _jummaBreakEndController.text.trim(),
         'profileCompleted': true,
-        'lastUpdated': FieldValue.serverTimestamp(),
       });
-
-      // Save to local storage
-      await _saveToLocalStorage();
 
       setState(() => _isLoading = false);
 
@@ -311,38 +704,25 @@ class _UserProfileViewState extends State<UserProfileView> {
       } else {
         // If existing user, just exit edit mode
         setState(() => _isEditing = false);
-        CustomSnackBar.successSnackBar("Profile updated successfully");
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text("Profile updated successfully"),
+              backgroundColor: Color(0xFF2E7D4B),
+            ),
+          );
+        }
       }
     } catch (e) {
       setState(() => _isLoading = false);
-      debugPrint("Error saving profile: $e");
-      CustomSnackBar.errorSnackBar("Error saving profile. Please try again.");
-    }
-  }
-
-  Future<void> _saveToLocalStorage() async {
-    try {
-      final prefs = await SharedPreferences.getInstance();
-      
-      Map<String, dynamic> userData = {
-        'name': _nameController.text.trim(),
-        'designation': _designationController.text.trim(),
-        'department': _departmentController.text.trim(),
-        'email': _emailController.text.trim(),
-        'phone': _phoneController.text.trim(),
-        'profileCompleted': true,
-        'pin': widget.employeePin,
-      };
-
-      await prefs.setString('user_data_${widget.user.id}', 
-          jsonEncode(userData));
-      await prefs.setString('user_name_${widget.user.id}', 
-          _nameController.text.trim());
-      await prefs.setBool('profile_completed_${widget.user.id}', true);
-
-      debugPrint("💾 Profile data saved to local storage");
-    } catch (e) {
-      debugPrint("❌ Error saving to local storage: $e");
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text("Error saving profile: $e"),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
     }
   }
 }

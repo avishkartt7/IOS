@@ -1,4 +1,4 @@
-import 'package:face_auth_compatible/constants/theme.dart';
+import 'package:face_auth/constants/theme.dart';
 import 'package:flutter/material.dart';
 
 /// CustomSnackBar with backward compatibility support

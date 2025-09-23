@@ -1,6 +1,6 @@
-import 'package:face_auth_compatible/common/utils/extensions/size_extension.dart';
-import 'package:face_auth_compatible/constants/theme.dart';
-import 'package:face_auth_compatible/model/user_model.dart';
+import 'package:face_auth/common/utils/extensions/size_extension.dart';
+import 'package:face_auth/constants/theme.dart';
+import 'package:face_auth/model/user_model.dart';
 import 'package:flutter/material.dart';
 
 class UserDetailsView extends StatelessWidget {

@@ -6,10 +6,10 @@ import 'package:flutter/foundation.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:face_auth_compatible/services/database_helper.dart';
-import 'package:face_auth_compatible/services/connectivity_service.dart';
-import 'package:face_auth_compatible/services/notification_service.dart';
-import 'package:face_auth_compatible/utils/enhanced_geofence_util.dart';
+import 'package:face_auth/services/database_helper.dart';
+import 'package:face_auth/services/connectivity_service.dart';
+import 'package:face_auth/services/notification_service.dart';
+import 'package:face_auth/utils/enhanced_geofence_util.dart';
 import 'package:intl/intl.dart';
 
 class GeofenceExitEvent {

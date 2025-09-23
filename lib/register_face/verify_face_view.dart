@@ -7,26 +7,26 @@ import 'dart:async';
 import 'dart:math';
 import 'package:permission_handler/permission_handler.dart';
 
-import 'package:face_auth_compatible/services/registration_completion_service.dart';
-import 'package:face_auth_compatible/dashboard/dashboard_view.dart';
-import 'package:face_auth_compatible/services/secure_face_storage_service.dart';
+import 'package:face_auth/services/registration_completion_service.dart';
+import 'package:face_auth/dashboard/dashboard_view.dart';
+import 'package:face_auth/services/secure_face_storage_service.dart';
 
 // Enhanced utilities imports
-import 'package:face_auth_compatible/model/enhanced_face_features.dart';
-import 'package:face_auth_compatible/common/utils/enhanced_face_extractor.dart';
-import 'package:face_auth_compatible/common/utils/extract_face_feature.dart';
+import 'package:face_auth/model/enhanced_face_features.dart';
+import 'package:face_auth/common/utils/enhanced_face_extractor.dart';
+import 'package:face_auth/common/utils/extract_face_feature.dart';
 
 // Existing imports
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:face_auth_compatible/common/views/camera_view.dart';
-import 'package:face_auth_compatible/model/user_model.dart';
-import 'package:face_auth_compatible/common/utils/custom_snackbar.dart';
+import 'package:face_auth/common/views/camera_view.dart';
+import 'package:face_auth/model/user_model.dart';
+import 'package:face_auth/common/utils/custom_snackbar.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:google_mlkit_face_detection/google_mlkit_face_detection.dart';
 import 'package:connectivity_plus/connectivity_plus.dart';
-import 'package:face_auth_compatible/services/connectivity_service.dart';
-import 'package:face_auth_compatible/services/service_locator.dart';
+import 'package:face_auth/services/connectivity_service.dart';
+import 'package:face_auth/services/service_locator.dart';
 import 'package:flutter_face_api/face_api.dart' as regula;
 
 class VerifyFaceView extends StatefulWidget {

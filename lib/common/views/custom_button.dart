@@ -1,6 +1,6 @@
 // lib/common/views/custom_button.dart
 
-import 'package:face_auth_compatible/constants/theme.dart';
+import 'package:face_auth/constants/theme.dart';
 import 'package:flutter/material.dart';
 
 class CustomButton extends StatelessWidget {

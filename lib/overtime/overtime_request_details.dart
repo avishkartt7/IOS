@@ -3,8 +3,8 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:face_auth_compatible/constants/theme.dart';
-import 'package:face_auth_compatible/model/overtime_request_model.dart';
+import 'package:face_auth/constants/theme.dart';
+import 'package:face_auth/model/overtime_request_model.dart';
 
 class OvertimeRequestDetails extends StatefulWidget {
   final OvertimeRequest request;

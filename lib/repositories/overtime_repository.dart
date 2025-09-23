@@ -3,10 +3,10 @@
 import 'dart:convert';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:cloud_functions/cloud_functions.dart';
-import 'package:face_auth_compatible/model/overtime_request_model.dart';
-import 'package:face_auth_compatible/services/database_helper.dart';
-import 'package:face_auth_compatible/services/connectivity_service.dart';
-import 'package:face_auth_compatible/services/notification_service.dart';
+import 'package:face_auth/model/overtime_request_model.dart';
+import 'package:face_auth/services/database_helper.dart';
+import 'package:face_auth/services/connectivity_service.dart';
+import 'package:face_auth/services/notification_service.dart';
 import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 

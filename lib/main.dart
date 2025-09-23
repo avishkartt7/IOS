@@ -7,31 +7,31 @@ import 'package:flutter/material.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:face_auth_compatible/onboarding/onboarding_screen.dart';
-import 'package:face_auth_compatible/pin_entry/pin_entry_view.dart';
-import 'package:face_auth_compatible/dashboard/dashboard_view.dart';
-import 'package:face_auth_compatible/constants/theme.dart';
+import 'package:face_auth/onboarding/onboarding_screen.dart';
+import 'package:face_auth/pin_entry/pin_entry_view.dart';
+import 'package:face_auth/dashboard/dashboard_view.dart';
+import 'package:face_auth/constants/theme.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:face_auth_compatible/services/service_locator.dart';
-import 'package:face_auth_compatible/services/simple_firebase_auth_service.dart';
-import 'package:face_auth_compatible/model/enhanced_face_features.dart';
+import 'package:face_auth/services/service_locator.dart';
+import 'package:face_auth/services/simple_firebase_auth_service.dart';
+import 'package:face_auth/model/enhanced_face_features.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 
 // Import the services for offline functionality
-import 'package:face_auth_compatible/services/sync_service.dart';
-import 'package:face_auth_compatible/services/connectivity_service.dart';
-import 'package:face_auth_compatible/services/secure_face_storage_service.dart';
-import 'package:face_auth_compatible/services/face_data_migration_service.dart';
-import 'package:face_auth_compatible/services/geofence_exit_monitoring_service.dart'; // NEW
+import 'package:face_auth/services/sync_service.dart';
+import 'package:face_auth/services/connectivity_service.dart';
+import 'package:face_auth/services/secure_face_storage_service.dart';
+import 'package:face_auth/services/face_data_migration_service.dart';
+import 'package:face_auth/services/geofence_exit_monitoring_service.dart'; // NEW
 import 'package:connectivity_plus/connectivity_plus.dart';
 
 // Add these imports for permissions
 import 'package:device_info_plus/device_info_plus.dart';
 import 'package:permission_handler/permission_handler.dart';
 
-import 'package:face_auth_compatible/repositories/polygon_location_repository.dart';
-import 'package:face_auth_compatible/repositories/location_exemption_repository.dart';
+import 'package:face_auth/repositories/polygon_location_repository.dart';
+import 'package:face_auth/repositories/location_exemption_repository.dart';
 
 import 'package:flutter/services.dart';
 

@@ -1,7 +1,7 @@
 // lib/services/enhanced_work_schedule_service.dart
 
 
-import 'package:face_auth_compatible/services/work_schedule_service.dart';
+import 'package:face_auth/services/work_schedule_service.dart';
 import 'package:intl/intl.dart';
 
 class EnhancedWorkScheduleService {

@@ -60,6 +60,10 @@ dependencies:
   country_picker: ^2.0.23
   cached_network_image: ^3.3.1
 
+  pdf: ^3.10.7
+  share_plus: ^7.2.2
+  printing: ^5.11.0
+
   url_launcher: ^6.2.2
   google_maps_flutter: ^2.5.0
   
@@ -83,6 +87,7 @@ flutter:
     - assets/success.mp3
     - assets/failed.mp3
     - assets/scan_beep.wav
+    - assets/images
     - assets/
 
 

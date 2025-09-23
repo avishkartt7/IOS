@@ -3,11 +3,11 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:face_auth_compatible/services/database_helper.dart';
-import 'package:face_auth_compatible/services/service_locator.dart';
-import 'package:face_auth_compatible/repositories/attendance_repository.dart';
-import 'package:face_auth_compatible/services/connectivity_service.dart';
-import 'package:face_auth_compatible/common/utils/custom_snackbar.dart';
+import 'package:face_auth/services/database_helper.dart';
+import 'package:face_auth/services/service_locator.dart';
+import 'package:face_auth/repositories/attendance_repository.dart';
+import 'package:face_auth/services/connectivity_service.dart';
+import 'package:face_auth/common/utils/custom_snackbar.dart';
 import 'package:intl/intl.dart';
 import 'dart:convert';
 

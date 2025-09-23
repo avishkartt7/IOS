@@ -1,139 +1,173 @@
-// lib/services/secure_face_storage_service.dart - UPDATED FOR ENHANCED FEATURES
+// lib/services/secure_face_storage_service.dart - Production Ready
 
 import 'dart:convert';
 import 'dart:io';
+import 'dart:math' as math;
 import 'package:flutter/foundation.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-
-// Import the new enhanced model
-import 'package:face_auth_compatible/model/enhanced_face_features.dart';
-import 'package:face_auth_compatible/model/user_model.dart'; // Keep for backward compatibility
-import 'dart:convert';
-import 'dart:io';
-import 'package:flutter/foundation.dart';
-import 'package:path_provider/path_provider.dart';
-import 'package:shared_preferences/shared_preferences.dart';
-
-// ✅ ADD THESE MISSING IMPORTS
-import 'package:cloud_firestore/cloud_firestore.dart';  // For DocumentSnapshot
-import 'package:face_auth_compatible/services/connectivity_service.dart';  // For ConnectivityService
-import 'package:face_auth_compatible/services/service_locator.dart';  // For getIt
-
-// Import the new enhanced model
-import 'package:face_auth_compatible/model/enhanced_face_features.dart';
-import 'package:face_auth_compatible/model/user_model.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:face_auth/services/connectivity_service.dart';
+import 'package:face_auth/services/service_locator.dart';
+import 'package:face_auth/model/user_model.dart';
 
 class SecureFaceStorageService {
   static const String _imagePrefix = 'secure_face_image_';
   static const String _featuresPrefix = 'secure_face_features_';
-  static const String _enhancedFeaturesPrefix = 'secure_enhanced_face_features_'; // NEW
   static const String _registeredPrefix = 'face_registered_';
-  static const String _enhancedRegisteredPrefix = 'enhanced_face_registered_'; // NEW
+  static const String _qualityPrefix = 'face_quality_score_';
+  static const String _methodPrefix = 'registration_method_';
 
-  /// Save face image securely
+  /// Save face image with validation and quality checks
   Future<void> saveFaceImage(String employeeId, String base64Image) async {
     try {
-      debugPrint("SecureFaceStorage: Saving face image for $employeeId");
+      debugPrint("🔒 Saving face image for $employeeId...");
 
-      // Clean the image data
-      String cleanedImage = base64Image;
-      if (cleanedImage.contains('data:image') && cleanedImage.contains(',')) {
-        cleanedImage = cleanedImage.split(',')[1];
-        debugPrint("SecureFaceStorage: Cleaned data URL format");
+      // Validate image data
+      if (!_validateImageData(base64Image)) {
+        throw Exception("Invalid image data provided");
       }
 
-      // Primary storage: Try external storage first (more secure, persists across app updates)
-      bool savedToExternal = await _saveToExternalStorage(employeeId, cleanedImage, 'image');
+      // Clean and optimize image data
+      String cleanedImage = _cleanImageData(base64Image);
+      debugPrint("🧹 Image data cleaned (${cleanedImage.length} chars)");
 
-      if (!savedToExternal) {
-        debugPrint("SecureFaceStorage: External storage failed, using SharedPreferences fallback");
-        // Fallback: SharedPreferences
-        final prefs = await SharedPreferences.getInstance();
-        await prefs.setString('$_imagePrefix$employeeId', cleanedImage);
+      // Analyze image quality
+      Map<String, dynamic> qualityAnalysis = _analyzeImageQuality(cleanedImage);
+      debugPrint("📊 Image quality score: ${qualityAnalysis['qualityScore']}");
+
+      if (qualityAnalysis['qualityScore'] < 0.3) {
+        debugPrint("⚠️ WARNING: Low image quality detected");
       }
 
-      debugPrint("SecureFaceStorage: ✅ Face image saved successfully for $employeeId");
+      // Save with multiple backup methods
+      await _saveImageWithBackups(employeeId, cleanedImage, qualityAnalysis);
+
+      debugPrint("✅ Face image saved successfully for $employeeId");
     } catch (e) {
-      debugPrint("SecureFaceStorage: ❌ Error saving face image: $e");
+      debugPrint("❌ Error saving face image: $e");
       rethrow;
     }
   }
 
-  /// Get face image securely
+  /// Save face features with validation
+  Future<void> saveFaceFeatures(String employeeId, FaceFeatures features) async {
+    try {
+      debugPrint("🔒 Saving face features for $employeeId...");
+
+      // Validate features
+      if (!_validateFaceFeatures(features)) {
+        throw Exception("Face features validation failed");
+      }
+
+      // Calculate quality metrics
+      double qualityScore = features.getQualityScore();
+      debugPrint("📊 Face features quality: ${(qualityScore * 100).toStringAsFixed(1)}%");
+
+      // Save with backup methods
+      await _saveFeaturesWithBackups(employeeId, features);
+
+      debugPrint("✅ Face features saved successfully for $employeeId");
+    } catch (e) {
+      debugPrint("❌ Error saving face features: $e");
+      rethrow;
+    }
+  }
+
+  /// Get face image with multiple fallback sources
   Future<String?> getFaceImage(String employeeId) async {
     try {
-      debugPrint("SecureFaceStorage: Retrieving face image for $employeeId");
+      debugPrint("🔍 Retrieving face image for $employeeId...");
 
       // Try external storage first
       String? image = await _getFromExternalStorage(employeeId, 'image');
-
-      if (image != null) {
-        debugPrint("SecureFaceStorage: ✅ Retrieved image from external storage");
+      if (image != null && _validateImageData(image)) {
+        debugPrint("✅ Retrieved image from external storage");
         return image;
       }
 
-      // Fallback: SharedPreferences
+      // Try multiple SharedPreferences keys
       final prefs = await SharedPreferences.getInstance();
-      image = prefs.getString('$_imagePrefix$employeeId');
+      List<String> imageKeys = [
+        '$_imagePrefix$employeeId',
+        'employee_image_$employeeId',
+        'face_image_$employeeId',
+      ];
 
-      if (image != null) {
-        debugPrint("SecureFaceStorage: ✅ Retrieved image from SharedPreferences");
-        return image;
+      for (String key in imageKeys) {
+        image = prefs.getString(key);
+        if (image != null && _validateImageData(image)) {
+          debugPrint("✅ Retrieved image from key: $key");
+          return image;
+        }
       }
 
-      debugPrint("SecureFaceStorage: ❌ No face image found for $employeeId");
+      debugPrint("❌ No valid face image found for $employeeId");
       return null;
     } catch (e) {
-      debugPrint("SecureFaceStorage: ❌ Error retrieving face image: $e");
+      debugPrint("❌ Error retrieving face image: $e");
       return null;
     }
   }
 
-  /// Save legacy face features (for backward compatibility)
-  Future<void> saveFaceFeatures(String employeeId, FaceFeatures features) async {
+  /// Get face features with validation and fallbacks
+  Future<FaceFeatures?> getFaceFeatures(String employeeId) async {
     try {
-      debugPrint("SecureFaceStorage: Saving legacy face features for $employeeId");
+      debugPrint("🔍 Retrieving face features for $employeeId...");
 
-      String featuresJson = jsonEncode(features.toJson());
+      // Try direct feature storage
+      final prefs = await SharedPreferences.getInstance();
+      List<String> featureKeys = [
+        '$_featuresPrefix$employeeId',
+        'employee_face_features_$employeeId',
+        'face_features_$employeeId',
+      ];
 
-      // Try external storage first
-      bool savedToExternal = await _saveToExternalStorage(employeeId, featuresJson, 'features');
-
-      if (!savedToExternal) {
-        // Fallback: SharedPreferences
-        final prefs = await SharedPreferences.getInstance();
-        await prefs.setString('$_featuresPrefix$employeeId', featuresJson);
+      for (String key in featureKeys) {
+        String? featuresJson = prefs.getString(key);
+        if (featuresJson != null && featuresJson.isNotEmpty) {
+          try {
+            Map<String, dynamic> featuresMap = jsonDecode(featuresJson);
+            FaceFeatures features = FaceFeatures.fromJson(featuresMap);
+            
+            if (_validateFaceFeatures(features)) {
+              debugPrint("✅ Retrieved valid features from key: $key");
+              return features;
+            } else {
+              debugPrint("⚠️ Invalid features found at key: $key");
+            }
+          } catch (e) {
+            debugPrint("⚠️ Error parsing features from $key: $e");
+          }
+        }
       }
 
-      debugPrint("SecureFaceStorage: ✅ Legacy face features saved for $employeeId");
+      debugPrint("❌ No valid face features found for $employeeId");
+      return null;
     } catch (e) {
-      debugPrint("SecureFaceStorage: ❌ Error saving legacy face features: $e");
-      rethrow;
+      debugPrint("❌ Error retrieving face features: $e");
+      return null;
     }
   }
 
-
-  // ADD THESE METHODS TO SecureFaceStorageService class
-
-  /// NEW: Download face data from Firestore when local data is missing
+  /// Smart cloud recovery with validation
   Future<bool> downloadFaceDataFromCloud(String employeeId) async {
     try {
-      debugPrint("🌐 Attempting to download face data from cloud for: $employeeId");
+      debugPrint("🌐 Downloading face data from cloud for: $employeeId");
 
-      // Check if we're online
+      // Check connectivity
       final connectivityService = getIt<ConnectivityService>();
       if (connectivityService.currentStatus == ConnectionStatus.offline) {
         debugPrint("❌ Cannot download - device is offline");
         return false;
       }
 
-      // Get data from Firestore
+      // Get data from Firestore with timeout
       DocumentSnapshot doc = await FirebaseFirestore.instance
           .collection('employees')
           .doc(employeeId)
           .get()
-          .timeout(Duration(seconds: 10));
+          .timeout(Duration(seconds: 15));
 
       if (!doc.exists) {
         debugPrint("❌ Employee document not found in Firestore");
@@ -142,52 +176,58 @@ class SecureFaceStorageService {
 
       Map<String, dynamic> data = doc.data() as Map<String, dynamic>;
 
-      // Check if face data exists in cloud
-      bool hasFaceImage = data.containsKey('image') && data['image'] != null;
-      bool hasEnhancedFeatures = data.containsKey('enhancedFaceFeatures') && data['enhancedFaceFeatures'] != null;
+      // Validate cloud data
+      bool hasValidImage = data.containsKey('image') && 
+                          data['image'] != null && 
+                          _validateImageData(data['image']);
+      
+      bool hasValidFeatures = data.containsKey('faceFeatures') && 
+                             data['faceFeatures'] != null;
+      
       bool isFaceRegistered = data['faceRegistered'] ?? false;
 
-      if (!hasFaceImage || !isFaceRegistered) {
+      if (!hasValidImage || !isFaceRegistered) {
         debugPrint("❌ No valid face data found in cloud");
         return false;
       }
 
-      debugPrint("✅ Face data found in cloud, downloading...");
+      debugPrint("✅ Valid face data found in cloud, downloading...");
 
-      // Download and save face image
-      String faceImage = data['image'];
-      await saveFaceImage(employeeId, faceImage);
-      debugPrint("✅ Face image downloaded and saved");
+      // Download and save with validation
+      bool success = true;
 
-      // Download and save enhanced features (if available)
-      if (hasEnhancedFeatures) {
+      // Save face image
+      try {
+        await saveFaceImage(employeeId, data['image']);
+        debugPrint("✅ Face image downloaded and saved");
+      } catch (e) {
+        debugPrint("❌ Error saving downloaded image: $e");
+        success = false;
+      }
+
+      // Save features if available
+      if (hasValidFeatures) {
         try {
-          Map<String, dynamic> featuresMap = data['enhancedFaceFeatures'];
-          EnhancedFaceFeatures features = EnhancedFaceFeatures.fromJson(featuresMap);
-          await saveEnhancedFaceFeatures(employeeId, features);
-          await setEnhancedFaceRegistered(employeeId, true);
-          debugPrint("✅ Enhanced face features downloaded and saved");
+          Map<String, dynamic> featuresMap = data['faceFeatures'];
+          FaceFeatures features = FaceFeatures.fromJson(featuresMap);
+          await saveFaceFeatures(employeeId, features);
+          debugPrint("✅ Face features downloaded and saved");
         } catch (e) {
-          debugPrint("⚠️ Error downloading enhanced features: $e");
-          // Continue with basic registration
+          debugPrint("❌ Error saving downloaded features: $e");
+          success = false;
         }
       }
 
       // Set registration flags
       await setFaceRegistered(employeeId, true);
 
-      // Also save to standard SharedPreferences for backward compatibility
+      // Save backup in standard SharedPreferences
       final prefs = await SharedPreferences.getInstance();
-      await prefs.setString('employee_image_$employeeId', faceImage);
+      await prefs.setString('employee_image_$employeeId', data['image']);
       await prefs.setBool('face_registered_$employeeId', true);
 
-      if (hasEnhancedFeatures) {
-        await prefs.setString('enhanced_face_features_$employeeId',
-            jsonEncode(data['enhancedFaceFeatures']));
-      }
-
-      debugPrint("🎉 Face data successfully downloaded and restored for: $employeeId");
-      return true;
+      debugPrint("🎉 Face data successfully downloaded for: $employeeId");
+      return success;
 
     } catch (e) {
       debugPrint("❌ Error downloading face data from cloud: $e");
@@ -195,55 +235,37 @@ class SecureFaceStorageService {
     }
   }
 
-  /// NEW: Check if local face data is missing and needs cloud recovery
-  Future<bool> needsCloudRecovery(String employeeId) async {
+  /// Comprehensive face data validation
+  Future<bool> validateLocalFaceData(String employeeId) async {
     try {
-      // Check if we have any local face data
-      String? localImage = await getFaceImage(employeeId);
-      bool hasLocalImage = localImage != null && localImage.isNotEmpty;
+      debugPrint("🔍 Validating local face data for: $employeeId");
+
+      // Check image data
+      String? image = await getFaceImage(employeeId);
+      bool hasValidImage = image != null && _validateImageData(image);
+
+      // Check features
+      FaceFeatures? features = await getFaceFeatures(employeeId);
+      bool hasValidFeatures = features != null && _validateFaceFeatures(features);
 
       // Check registration flags
       bool isRegistered = await isFaceRegistered(employeeId);
-      bool isEnhancedRegistered = await isEnhancedFaceRegistered(employeeId);
 
-      // Check SharedPreferences backup
-      final prefs = await SharedPreferences.getInstance();
-      bool hasBackupImage = prefs.getString('employee_image_$employeeId') != null;
-
-      // If registration flags exist but no actual data, we need recovery
-      bool needsRecovery = (isRegistered || isEnhancedRegistered) && !hasLocalImage && !hasBackupImage;
-
-      debugPrint("🔍 Face data status for $employeeId:");
-      debugPrint("   - Has local image: $hasLocalImage");
+      debugPrint("📊 Validation results for $employeeId:");
+      debugPrint("   - Valid image: $hasValidImage");
+      debugPrint("   - Valid features: $hasValidFeatures");
       debugPrint("   - Is registered: $isRegistered");
-      debugPrint("   - Is enhanced registered: $isEnhancedRegistered");
-      debugPrint("   - Has backup image: $hasBackupImage");
-      debugPrint("   - Needs recovery: $needsRecovery");
 
-      return needsRecovery;
+      // Validation logic
+      bool isValid = hasValidImage && hasValidFeatures && isRegistered;
 
-    } catch (e) {
-      debugPrint("❌ Error checking if cloud recovery needed: $e");
-      return false;
-    }
-  }
-
-  /// NEW: Validate that all required face data exists locally
-  Future<bool> validateLocalFaceData(String employeeId) async {
-    try {
-      String? image = await getFaceImage(employeeId);
-      bool hasImage = image != null && image.isNotEmpty;
-
-      bool isRegistered = await isFaceRegistered(employeeId);
-      bool isEnhancedRegistered = await isEnhancedFaceRegistered(employeeId);
-
-      // Check if we have the registration flag but missing data
-      if ((isRegistered || isEnhancedRegistered) && !hasImage) {
-        debugPrint("⚠️ Registration flag exists but face data missing for: $employeeId");
+      if (!isValid && isRegistered) {
+        debugPrint("⚠️ Registration flags exist but data is invalid - needs recovery");
         return false;
       }
 
-      return hasImage && (isRegistered || isEnhancedRegistered);
+      debugPrint("✅ Local face data validation: ${isValid ? 'PASS' : 'FAIL'}");
+      return isValid;
 
     } catch (e) {
       debugPrint("❌ Error validating local face data: $e");
@@ -251,26 +273,131 @@ class SecureFaceStorageService {
     }
   }
 
-  /// NEW: Smart recovery - check and download if needed
+  /// Set face registered flag
+  Future<void> setFaceRegistered(String employeeId, bool isRegistered) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setBool('$_registeredPrefix$employeeId', isRegistered);
+      
+      if (isRegistered) {
+        await prefs.setString('face_registration_date_$employeeId', DateTime.now().toIso8601String());
+        await prefs.setString('face_registration_method_$employeeId', 'production');
+      }
+      
+      debugPrint("🔒 Set face registered for $employeeId: $isRegistered");
+    } catch (e) {
+      debugPrint("❌ Error setting face registered flag: $e");
+    }
+  }
+
+  /// Check if face is registered
+  Future<bool> isFaceRegistered(String employeeId) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      bool isRegistered = prefs.getBool('$_registeredPrefix$employeeId') ?? false;
+      debugPrint("🔍 Face registered for $employeeId: $isRegistered");
+      return isRegistered;
+    } catch (e) {
+      debugPrint("❌ Error checking face registered flag: $e");
+      return false;
+    }
+  }
+
+  /// Get face data information for debugging
+  Future<Map<String, dynamic>> getFaceDataInfo(String employeeId) async {
+    try {
+      String? image = await getFaceImage(employeeId);
+      FaceFeatures? features = await getFaceFeatures(employeeId);
+      bool isRegistered = await isFaceRegistered(employeeId);
+      double? qualityScore = await _getQualityScore(employeeId);
+      String? method = await _getRegistrationMethod(employeeId);
+
+      return {
+        'employeeId': employeeId,
+        'hasImage': image != null,
+        'imageSize': image?.length ?? 0,
+        'imageValid': image != null ? _validateImageData(image) : false,
+        'hasFeatures': features != null,
+        'featuresValid': features != null ? _validateFaceFeatures(features) : false,
+        'isRegistered': isRegistered,
+        'qualityScore': qualityScore,
+        'registrationMethod': method,
+        'faceQuality': features?.getQualityScore(),
+        'landmarkCount': features?.countFeatures(),
+        'validationStatus': await validateLocalFaceData(employeeId),
+        'needsCloudRecovery': await needsCloudRecovery(employeeId),
+      };
+    } catch (e) {
+      debugPrint("❌ Error getting face data info: $e");
+      return {'error': e.toString()};
+    }
+  }
+
+  /// Clear all face data
+  Future<void> clearFaceData(String employeeId) async {
+    try {
+      debugPrint("🗑️ Clearing all face data for $employeeId");
+
+      // Clear external storage
+      await _deleteFromExternalStorage(employeeId, 'image');
+      await _deleteFromExternalStorage(employeeId, 'features');
+
+      // Clear SharedPreferences
+      final prefs = await SharedPreferences.getInstance();
+      List<String> keysToRemove = [
+        '$_imagePrefix$employeeId',
+        '$_featuresPrefix$employeeId',
+        '$_registeredPrefix$employeeId',
+        '$_qualityPrefix$employeeId',
+        '$_methodPrefix$employeeId',
+        'employee_image_$employeeId',
+        'employee_face_features_$employeeId',
+        'face_image_$employeeId',
+        'face_features_$employeeId',
+        'face_registration_date_$employeeId',
+        'face_registration_method_$employeeId',
+      ];
+
+      for (String key in keysToRemove) {
+        await prefs.remove(key);
+      }
+
+      debugPrint("✅ All face data cleared for $employeeId");
+    } catch (e) {
+      debugPrint("❌ Error clearing face data: $e");
+    }
+  }
+
+  /// Check if needs cloud recovery
+  Future<bool> needsCloudRecovery(String employeeId) async {
+    try {
+      bool isRegistered = await isFaceRegistered(employeeId);
+      bool hasValidData = await validateLocalFaceData(employeeId);
+
+      return isRegistered && !hasValidData;
+    } catch (e) {
+      debugPrint("❌ Error checking cloud recovery need: $e");
+      return false;
+    }
+  }
+
+  /// Ensure face data is available with smart recovery
   Future<bool> ensureFaceDataAvailable(String employeeId) async {
     try {
       debugPrint("🔄 Ensuring face data is available for: $employeeId");
 
-      // First, validate current local data
       bool isValid = await validateLocalFaceData(employeeId);
       if (isValid) {
         debugPrint("✅ Local face data is valid");
         return true;
       }
 
-      // Check if we need cloud recovery
       bool needsRecovery = await needsCloudRecovery(employeeId);
       if (!needsRecovery) {
         debugPrint("ℹ️ No cloud recovery needed");
         return false;
       }
 
-      // Attempt cloud recovery
       debugPrint("🌐 Attempting cloud recovery...");
       bool recovered = await downloadFaceDataFromCloud(employeeId);
 
@@ -288,230 +415,184 @@ class SecureFaceStorageService {
     }
   }
 
-  /// Get legacy face features (for backward compatibility)
-  Future<FaceFeatures?> getFaceFeatures(String employeeId) async {
-    try {
-      debugPrint("SecureFaceStorage: Retrieving legacy face features for $employeeId");
-
-      // Try external storage first
-      String? featuresJson = await _getFromExternalStorage(employeeId, 'features');
-
-      if (featuresJson == null) {
-        // Fallback: SharedPreferences
-        final prefs = await SharedPreferences.getInstance();
-        featuresJson = prefs.getString('$_featuresPrefix$employeeId');
-      }
-
-      if (featuresJson != null) {
-        Map<String, dynamic> featuresMap = jsonDecode(featuresJson);
-        FaceFeatures features = FaceFeatures.fromJson(featuresMap);
-        debugPrint("SecureFaceStorage: ✅ Retrieved legacy face features for $employeeId");
-        return features;
-      }
-
-      debugPrint("SecureFaceStorage: ❌ No legacy face features found for $employeeId");
-      return null;
-    } catch (e) {
-      debugPrint("SecureFaceStorage: ❌ Error retrieving legacy face features: $e");
-      return null;
-    }
-  }
-
-  /// NEW: Save enhanced face features
-  Future<void> saveEnhancedFaceFeatures(String employeeId, EnhancedFaceFeatures features) async {
-    try {
-      debugPrint("SecureFaceStorage: Saving ENHANCED face features for $employeeId");
-
-      String featuresJson = jsonEncode(features.toJson());
-
-      // Try external storage first
-      bool savedToExternal = await _saveToExternalStorage(employeeId, featuresJson, 'enhanced_features');
-
-      if (!savedToExternal) {
-        // Fallback: SharedPreferences
-        final prefs = await SharedPreferences.getInstance();
-        await prefs.setString('$_enhancedFeaturesPrefix$employeeId', featuresJson);
-      }
-
-      // Also set the enhanced registration flag
-      await setEnhancedFaceRegistered(employeeId, true);
-
-      debugPrint("SecureFaceStorage: ✅ Enhanced face features saved for $employeeId");
-      debugPrint("SecureFaceStorage: Features summary: $features");
-    } catch (e) {
-      debugPrint("SecureFaceStorage: ❌ Error saving enhanced face features: $e");
-      rethrow;
-    }
-  }
-
-  /// NEW: Get enhanced face features
-  Future<EnhancedFaceFeatures?> getEnhancedFaceFeatures(String employeeId) async {
-    try {
-      debugPrint("SecureFaceStorage: Retrieving ENHANCED face features for $employeeId");
-
-      // Try external storage first
-      String? featuresJson = await _getFromExternalStorage(employeeId, 'enhanced_features');
-
-      if (featuresJson == null) {
-        // Fallback: SharedPreferences
-        final prefs = await SharedPreferences.getInstance();
-        featuresJson = prefs.getString('$_enhancedFeaturesPrefix$employeeId');
-      }
-
-      if (featuresJson != null) {
-        Map<String, dynamic> featuresMap = jsonDecode(featuresJson);
-        EnhancedFaceFeatures features = EnhancedFaceFeatures.fromJson(featuresMap);
-        debugPrint("SecureFaceStorage: ✅ Retrieved enhanced face features for $employeeId");
-        debugPrint("SecureFaceStorage: Features quality: ${features.faceQualityScore}");
-        return features;
-      }
-
-      debugPrint("SecureFaceStorage: ❌ No enhanced face features found for $employeeId");
-      return null;
-    } catch (e) {
-      debugPrint("SecureFaceStorage: ❌ Error retrieving enhanced face features: $e");
-      return null;
-    }
-  }
-
-  /// Set face registered flag (legacy)
-  Future<void> setFaceRegistered(String employeeId, bool isRegistered) async {
+  /// Save user data with face information
+  Future<void> saveUserData(String employeeId, Map<String, dynamic> userData) async {
     try {
       final prefs = await SharedPreferences.getInstance();
-      await prefs.setBool('$_registeredPrefix$employeeId', isRegistered);
-      debugPrint("SecureFaceStorage: Set legacy face registered for $employeeId: $isRegistered");
+      
+      // Add metadata
+      userData['lastUpdated'] = DateTime.now().toIso8601String();
+      userData['platform'] = Platform.operatingSystem;
+      userData['version'] = 'production_v1';
+      
+      await prefs.setString('user_data_$employeeId', jsonEncode(userData));
+      debugPrint("✅ User data saved for $employeeId");
     } catch (e) {
-      debugPrint("SecureFaceStorage: Error setting face registered flag: $e");
+      debugPrint("❌ Error saving user data: $e");
     }
   }
 
-  /// Check if face is registered (legacy)
-  Future<bool> isFaceRegistered(String employeeId) async {
+  /// Get user data
+  Future<Map<String, dynamic>?> getUserData(String employeeId) async {
     try {
       final prefs = await SharedPreferences.getInstance();
-      bool isRegistered = prefs.getBool('$_registeredPrefix$employeeId') ?? false;
-      debugPrint("SecureFaceStorage: Legacy face registered for $employeeId: $isRegistered");
-      return isRegistered;
+      String? userData = prefs.getString('user_data_$employeeId');
+      
+      if (userData != null && userData.isNotEmpty) {
+        return jsonDecode(userData);
+      }
+      
+      return null;
     } catch (e) {
-      debugPrint("SecureFaceStorage: Error checking face registered flag: $e");
+      debugPrint("❌ Error getting user data: $e");
+      return null;
+    }
+  }
+
+  // ================ PRIVATE HELPER METHODS ================
+
+  /// Validate image data quality and format
+  bool _validateImageData(String imageData) {
+    if (imageData.isEmpty) return false;
+    
+    // Check minimum size (should be at least 1KB when decoded)
+    if (imageData.length < 1000) return false;
+    
+    // Check maximum size (should be less than 10MB)
+    if (imageData.length > 10000000) return false;
+    
+    // Check if it's valid base64
+    try {
+      String testData = imageData.substring(0, math.min(100, imageData.length));
+      base64Decode(testData);
+      return true;
+    } catch (e) {
       return false;
     }
   }
 
-  /// NEW: Set enhanced face registered flag
-  Future<void> setEnhancedFaceRegistered(String employeeId, bool isRegistered) async {
-    try {
-      final prefs = await SharedPreferences.getInstance();
-      await prefs.setBool('$_enhancedRegisteredPrefix$employeeId', isRegistered);
-      debugPrint("SecureFaceStorage: Set ENHANCED face registered for $employeeId: $isRegistered");
-    } catch (e) {
-      debugPrint("SecureFaceStorage: Error setting enhanced face registered flag: $e");
+  /// Clean and optimize image data
+  String _cleanImageData(String imageData) {
+    String cleaned = imageData.trim();
+    
+    // Remove data URL prefix if present
+    if (cleaned.contains('data:image') && cleaned.contains(',')) {
+      cleaned = cleaned.split(',')[1];
     }
+    
+    // Remove any whitespace
+    cleaned = cleaned.replaceAll(RegExp(r'\s+'), '');
+    
+    return cleaned;
   }
 
-  /// NEW: Check if enhanced face is registered
-  Future<bool> isEnhancedFaceRegistered(String employeeId) async {
-    try {
-      final prefs = await SharedPreferences.getInstance();
-      bool isRegistered = prefs.getBool('$_enhancedRegisteredPrefix$employeeId') ?? false;
-      debugPrint("SecureFaceStorage: Enhanced face registered for $employeeId: $isRegistered");
-      return isRegistered;
-    } catch (e) {
-      debugPrint("SecureFaceStorage: Error checking enhanced face registered flag: $e");
-      return false;
-    }
-  }
-
-  /// NEW: Check which registration type is available
-  Future<String> getRegistrationType(String employeeId) async {
-    bool hasEnhanced = await isEnhancedFaceRegistered(employeeId);
-    bool hasLegacy = await isFaceRegistered(employeeId);
-
-    if (hasEnhanced) {
-      return 'enhanced';
-    } else if (hasLegacy) {
-      return 'legacy';
+  /// Analyze image quality
+  Map<String, dynamic> _analyzeImageQuality(String imageData) {
+    double sizeKB = imageData.length / 1024;
+    
+    double qualityScore;
+    if (sizeKB < 15) {
+      qualityScore = 0.2;
+    } else if (sizeKB < 50) {
+      qualityScore = 0.6;
+    } else if (sizeKB < 500) {
+      qualityScore = 1.0;
+    } else if (sizeKB < 2000) {
+      qualityScore = 0.9;
     } else {
-      return 'none';
+      qualityScore = 0.7;
     }
+    
+    return {
+      'sizeKB': sizeKB,
+      'qualityScore': qualityScore,
+      'isOptimal': sizeKB >= 50 && sizeKB <= 500,
+    };
   }
 
-  /// Clear all face data for an employee
-  Future<void> clearFaceData(String employeeId) async {
-    try {
-      debugPrint("SecureFaceStorage: Clearing all face data for $employeeId");
-
-      // Clear from external storage
-      await _deleteFromExternalStorage(employeeId, 'image');
-      await _deleteFromExternalStorage(employeeId, 'features');
-      await _deleteFromExternalStorage(employeeId, 'enhanced_features');
-
-      // Clear from SharedPreferences
-      final prefs = await SharedPreferences.getInstance();
-      await prefs.remove('$_imagePrefix$employeeId');
-      await prefs.remove('$_featuresPrefix$employeeId');
-      await prefs.remove('$_enhancedFeaturesPrefix$employeeId');
-      await prefs.remove('$_registeredPrefix$employeeId');
-      await prefs.remove('$_enhancedRegisteredPrefix$employeeId');
-
-      debugPrint("SecureFaceStorage: ✅ All face data cleared for $employeeId");
-    } catch (e) {
-      debugPrint("SecureFaceStorage: ❌ Error clearing face data: $e");
+  /// Validate face features
+  bool _validateFaceFeatures(FaceFeatures features) {
+    // Must have essential features
+    if (features.leftEye == null || features.rightEye == null || features.noseBase == null) {
+      return false;
     }
+    
+    // Validate coordinate sanity
+    if (!features.leftEye!.isValid() || !features.rightEye!.isValid() || !features.noseBase!.isValid()) {
+      return false;
+    }
+    
+    // Check if features pass quality threshold
+    return features.getQualityScore() >= 0.3;
   }
 
-  /// Get comprehensive face data info for debugging
-  Future<Map<String, dynamic>> getFaceDataInfo(String employeeId) async {
-    try {
-      String? image = await getFaceImage(employeeId);
-      FaceFeatures? legacyFeatures = await getFaceFeatures(employeeId);
-      EnhancedFaceFeatures? enhancedFeatures = await getEnhancedFaceFeatures(employeeId);
-      bool isLegacyRegistered = await isFaceRegistered(employeeId);
-      bool isEnhancedRegistered = await isEnhancedFaceRegistered(employeeId);
-      String registrationType = await getRegistrationType(employeeId);
-
-      return {
-        'employeeId': employeeId,
-        'hasImage': image != null,
-        'imageSize': image?.length ?? 0,
-        'hasLegacyFeatures': legacyFeatures != null,
-        'hasEnhancedFeatures': enhancedFeatures != null,
-        'isLegacyRegistered': isLegacyRegistered,
-        'isEnhancedRegistered': isEnhancedRegistered,
-        'registrationType': registrationType,
-        'enhancedQuality': enhancedFeatures?.faceQualityScore,
-        'enhancedLandmarkCount': enhancedFeatures?.landmarkCount ?? 0,
-        'enhancedContourCount': 0, // Simplified version doesn't track contours separately
-      };
-    } catch (e) {
-      debugPrint("SecureFaceStorage: Error getting face data info: $e");
-      return {'error': e.toString()};
-    }
+  /// Save image with multiple backup methods
+  Future<void> _saveImageWithBackups(String employeeId, String imageData, Map<String, dynamic> qualityAnalysis) async {
+    final prefs = await SharedPreferences.getInstance();
+    
+    // Primary storage
+    await prefs.setString('$_imagePrefix$employeeId', imageData);
+    
+    // Legacy compatibility
+    await prefs.setString('employee_image_$employeeId', imageData);
+    
+    // Alternative storage
+    await prefs.setString('face_image_$employeeId', imageData);
+    
+    // External storage
+    await _saveToExternalStorage(employeeId, imageData, 'image');
+    
+    // Save quality metadata
+    await prefs.setDouble('$_qualityPrefix$employeeId', qualityAnalysis['qualityScore']);
   }
 
-  // Private helper methods for external storage
+  /// Save features with backups
+  Future<void> _saveFeaturesWithBackups(String employeeId, FaceFeatures features) async {
+    final prefs = await SharedPreferences.getInstance();
+    
+    String featuresJson = jsonEncode(features.toJson());
+    
+    // Primary features storage
+    await prefs.setString('$_featuresPrefix$employeeId', featuresJson);
+    
+    // Legacy compatibility
+    await prefs.setString('employee_face_features_$employeeId', featuresJson);
+    
+    // Alternative storage
+    await prefs.setString('face_features_$employeeId', featuresJson);
+    
+    // External storage
+    await _saveToExternalStorage(employeeId, featuresJson, 'features');
+  }
 
+  /// Get quality score
+  Future<double?> _getQualityScore(String employeeId) async {
+    final prefs = await SharedPreferences.getInstance();
+    return prefs.getDouble('$_qualityPrefix$employeeId');
+  }
+
+  /// Get registration method
+  Future<String?> _getRegistrationMethod(String employeeId) async {
+    final prefs = await SharedPreferences.getInstance();
+    return prefs.getString('$_methodPrefix$employeeId');
+  }
+
+  // External storage helper methods
   Future<bool> _saveToExternalStorage(String employeeId, String data, String dataType) async {
     try {
       if (Platform.isAndroid || Platform.isIOS) {
         Directory? directory = await getExternalStorageDirectory();
-
         if (directory != null) {
           String filePath = '${directory.path}/face_data_${employeeId}_$dataType.dat';
           File file = File(filePath);
-
-          // Create directory if it doesn't exist
           await file.parent.create(recursive: true);
-
-          // Write data
           await file.writeAsString(data);
-          debugPrint("SecureFaceStorage: Saved $dataType to external storage: $filePath");
           return true;
         }
       }
       return false;
     } catch (e) {
-      debugPrint("SecureFaceStorage: Error saving to external storage: $e");
+      debugPrint("❌ Error saving to external storage: $e");
       return false;
     }
   }
@@ -520,21 +601,17 @@ class SecureFaceStorageService {
     try {
       if (Platform.isAndroid || Platform.isIOS) {
         Directory? directory = await getExternalStorageDirectory();
-
         if (directory != null) {
           String filePath = '${directory.path}/face_data_${employeeId}_$dataType.dat';
           File file = File(filePath);
-
           if (await file.exists()) {
-            String data = await file.readAsString();
-            debugPrint("SecureFaceStorage: Retrieved $dataType from external storage");
-            return data;
+            return await file.readAsString();
           }
         }
       }
       return null;
     } catch (e) {
-      debugPrint("SecureFaceStorage: Error reading from external storage: $e");
+      debugPrint("❌ Error reading from external storage: $e");
       return null;
     }
   }
@@ -543,22 +620,96 @@ class SecureFaceStorageService {
     try {
       if (Platform.isAndroid || Platform.isIOS) {
         Directory? directory = await getExternalStorageDirectory();
-
         if (directory != null) {
           String filePath = '${directory.path}/face_data_${employeeId}_$dataType.dat';
           File file = File(filePath);
-
           if (await file.exists()) {
             await file.delete();
-            debugPrint("SecureFaceStorage: Deleted $dataType from external storage");
           }
         }
       }
     } catch (e) {
-      debugPrint("SecureFaceStorage: Error deleting from external storage: $e");
+      debugPrint("❌ Error deleting from external storage: $e");
+    }
+  }
+
+  /// Sync pending face registrations when coming online
+  Future<void> syncPendingRegistrations() async {
+    try {
+      debugPrint("🔄 Syncing pending face registrations...");
+      
+      final prefs = await SharedPreferences.getInstance();
+      final keys = prefs.getKeys();
+      
+      List<String> employeesWithPendingSync = [];
+      
+      for (String key in keys) {
+        if (key.startsWith('pending_face_registration_')) {
+          String employeeId = key.replaceFirst('pending_face_registration_', '');
+          employeesWithPendingSync.add(employeeId);
+        }
+      }
+      
+      debugPrint("📊 Found ${employeesWithPendingSync.length} pending sync operations");
+      
+      for (String employeeId in employeesWithPendingSync) {
+        await _syncSingleEmployeeData(employeeId);
+      }
+      
+      debugPrint("✅ Pending sync operations completed");
+    } catch (e) {
+      debugPrint("❌ Error syncing pending registrations: $e");
+    }
+  }
+
+  /// Sync single employee data to cloud
+  Future<void> _syncSingleEmployeeData(String employeeId) async {
+    try {
+      debugPrint("🔄 Syncing data for employee: $employeeId");
+      
+      // Get local data
+      String? image = await getFaceImage(employeeId);
+      FaceFeatures? features = await getFaceFeatures(employeeId);
+      Map<String, dynamic>? userData = await getUserData(employeeId);
+      
+      if (image == null || features == null) {
+        debugPrint("❌ Missing local data for $employeeId");
+        return;
+      }
+      
+      // Prepare cloud data
+      Map<String, dynamic> cloudData = {
+        'image': image,
+        'faceFeatures': features.toJson(),
+        'faceRegistered': true,
+        'registeredOn': FieldValue.serverTimestamp(),
+        'platform': Platform.operatingSystem,
+        'registrationMethod': 'production_offline_sync',
+        'faceQualityScore': features.getQualityScore(),
+        'featuresCount': features.countFeatures(),
+        'lastUpdated': FieldValue.serverTimestamp(),
+        'syncedAt': FieldValue.serverTimestamp(),
+      };
+      
+      if (userData != null) {
+        cloudData.addAll(userData);
+      }
+      
+      // Upload to Firestore
+      await FirebaseFirestore.instance
+          .collection('employees')
+          .doc(employeeId)
+          .update(cloudData);
+      
+      // Mark as synced
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.remove('pending_face_registration_$employeeId');
+      await prefs.remove('pending_sync_data_$employeeId');
+      
+      debugPrint("✅ Successfully synced data for $employeeId");
+      
+    } catch (e) {
+      debugPrint("❌ Error syncing data for $employeeId: $e");
     }
   }
 }
-
-
-

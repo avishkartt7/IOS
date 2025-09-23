@@ -4,8 +4,8 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/foundation.dart';
 import 'package:intl/intl.dart';
-import 'package:face_auth_compatible/services/employee_overtime_service.dart';
-import 'package:face_auth_compatible/model/overtime_request_model.dart';
+import 'package:face_auth/services/employee_overtime_service.dart';
+import 'package:face_auth/model/overtime_request_model.dart';
 
 class DashboardOvertimeService {
   final EmployeeOvertimeService _overtimeService = EmployeeOvertimeService();

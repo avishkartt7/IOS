@@ -3,9 +3,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:face_auth_compatible/common/utils/custom_snackbar.dart';
-import 'package:face_auth_compatible/constants/theme.dart';
-import 'package:face_auth_compatible/dashboard/dashboard_view.dart';
+import 'package:face_auth/common/utils/custom_snackbar.dart';
+import 'package:face_auth/constants/theme.dart';
+import 'package:face_auth/dashboard/dashboard_view.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 class AppPasswordEntryView extends StatefulWidget {

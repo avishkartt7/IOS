@@ -4,8 +4,8 @@ import 'dart:convert';
 import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:face_auth_compatible/constants/theme.dart';
-import 'package:face_auth_compatible/common/utils/custom_snackbar.dart';
+import 'package:face_auth/constants/theme.dart';
+import 'package:face_auth/common/utils/custom_snackbar.dart';
 import 'package:flutter_face_api/face_api.dart' as regula;
 
 class SettingsView extends StatefulWidget {

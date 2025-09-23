@@ -1,14 +1,14 @@
 // lib/authenticate_face/user_password_setup_view.dart
 
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:face_auth_compatible/common/utils/custom_snackbar.dart';
-import 'package:face_auth_compatible/common/utils/extensions/size_extension.dart';
-import 'package:face_auth_compatible/common/views/custom_button.dart';
-import 'package:face_auth_compatible/constants/theme.dart';
-import 'package:face_auth_compatible/register_face/registration_complete_view.dart';
+import 'package:face_auth/common/utils/custom_snackbar.dart';
+import 'package:face_auth/common/utils/extensions/size_extension.dart';
+import 'package:face_auth/common/views/custom_button.dart';
+import 'package:face_auth/constants/theme.dart';
+import 'package:face_auth/register_face/registration_complete_view.dart';
 import 'package:flutter/material.dart';
 
-import 'package:face_auth_compatible/pin_entry/app_password_entry_view.dart';
+import 'package:face_auth/pin_entry/app_password_entry_view.dart';
 
 class UserPasswordSetupView extends StatefulWidget {
   final String employeeId;

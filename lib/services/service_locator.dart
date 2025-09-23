@@ -2,28 +2,28 @@
 
 import 'package:get_it/get_it.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:face_auth_compatible/repositories/location_repository.dart';
-import 'package:face_auth_compatible/repositories/polygon_location_repository.dart';
-import 'package:face_auth_compatible/repositories/attendance_repository.dart';
-import 'package:face_auth_compatible/repositories/check_out_request_repository.dart';
-import 'package:face_auth_compatible/repositories/overtime_repository.dart';
-import 'package:face_auth_compatible/repositories/leave_application_repository.dart';
-import 'package:face_auth_compatible/services/database_helper.dart';
-import 'package:face_auth_compatible/services/connectivity_service.dart';
-import 'package:face_auth_compatible/services/notification_service.dart';
-import 'package:face_auth_compatible/services/fcm_token_service.dart';
-import 'package:face_auth_compatible/services/sync_service.dart';
-import 'package:face_auth_compatible/services/secure_face_storage_service.dart';
-import 'package:face_auth_compatible/services/overtime_approver_service.dart';
-import 'package:face_auth_compatible/services/employee_overtime_service.dart';
-import 'package:face_auth_compatible/services/leave_application_service.dart';
-import 'package:face_auth_compatible/services/firebase_auth_service.dart';
+import 'package:face_auth/repositories/location_repository.dart';
+import 'package:face_auth/repositories/polygon_location_repository.dart';
+import 'package:face_auth/repositories/attendance_repository.dart';
+import 'package:face_auth/repositories/check_out_request_repository.dart';
+import 'package:face_auth/repositories/overtime_repository.dart';
+import 'package:face_auth/repositories/leave_application_repository.dart';
+import 'package:face_auth/services/database_helper.dart';
+import 'package:face_auth/services/connectivity_service.dart';
+import 'package:face_auth/services/notification_service.dart';
+import 'package:face_auth/services/fcm_token_service.dart';
+import 'package:face_auth/services/sync_service.dart';
+import 'package:face_auth/services/secure_face_storage_service.dart';
+import 'package:face_auth/services/overtime_approver_service.dart';
+import 'package:face_auth/services/employee_overtime_service.dart';
+import 'package:face_auth/services/leave_application_service.dart';
+import 'package:face_auth/services/firebase_auth_service.dart';
 
-import 'package:face_auth_compatible/repositories/location_exemption_repository.dart';
-import 'package:face_auth_compatible/services/geofence_exit_monitoring_service.dart';
+import 'package:face_auth/repositories/location_exemption_repository.dart';
+import 'package:face_auth/services/geofence_exit_monitoring_service.dart';
 
 // ✅ NEW: Import the PDF service
-import 'package:face_auth_compatible/services/attendance_pdf_service.dart';
+import 'package:face_auth/services/attendance_pdf_service.dart';
 
 final GetIt getIt = GetIt.instance;
 

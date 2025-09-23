@@ -1,6 +1,6 @@
 // lib/common/utils/enhanced_face_extractor.dart - SIMPLIFIED WORKING VERSION
 import 'package:google_mlkit_face_detection/google_mlkit_face_detection.dart';
-import 'package:face_auth_compatible/model/enhanced_face_features.dart';
+import 'package:face_auth/model/enhanced_face_features.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 

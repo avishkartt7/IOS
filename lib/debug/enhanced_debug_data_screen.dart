@@ -1,11 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:intl/intl.dart';
-import 'package:face_auth_compatible/services/database_helper.dart';
-import 'package:face_auth_compatible/services/service_locator.dart';
-import 'package:face_auth_compatible/repositories/attendance_repository.dart';
-import 'package:face_auth_compatible/model/local_attendance_model.dart';
-import 'package:face_auth_compatible/services/connectivity_service.dart';
+import 'package:face_auth/services/database_helper.dart';
+import 'package:face_auth/services/service_locator.dart';
+import 'package:face_auth/repositories/attendance_repository.dart';
+import 'package:face_auth/model/local_attendance_model.dart';
+import 'package:face_auth/services/connectivity_service.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'dart:convert';
 

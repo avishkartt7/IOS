@@ -2,14 +2,14 @@
 
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
-import 'package:face_auth_compatible/constants/theme.dart';
-import 'package:face_auth_compatible/common/utils/custom_snackbar.dart';
-import 'package:face_auth_compatible/model/overtime_request_model.dart';
-import 'package:face_auth_compatible/model/attendance_model.dart';
-import 'package:face_auth_compatible/repositories/attendance_repository.dart';
-import 'package:face_auth_compatible/services/employee_overtime_service.dart';
-import 'package:face_auth_compatible/services/service_locator.dart';
-import 'package:face_auth_compatible/model/local_attendance_model.dart';
+import 'package:face_auth/constants/theme.dart';
+import 'package:face_auth/common/utils/custom_snackbar.dart';
+import 'package:face_auth/model/overtime_request_model.dart';
+import 'package:face_auth/model/attendance_model.dart';
+import 'package:face_auth/repositories/attendance_repository.dart';
+import 'package:face_auth/services/employee_overtime_service.dart';
+import 'package:face_auth/services/service_locator.dart';
+import 'package:face_auth/model/local_attendance_model.dart';
 
 class MyAttendanceView extends StatefulWidget {
   final String employeeId;

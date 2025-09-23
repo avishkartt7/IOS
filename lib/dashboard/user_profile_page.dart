@@ -1,11 +1,11 @@
-// lib/dashboard/user_profile_page.dart - COMPLETE FIXED VERSION
+// lib/dashboard/user_profile_page.dart - FIXED OVERFLOW + NOTIFICATION SYSTEM + DATA PERSISTENCE
 
 import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:face_auth/constants/theme.dart';
-import 'package:face_auth/common/utils/custom_snackbar.dart';
-import 'package:face_auth/common/views/custom_button.dart';
+import 'package:face_auth_compatible/constants/theme.dart';
+import 'package:face_auth_compatible/common/utils/custom_snackbar.dart';
+import 'package:face_auth_compatible/common/views/custom_button.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 // Country model class with flag URL
@@ -75,7 +75,7 @@ class _UserProfilePageState extends State<UserProfilePage>
     'other_documents': null,
   };
 
-  // Countriesss with real flag image URLs (top countries for UAE context)
+  // Countries with real flag image URLs (top countries for UAE context)
   final List<CountryData> _countries = [
     CountryData(name: "United Arab Emirates", code: "AE", flagUrl: "https://flagcdn.com/w40/ae.png"),
     CountryData(name: "India", code: "IN", flagUrl: "https://flagcdn.com/w40/in.png"),
@@ -146,17 +146,14 @@ class _UserProfilePageState extends State<UserProfilePage>
     _checkProfileCompleteness();
   }
 
-  // FIXED: Enhanced profile completeness check
   void _checkProfileCompleteness() {
-    // Get the latest values from controllers instead of initial userData
-    final phone = _phoneController.text.trim();
-    final email = _emailController.text.trim();
+    // Check if phone or email is missing
+    final phone = widget.userData['phone']?.toString().trim() ?? '';
+    final email = widget.userData['email']?.toString().trim() ?? '';
 
     setState(() {
       _showNotificationBanner = phone.isEmpty || email.isEmpty;
     });
-
-    print('Profile completeness check - Phone: "$phone", Email: "$email", Show banner: $_showNotificationBanner');
   }
 
   void _initializeAnimations() {
@@ -184,34 +181,24 @@ class _UserProfilePageState extends State<UserProfilePage>
     _animationController.forward();
   }
 
-  // FIXED: Enhanced controller initialization with listeners
   void _initializeControllers() {
+    // Fix: Ensure proper null handling and string conversion
     _nameController = TextEditingController(text: widget.userData['name']?.toString() ?? '');
     _designationController = TextEditingController(text: widget.userData['designation']?.toString() ?? '');
     _departmentController = TextEditingController(text: widget.userData['department']?.toString() ?? '');
+
+    // FIXED: Proper handling for phone and email
     _phoneController = TextEditingController(text: widget.userData['phone']?.toString() ?? '');
     _emailController = TextEditingController(text: widget.userData['email']?.toString() ?? '');
+
     _birthdateController = TextEditingController(text: widget.userData['birthdate']?.toString() ?? '');
     _otherCountryController = TextEditingController(text: '');
 
-    // Add listeners to controllers for real-time validation
-    _phoneController.addListener(() {
-      if (mounted) {
-        _checkProfileCompleteness();
-      }
-    });
-
-    _emailController.addListener(() {
-      if (mounted) {
-        _checkProfileCompleteness();
-      }
-    });
-
     // Initialize country selection
-    String? countryName = widget.userData['country']?.toString();
+    String? countryName = widget.userData['country'];
     if (countryName != null && countryName.isNotEmpty) {
       _selectedCountry = _countries.firstWhere(
-        (country) => country.name == countryName,
+            (country) => country.name == countryName,
         orElse: () {
           _showOtherCountryField = true;
           _otherCountryController.text = countryName;
@@ -220,11 +207,11 @@ class _UserProfilePageState extends State<UserProfilePage>
       );
     }
 
-    _breakStartTimeController = TextEditingController(text: widget.userData['breakStartTime']?.toString() ?? '');
-    _breakEndTimeController = TextEditingController(text: widget.userData['breakEndTime']?.toString() ?? '');
+    _breakStartTimeController = TextEditingController(text: widget.userData['breakStartTime'] ?? '');
+    _breakEndTimeController = TextEditingController(text: widget.userData['breakEndTime'] ?? '');
     _hasJummaBreak = widget.userData['hasJummaBreak'] ?? false;
-    _jummaBreakStartController = TextEditingController(text: widget.userData['jummaBreakStart']?.toString() ?? '');
-    _jummaBreakEndController = TextEditingController(text: widget.userData['jummaBreakEnd']?.toString() ?? '');
+    _jummaBreakStartController = TextEditingController(text: widget.userData['jummaBreakStart'] ?? '');
+    _jummaBreakEndController = TextEditingController(text: widget.userData['jummaBreakEnd'] ?? '');
   }
 
   void _loadUploadedDocuments() {
@@ -305,45 +292,6 @@ class _UserProfilePageState extends State<UserProfilePage>
     setState(() {
       _isEditing = !_isEditing;
     });
-  }
-
-  // ADDED: Email validation helper method
-  bool _isValidEmail(String email) {
-    return RegExp(r'^[\w-\.]+@([\w-]+\.)+[\w-]{2,4}$').hasMatch(email);
-  }
-
-  // ADDED: Phone validation helper method
-  bool _isValidPhone(String phone) {
-    // Remove all non-numeric characters
-    String numericPhone = phone.replaceAll(RegExp(r'[^0-9]'), '');
-    // Check if it has at least 7 digits and at most 15 digits
-    return numericPhone.length >= 7 && numericPhone.length <= 15;
-  }
-
-  // ADDED: Debug method for testing Firestore connection
-  Future<void> _debugConnection() async {
-    print('=== DEBUGGING FIRESTORE CONNECTION ===');
-    print('Employee ID: ${widget.employeeId}');
-    print('Name: "${_nameController.text}"');
-    print('Phone: "${_phoneController.text}"');
-    print('Email: "${_emailController.text}"');
-    
-    try {
-      DocumentSnapshot doc = await FirebaseFirestore.instance
-          .collection('employees')
-          .doc(widget.employeeId)
-          .get();
-      
-      print('Document exists: ${doc.exists}');
-      if (doc.exists) {
-        print('Current document data: ${doc.data()}');
-      } else {
-        print('ERROR: Document does not exist!');
-      }
-    } catch (e) {
-      print('ERROR accessing Firestore: $e');
-    }
-    print('=== END DEBUG ===');
   }
 
   Future<void> _selectTime(TextEditingController controller) async {
@@ -482,27 +430,11 @@ class _UserProfilePageState extends State<UserProfilePage>
     }
   }
 
-  // COMPLETELY FIXED: Enhanced save profile method with proper error handling
+  // FIXED SAVE PROFILE METHOD - THIS IS THE KEY FIX
+  // FIXED SAVE PROFILE METHOD
   Future<void> _saveProfile() async {
-    print('=== STARTING SAVE PROFILE ===');
-    
-    // Enhanced validation
     if (_nameController.text.trim().isEmpty) {
       CustomSnackBar.errorSnackBar(context, "Name cannot be empty");
-      return;
-    }
-
-    // Validate phone number
-    String phone = _phoneController.text.trim();
-    if (phone.isNotEmpty && !_isValidPhone(phone)) {
-      CustomSnackBar.errorSnackBar(context, "Please enter a valid phone number (7-15 digits)");
-      return;
-    }
-
-    // Validate email format
-    String email = _emailController.text.trim();
-    if (email.isNotEmpty && !_isValidEmail(email)) {
-      CustomSnackBar.errorSnackBar(context, "Please enter a valid email address");
       return;
     }
 
@@ -523,18 +455,21 @@ class _UserProfilePageState extends State<UserProfilePage>
     });
 
     try {
-      // Determine country name to save
+      // Determine country name to save - THIS WAS MISSING!
       String countryToSave = _selectedCountry!.isOther
           ? _otherCountryController.text.trim()
           : _selectedCountry!.name;
 
-      // Prepare update data with explicit type conversion
-      Map<String, dynamic> updateData = {
+      // Create updated data map with explicit string conversion
+      Map<String, dynamic> updatedData = {
         'name': _nameController.text.trim(),
         'designation': _designationController.text.trim(),
         'department': _departmentController.text.trim(),
-        'phone': phone,
-        'email': email,
+
+        // FIXED: Ensure these are saved as strings, not null
+        'phone': _phoneController.text.trim(),
+        'email': _emailController.text.trim(),
+
         'country': countryToSave,
         'countryCode': _selectedCountry!.isOther ? 'OTHER' : _selectedCountry!.code,
         'birthdate': _birthdateController.text.trim(),
@@ -546,127 +481,50 @@ class _UserProfilePageState extends State<UserProfilePage>
         'lastUpdated': FieldValue.serverTimestamp(),
       };
 
-      print('Attempting to update profile with data: $updateData');
-
-      // First check if document exists
-      DocumentReference docRef = FirebaseFirestore.instance
+      // Save to Firestore
+      await FirebaseFirestore.instance
           .collection('employees')
-          .doc(widget.employeeId);
+          .doc(widget.employeeId)
+          .update(updatedData);
 
-      DocumentSnapshot docSnapshot = await docRef.get();
-      
-      if (!docSnapshot.exists) {
-        throw Exception('Employee document does not exist');
-      }
-
-      print('Document exists, proceeding with update...');
-
-      // Perform Firestore update
-      await docRef.update(updateData);
-
-      print('Firestore update completed successfully');
-
-      // Update local userData to reflect changes
-      widget.userData.addAll(updateData);
+      // *** KEY FIX: Update the local userData map with new values ***
+      // This ensures the data persists when reopening the profile
+      widget.userData.addAll({
+        'name': _nameController.text.trim(),
+        'designation': _designationController.text.trim(),
+        'department': _departmentController.text.trim(),
+        'phone': _phoneController.text.trim(),
+        'email': _emailController.text.trim(),
+        'country': countryToSave,
+        'countryCode': _selectedCountry!.isOther ? 'OTHER' : _selectedCountry!.code,
+        'birthdate': _birthdateController.text.trim(),
+        'breakStartTime': _breakStartTimeController.text.trim(),
+        'breakEndTime': _breakEndTimeController.text.trim(),
+        'hasJummaBreak': _hasJummaBreak,
+        'jummaBreakStart': _jummaBreakStartController.text.trim(),
+        'jummaBreakEnd': _jummaBreakEndController.text.trim(),
+      });
 
       setState(() {
         _isLoading = false;
         _isEditing = false;
       });
 
-      // Re-check profile completeness with updated data
+      // Check if notification should be hidden now
       _checkProfileCompleteness();
 
       if (mounted) {
         CustomSnackBar.successSnackBar(context, "Profile updated successfully");
       }
-
-      print('=== SAVE PROFILE COMPLETED SUCCESSFULLY ===');
-
     } catch (e) {
-      print('ERROR in _saveProfile: $e');
-      
       setState(() {
         _isLoading = false;
       });
 
       if (mounted) {
-        String errorMessage = "Error updating profile: ";
-        
-        // Provide more specific error messages
-        if (e.toString().contains('permission')) {
-          errorMessage += "You don't have permission to update this profile";
-        } else if (e.toString().contains('network')) {
-          errorMessage += "Network connection error. Please check your internet connection";
-        } else if (e.toString().contains('not-found') || e.toString().contains('does not exist')) {
-          errorMessage += "Profile not found in database";
-        } else {
-          errorMessage += e.toString();
-        }
-        
-        CustomSnackBar.errorSnackBar(context, errorMessage);
-        
-        // Show debug dialog in debug mode
-        if (mounted) {
-          _showDebugDialog(e.toString());
-        }
+        CustomSnackBar.errorSnackBar(context, "Error updating profile: $e");
       }
     }
-  }
-
-  // ADDED: Debug dialog for development
-  void _showDebugDialog(String error) {
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        backgroundColor: _isDarkMode ? const Color(0xFF1E293B) : Colors.white,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-        title: Text(
-          "Debug Information",
-          style: TextStyle(
-            color: _isDarkMode ? Colors.white : Colors.black87,
-            fontWeight: FontWeight.bold,
-          ),
-        ),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              "Employee ID: ${widget.employeeId}",
-              style: TextStyle(
-                color: _isDarkMode ? Colors.grey.shade300 : Colors.grey.shade700,
-                fontSize: 12,
-              ),
-            ),
-            const SizedBox(height: 8),
-            Text(
-              "Error: $error",
-              style: TextStyle(
-                color: _isDarkMode ? Colors.grey.shade300 : Colors.grey.shade700,
-                fontSize: 12,
-              ),
-            ),
-          ],
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => _debugConnection(),
-            child: Text(
-              "Test Connection",
-              style: TextStyle(color: Theme.of(context).colorScheme.primary),
-            ),
-          ),
-          TextButton(
-            onPressed: () => Navigator.of(context).pop(),
-            child: Text(
-              "OK",
-              style: TextStyle(color: Theme.of(context).colorScheme.primary),
-            ),
-          ),
-        ],
-      ),
-    );
   }
 
   void _dismissNotificationBanner() {
@@ -768,8 +626,8 @@ class _UserProfilePageState extends State<UserProfilePage>
   }
 
   Widget _buildNotificationBanner() {
-    final phone = _phoneController.text.trim();
-    final email = _emailController.text.trim();
+    final phone = widget.userData['phone']?.toString().trim() ?? '';
+    final email = widget.userData['email']?.toString().trim() ?? '';
 
     List<String> missingFields = [];
     if (phone.isEmpty) missingFields.add('mobile number');
@@ -894,18 +752,9 @@ class _UserProfilePageState extends State<UserProfilePage>
             height: isTablet ? 140 : 120,
             width: double.infinity,
             decoration: BoxDecoration(
-              gradient: LinearGradient(
-                begin: Alignment.topLeft,
-                end: Alignment.bottomRight,
-                colors: _isDarkMode
-                    ? [
-                  const Color(0xFF1a202c),
-                  const Color(0xFF2d3748),
-                ]
-                    : [
-                  const Color(0xFF2E7D4B),
-                  const Color(0xFF34A853),
-                ],
+              image: DecorationImage(
+                image: AssetImage('assets/images/company_banner.png'),
+                fit: BoxFit.cover,
               ),
             ),
             child: SafeArea(
@@ -919,7 +768,7 @@ class _UserProfilePageState extends State<UserProfilePage>
                     // Back Button
                     Container(
                       decoration: BoxDecoration(
-                        color: Colors.white.withOpacity(0.2),
+                        color: Colors.black.withOpacity(0.3),
                         borderRadius: BorderRadius.circular(12),
                         border: Border.all(
                           color: Colors.white.withOpacity(0.3),
@@ -937,50 +786,12 @@ class _UserProfilePageState extends State<UserProfilePage>
                       ),
                     ),
 
-                    // Company Name - Expanded to prevent overflow
-                    Expanded(
-                      child: Container(
-                        margin: const EdgeInsets.symmetric(horizontal: 12),
-                        child: Column(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            FittedBox(
-                              fit: BoxFit.scaleDown,
-                              child: Text(
-                                "PHOENICIAN TECHNICAL SERVICES LLC",
-                                style: TextStyle(
-                                  color: Colors.white,
-                                  fontSize: (isTablet ? 16 : 14) * responsiveFontSize,
-                                  fontWeight: FontWeight.bold,
-                                  letterSpacing: 1.0,
-                                ),
-                                textAlign: TextAlign.center,
-                                maxLines: 1,
-                              ),
-                            ),
-                            const SizedBox(height: 4),
-                            FittedBox(
-                              fit: BoxFit.scaleDown,
-                              child: Text(
-                                "DUBAI, UNITED ARAB EMIRATES",
-                                style: TextStyle(
-                                  color: Colors.white.withOpacity(0.8),
-                                  fontSize: (isTablet ? 12 : 10) * responsiveFontSize,
-                                  fontWeight: FontWeight.w500,
-                                ),
-                                textAlign: TextAlign.center,
-                                maxLines: 1,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ),
+                    const Spacer(), // This pushes the edit button to the right
 
                     // Edit Button
                     Container(
                       decoration: BoxDecoration(
-                        color: Colors.white.withOpacity(0.2),
+                        color: Colors.black.withOpacity(0.3),
                         borderRadius: BorderRadius.circular(12),
                         border: Border.all(
                           color: Colors.white.withOpacity(0.3),
@@ -2013,3 +1824,6 @@ class _UserProfilePageState extends State<UserProfilePage>
     );
   }
 }
+
+
+

@@ -1,13 +1,12 @@
-// lib/repositories/overtime_repository.dart - COMPLETE CORRECTED VERSION
-// Fixed to match the enhanced OvertimeRequest model structure
+// lib/repositories/overtime_repository.dart - UPDATED FOR MANUAL APPROVER SELECTION
 
 import 'dart:convert';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:cloud_functions/cloud_functions.dart';
-import 'package:face_auth/model/overtime_request_model.dart';
-import 'package:face_auth/services/database_helper.dart';
-import 'package:face_auth/services/connectivity_service.dart';
-import 'package:face_auth/services/notification_service.dart';
+import 'package:face_auth_compatible/model/overtime_request_model.dart';
+import 'package:face_auth_compatible/services/database_helper.dart';
+import 'package:face_auth_compatible/services/connectivity_service.dart';
+import 'package:face_auth_compatible/services/notification_service.dart';
 import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -27,125 +26,168 @@ class OvertimeRepository {
         _connectivityService = connectivityService,
         _notificationService = notificationService;
 
-  // ✅ ENHANCED: Get the current overtime approver from database
-  Future<Map<String, dynamic>?> getOvertimeApprover() async {
+  // ✅ NEW: Get list of available overtime approvers for UI selection
+  Future<List<Map<String, dynamic>>> getAvailableApprovers() async {
     try {
-      debugPrint("=== FETCHING OVERTIME APPROVER FROM DATABASE ===");
+      debugPrint("=== FETCHING ALL AVAILABLE OVERTIME APPROVERS ===");
 
-      // Method 1: Check for specific overtime_approvers collection
-      QuerySnapshot approversSnapshot = await _firestore
-          .collection('overtime_approvers')
-          .where('isActive', isEqualTo: true)
-          .limit(1)
-          .get();
+      List<Map<String, dynamic>> approvers = [];
+      Set<String> addedApprovers = {}; // Prevent duplicates
 
-      if (approversSnapshot.docs.isNotEmpty) {
-        var approverDoc = approversSnapshot.docs.first;
-        var approverData = approverDoc.data() as Map<String, dynamic>;
+      // Method 1: Check dedicated overtime_approvers collection
+      try {
+        QuerySnapshot approversSnapshot = await _firestore
+            .collection('overtime_approvers')
+            .where('isActive', isEqualTo: true)
+            .get();
 
-        // ✅ FIXED: Return the stored approverId, NOT the document ID
-        String approverId = approverData['approverId'] ?? approverDoc.id;
-        debugPrint("Found overtime approver in overtime_approvers: $approverId");
+        for (var doc in approversSnapshot.docs) {
+          Map<String, dynamic> data = doc.data() as Map<String, dynamic>;
+          String approverId = data['approverId'] ?? doc.id;
 
-        return {
-          'approverId': approverId,  // ✅ Use stored approverId field
-          'approverName': approverData['approverName'] ?? 'Unknown',
-          'source': 'overtime_approvers'
-        };
+          if (!addedApprovers.contains(approverId)) {
+            approvers.add({
+              'id': approverId,
+              'name': data['approverName'] ?? 'Unknown Approver',
+              'designation': data['designation'] ?? 'Overtime Approver',
+              'department': data['department'] ?? 'Management',
+              'source': 'overtime_approvers',
+              'priority': 1, // Highest priority
+            });
+            addedApprovers.add(approverId);
+          }
+        }
+        debugPrint("Found ${approversSnapshot.docs.length} dedicated overtime approvers");
+      } catch (e) {
+        debugPrint("Error loading from overtime_approvers: $e");
       }
 
-      // Method 2: Check MasterSheet collection first (since you have EMP1289 there)
-      debugPrint("Checking MasterSheet for hasOvertimeApprovalAccess...");
+      // Method 2: Check MasterSheet for hasOvertimeApprovalAccess
+      try {
+        QuerySnapshot masterSheetSnapshot = await _firestore
+            .collection('MasterSheet')
+            .doc('Employee-Data')
+            .collection('employees')
+            .where('hasOvertimeApprovalAccess', isEqualTo: true)
+            .get();
 
-      QuerySnapshot masterSheetSnapshot = await _firestore
-          .collection('MasterSheet')
-          .doc('Employee-Data')
-          .collection('employees')
-          .where('hasOvertimeApprovalAccess', isEqualTo: true)
-          .limit(1)
-          .get();
+        for (var doc in masterSheetSnapshot.docs) {
+          Map<String, dynamic> data = doc.data() as Map<String, dynamic>;
+          String approverId = doc.id;
 
-      if (masterSheetSnapshot.docs.isNotEmpty) {
-        var approverDoc = masterSheetSnapshot.docs.first;
-        var approverData = approverDoc.data() as Map<String, dynamic>;
-
-        // ✅ FIXED: Use the document ID as the employee ID (this should be EMP1289)
-        String approverId = approverDoc.id;  // This should be "EMP1289"
-        debugPrint("Found overtime approver in MasterSheet: $approverId");
-
-        return {
-          'approverId': approverId,  // ✅ This will be "EMP1289"
-          'approverName': approverData['employeeName'] ?? approverData['name'] ?? 'Unknown',
-          'source': 'mastersheet'
-        };
+          if (!addedApprovers.contains(approverId)) {
+            approvers.add({
+              'id': approverId,
+              'name': data['employeeName'] ?? data['name'] ?? 'Unknown',
+              'designation': data['designation'] ?? 'Manager',
+              'department': data['department'] ?? 'Unknown Department',
+              'source': 'mastersheet',
+              'priority': 2,
+            });
+            addedApprovers.add(approverId);
+          }
+        }
+        debugPrint("Found ${masterSheetSnapshot.docs.length} MasterSheet approvers");
+      } catch (e) {
+        debugPrint("Error loading from MasterSheet: $e");
       }
 
-      // Method 3: Check employees collection for overtime approver role
-      QuerySnapshot employeesSnapshot = await _firestore
-          .collection('employees')
-          .where('hasOvertimeApprovalAccess', isEqualTo: true)
-          .limit(1)
-          .get();
+      // Method 3: Check employees collection
+      try {
+        QuerySnapshot employeesSnapshot = await _firestore
+            .collection('employees')
+            .where('hasOvertimeApprovalAccess', isEqualTo: true)
+            .get();
 
-      if (employeesSnapshot.docs.isNotEmpty) {
-        var approverDoc = employeesSnapshot.docs.first;
-        var approverData = approverDoc.data() as Map<String, dynamic>;
+        for (var doc in employeesSnapshot.docs) {
+          Map<String, dynamic> data = doc.data() as Map<String, dynamic>;
+          String approverId = doc.id;
 
-        // ✅ FIXED: Use document ID as employee ID
-        String approverId = approverDoc.id;
-        debugPrint("Found overtime approver in employees: $approverId");
-
-        return {
-          'approverId': approverId,  // ✅ Document ID should be proper employee ID
-          'approverName': approverData['name'] ?? approverData['employeeName'] ?? 'Unknown',
-          'source': 'employees'
-        };
+          if (!addedApprovers.contains(approverId)) {
+            approvers.add({
+              'id': approverId,
+              'name': data['name'] ?? data['employeeName'] ?? 'Unknown',
+              'designation': data['designation'] ?? 'Manager',
+              'department': data['department'] ?? 'Unknown Department',
+              'source': 'employees',
+              'priority': 3,
+            });
+            addedApprovers.add(approverId);
+          }
+        }
+        debugPrint("Found ${employeesSnapshot.docs.length} employee approvers");
+      } catch (e) {
+        debugPrint("Error loading from employees: $e");
       }
 
-      // Method 4: Check line_managers collection
-      QuerySnapshot managersSnapshot = await _firestore
-          .collection('line_managers')
-          .where('canApproveOvertime', isEqualTo: true)
-          .limit(1)
-          .get();
+      // Method 4: Check line_managers
+      try {
+        QuerySnapshot managersSnapshot = await _firestore
+            .collection('line_managers')
+            .where('canApproveOvertime', isEqualTo: true)
+            .get();
 
-      if (managersSnapshot.docs.isNotEmpty) {
-        var managerDoc = managersSnapshot.docs.first;
-        var managerData = managerDoc.data() as Map<String, dynamic>;
+        for (var doc in managersSnapshot.docs) {
+          Map<String, dynamic> data = doc.data() as Map<String, dynamic>;
+          String approverId = data['managerId'] ?? doc.id;
 
-        // ✅ FIXED: Use managerId field, NOT document ID
-        String managerId = managerData['managerId'] ?? managerDoc.id;
-        debugPrint("Found overtime approver in line_managers: $managerId");
-
-        return {
-          'approverId': managerId,  // ✅ Use managerId field
-          'approverName': managerData['managerName'] ?? 'Manager',
-          'source': 'line_managers'
-        };
+          if (!addedApprovers.contains(approverId)) {
+            approvers.add({
+              'id': approverId,
+              'name': data['managerName'] ?? 'Unknown Manager',
+              'designation': data['designation'] ?? 'Line Manager',
+              'department': data['department'] ?? 'Management',
+              'source': 'line_managers',
+              'priority': 4,
+            });
+            addedApprovers.add(approverId);
+          }
+        }
+        debugPrint("Found ${managersSnapshot.docs.length} line manager approvers");
+      } catch (e) {
+        debugPrint("Error loading from line_managers: $e");
       }
 
-      // Method 5: Ultimate fallback to EMP1289 if nothing else found
-      debugPrint("No dynamic approver found, falling back to EMP1289");
+      // Sort by priority and name
+      approvers.sort((a, b) {
+        int priorityCompare = a['priority'].compareTo(b['priority']);
+        if (priorityCompare != 0) return priorityCompare;
+        return a['name'].compareTo(b['name']);
+      });
 
-      return {
-        'approverId': 'EMP1289',  // ✅ FIXED: Use proper employee ID format
-        'approverName': 'Default Approver',
-        'source': 'fallback'
-      };
+      debugPrint("✅ Total unique approvers found: ${approvers.length}");
+
+      // Add fallback if no approvers found
+      if (approvers.isEmpty) {
+        debugPrint("⚠️ No approvers found! Adding fallback EMP1289");
+        approvers.add({
+          'id': 'EMP1289',
+          'name': 'Default Approver',
+          'designation': 'System Approver',
+          'department': 'Administration',
+          'source': 'fallback',
+          'priority': 999,
+        });
+      }
+
+      return approvers;
 
     } catch (e) {
-      debugPrint("Error fetching overtime approver: $e");
-      // Return fallback approver with correct ID
-      return {
-        'approverId': 'EMP1289',  // ✅ FIXED: Proper format
-        'approverName': 'Default Approver',
-        'source': 'error_fallback'
-      };
+      debugPrint("❌ Error fetching available approvers: $e");
+      // Return fallback approver
+      return [{
+        'id': 'EMP1289',
+        'name': 'Default Approver',
+        'designation': 'System Approver',
+        'department': 'Administration',
+        'source': 'fallback',
+        'priority': 999,
+      }];
     }
   }
 
-  // ✅ ENHANCED: Create a new overtime request with multi-project support
-  Future<String?> createOvertimeRequest({
+  // ✅ UPDATED: Create request with manually selected approver (no automatic detection)
+  Future<String?> createOvertimeRequestWithSelectedApprover({
     required String projectName,
     required String projectCode,
     required DateTime startTime,
@@ -153,27 +195,18 @@ class OvertimeRepository {
     required List<String> employeeIds,
     required String requesterId,
     required String requesterName,
-    // ✅ NEW: Multi-project support
+    required String selectedApproverId, // ✅ NEW: Manually selected approver
+    required String selectedApproverName, // ✅ NEW: Manually selected approver name
+    // Multi-project support
     List<OvertimeProjectEntry>? projects,
     Map<String, dynamic>? metadata,
   }) async {
     try {
-      debugPrint("=== CREATING ENHANCED OVERTIME REQUEST ===");
+      debugPrint("=== CREATING OVERTIME REQUEST WITH SELECTED APPROVER ===");
       debugPrint("Requester: $requesterName ($requesterId)");
+      debugPrint("Selected Approver: $selectedApproverName ($selectedApproverId)");
       debugPrint("Project: $projectName");
       debugPrint("Employees: ${employeeIds.length}");
-
-      // Get the current overtime approver dynamically
-      Map<String, dynamic>? approverInfo = await getOvertimeApprover();
-
-      if (approverInfo == null) {
-        throw Exception("Could not determine overtime approver");
-      }
-
-      String approverId = approverInfo['approverId'];
-      String approverName = approverInfo['approverName'];
-
-      debugPrint("Dynamic approver found: $approverName ($approverId) from ${approverInfo['source']}");
 
       // ✅ ENHANCED: Handle multi-project or single project
       List<OvertimeProjectEntry> projectList = projects ?? [
@@ -193,7 +226,7 @@ class OvertimeRepository {
 
       // Create the enhanced overtime request
       final requestData = {
-        // ✅ NEW: Multi-project structure
+        // Multi-project structure
         'projects': projectList.map((p) => p.toMap()).toList(),
 
         // Basic fields
@@ -204,12 +237,12 @@ class OvertimeRepository {
         'employeeIds': employeeIds,
         'requesterId': requesterId,
         'requesterName': requesterName,
-        'approverEmpId': approverId,
-        'approverName': approverName,
+        'approverEmpId': selectedApproverId, // ✅ Use selected approver
+        'approverName': selectedApproverName, // ✅ Use selected approver
         'requestTime': FieldValue.serverTimestamp(),
         'status': 'pending',
 
-        // ✅ NEW: Enhanced tracking fields
+        // Enhanced tracking fields
         'totalProjects': totalProjects,
         'totalEmployees': totalEmployees,
         'totalHours': totalHours,
@@ -218,8 +251,9 @@ class OvertimeRepository {
         'createdAt': FieldValue.serverTimestamp(),
         'updatedAt': FieldValue.serverTimestamp(),
 
-        // ✅ NEW: Additional metadata
+        // Additional metadata
         'metadata': metadata ?? {},
+        'approverSelectionSource': 'manual_ui_selection', // ✅ Track how approver was selected
       };
 
       // Save to Firestore
@@ -229,11 +263,11 @@ class OvertimeRepository {
 
       debugPrint("Enhanced overtime request created with ID: ${docRef.id}");
 
-      // ✅ ENHANCED: Send notifications with multi-project support
+      // ✅ Send notifications to selected approver
       await _sendOvertimeNotifications(
         requestId: docRef.id,
-        approverId: approverId,
-        approverName: approverName,
+        approverId: selectedApproverId,
+        approverName: selectedApproverName,
         requesterId: requesterId,
         requesterName: requesterName,
         projectName: requestData['projectName'] as String,
@@ -251,7 +285,56 @@ class OvertimeRepository {
     }
   }
 
-  // ✅ FIXED: Get requests created by a specific requester (for history)
+  // ✅ DEPRECATED: Keep for backward compatibility, but use manual selection instead
+  @Deprecated("Use createOvertimeRequestWithSelectedApprover instead")
+  Future<String?> createOvertimeRequest({
+    required String projectName,
+    required String projectCode,
+    required DateTime startTime,
+    required DateTime endTime,
+    required List<String> employeeIds,
+    required String requesterId,
+    required String requesterName,
+    List<OvertimeProjectEntry>? projects,
+    Map<String, dynamic>? metadata,
+  }) async {
+    // Get first available approver as fallback
+    final approvers = await getAvailableApprovers();
+    if (approvers.isEmpty) {
+      throw Exception("No overtime approvers available");
+    }
+
+    final fallbackApprover = approvers.first;
+
+    return createOvertimeRequestWithSelectedApprover(
+      projectName: projectName,
+      projectCode: projectCode,
+      startTime: startTime,
+      endTime: endTime,
+      employeeIds: employeeIds,
+      requesterId: requesterId,
+      requesterName: requesterName,
+      selectedApproverId: fallbackApprover['id'],
+      selectedApproverName: fallbackApprover['name'],
+      projects: projects,
+      metadata: metadata,
+    );
+  }
+
+  // ✅ Keep this method but mark as deprecated (was used for automatic detection)
+  @Deprecated("Approver selection is now done manually in UI")
+  Future<Map<String, dynamic>?> getOvertimeApprover() async {
+    final approvers = await getAvailableApprovers();
+    if (approvers.isEmpty) return null;
+
+    return {
+      'approverId': approvers.first['id'],
+      'approverName': approvers.first['name'],
+      'source': 'deprecated_auto_selection'
+    };
+  }
+
+  // ✅ Get requests created by a specific requester (for history)
   Future<List<OvertimeRequest>> getRequestsForRequester(String requesterId) async {
     try {
       debugPrint("Getting request history for requester: $requesterId");
@@ -288,7 +371,6 @@ class OvertimeRepository {
           limit: 50,
         );
 
-        // ✅ FIXED: Use correct fromMap method
         return maps.map<OvertimeRequest>((map) => _mapLocalToOvertimeRequest(map)).toList();
       }
     } catch (e) {
@@ -297,55 +379,7 @@ class OvertimeRepository {
     }
   }
 
-  // ✅ ENHANCED: Get all requests with filtering
-  Future<List<OvertimeRequest>> getAllRequests({
-    int? limit,
-    String? status,
-    DateTime? startDate,
-    DateTime? endDate,
-  }) async {
-    try {
-      Query query = _firestore.collection('overtime_requests');
-
-      // Add filters
-      if (status != null) {
-        query = query.where('status', isEqualTo: status);
-      }
-
-      if (startDate != null) {
-        query = query.where('requestTime', isGreaterThanOrEqualTo: Timestamp.fromDate(startDate));
-      }
-
-      if (endDate != null) {
-        query = query.where('requestTime', isLessThanOrEqualTo: Timestamp.fromDate(endDate));
-      }
-
-      query = query.orderBy('requestTime', descending: true);
-
-      if (limit != null) {
-        query = query.limit(limit);
-      }
-
-      QuerySnapshot snapshot = await query.get();
-
-      List<OvertimeRequest> requests = [];
-      for (var doc in snapshot.docs) {
-        try {
-          Map<String, dynamic> data = doc.data() as Map<String, dynamic>;
-          requests.add(_mapToOvertimeRequest(doc.id, data));
-        } catch (e) {
-          debugPrint("Error parsing request ${doc.id}: $e");
-        }
-      }
-
-      return requests;
-    } catch (e) {
-      debugPrint("Error getting all requests: $e");
-      return [];
-    }
-  }
-
-  // ✅ ENHANCED: Get requests by status with pagination
+  // ✅ Get requests by status with pagination
   Future<List<OvertimeRequest>> getRequestsByStatus(
       OvertimeRequestStatus status, {
         int? limit,
@@ -384,73 +418,7 @@ class OvertimeRepository {
     }
   }
 
-  // ✅ ENHANCED: Search requests with multiple criteria
-  Future<List<OvertimeRequest>> searchRequests(String query, {
-    String? requesterId,
-    String? approverId,
-    OvertimeRequestStatus? status,
-    DateTime? startDate,
-    DateTime? endDate,
-  }) async {
-    try {
-      Query baseQuery = _firestore.collection('overtime_requests');
-
-      if (requesterId != null) {
-        baseQuery = baseQuery.where('requesterId', isEqualTo: requesterId);
-      }
-
-      if (approverId != null) {
-        List<String> approverIds = [
-          approverId,
-          approverId.startsWith('EMP') ? approverId.substring(3) : 'EMP$approverId',
-        ];
-        baseQuery = baseQuery.where('approverEmpId', whereIn: approverIds);
-      }
-
-      if (status != null) {
-        baseQuery = baseQuery.where('status', isEqualTo: status.value);
-      }
-
-      if (startDate != null) {
-        baseQuery = baseQuery.where('requestTime', isGreaterThanOrEqualTo: Timestamp.fromDate(startDate));
-      }
-
-      if (endDate != null) {
-        baseQuery = baseQuery.where('requestTime', isLessThanOrEqualTo: Timestamp.fromDate(endDate));
-      }
-
-      QuerySnapshot snapshot = await baseQuery
-          .orderBy('requestTime', descending: true)
-          .get();
-
-      List<OvertimeRequest> allRequests = [];
-      for (var doc in snapshot.docs) {
-        try {
-          Map<String, dynamic> data = doc.data() as Map<String, dynamic>;
-          allRequests.add(_mapToOvertimeRequest(doc.id, data));
-        } catch (e) {
-          debugPrint("Error parsing request ${doc.id}: $e");
-        }
-      }
-
-      // Filter by search query text
-      if (query.isNotEmpty) {
-        String lowerQuery = query.toLowerCase();
-        allRequests = allRequests.where((request) {
-          return request.projectsSummary.toLowerCase().contains(lowerQuery) ||
-              request.requesterName.toLowerCase().contains(lowerQuery) ||
-              request.approverName.toLowerCase().contains(lowerQuery);
-        }).toList();
-      }
-
-      return allRequests;
-    } catch (e) {
-      debugPrint("Error searching requests: $e");
-      return [];
-    }
-  }
-
-  // ✅ ENHANCED: Get pending requests for approver with better error handling
+  // ✅ Get pending requests for approver
   Future<List<OvertimeRequest>> getPendingRequestsForApprover(String approverId) async {
     try {
       debugPrint("=== FETCHING PENDING REQUESTS FOR APPROVER ===");
@@ -533,7 +501,7 @@ class OvertimeRepository {
     }
   }
 
-  // ✅ ENHANCED: Update request status with better tracking
+  // ✅ Update request status
   Future<bool> updateRequestStatus(
       String requestId,
       OvertimeRequestStatus status,
@@ -564,7 +532,7 @@ class OvertimeRepository {
         'version': FieldValue.increment(1),
       });
 
-      // ✅ ENHANCED: Send status update notification
+      // Send status update notification
       try {
         await _sendStatusUpdateNotification(
           requestId: requestId,
@@ -584,145 +552,83 @@ class OvertimeRepository {
     }
   }
 
-  // ✅ NEW: Get employee details for a request
-  Future<List<Map<String, dynamic>>> getEmployeeDetailsForRequest(List<String> employeeIds) async {
+  // ✅ Get active overtime assignments for an employee
+  Future<List<OvertimeRequest>> getActiveOvertimeForEmployee(String employeeId) async {
     try {
-      List<Map<String, dynamic>> employees = [];
+      debugPrint("=== GETTING ACTIVE OVERTIME FOR EMPLOYEE: $employeeId ===");
 
-      for (String empId in employeeIds) {
-        // Try employees collection first
-        DocumentSnapshot empDoc = await _firestore.collection('employees').doc(empId).get();
+      DateTime now = DateTime.now();
+      DateTime today = DateTime(now.year, now.month, now.day);
+      DateTime tomorrow = today.add(Duration(days: 1));
 
-        if (empDoc.exists) {
-          Map<String, dynamic> data = empDoc.data() as Map<String, dynamic>;
-          data['id'] = empId;
-          employees.add(data);
-        } else {
-          // Try MasterSheet
-          DocumentSnapshot masterDoc = await _firestore
-              .collection('MasterSheet')
-              .doc('Employee-Data')
-              .collection('employees')
-              .doc(empId)
-              .get();
+      // Get approved overtime requests for today where this employee is included
+      QuerySnapshot snapshot = await _firestore
+          .collection('overtime_requests')
+          .where('status', isEqualTo: 'approved')
+          .where('employeeIds', arrayContains: employeeId)
+          .where('startTime', isGreaterThanOrEqualTo: Timestamp.fromDate(today))
+          .where('startTime', isLessThan: Timestamp.fromDate(tomorrow))
+          .get();
 
-          if (masterDoc.exists) {
-            Map<String, dynamic> data = masterDoc.data() as Map<String, dynamic>;
-            data['id'] = empId;
-            employees.add(data);
+      List<OvertimeRequest> activeOvertime = [];
+      for (var doc in snapshot.docs) {
+        try {
+          Map<String, dynamic> data = doc.data() as Map<String, dynamic>;
+          OvertimeRequest request = _mapToOvertimeRequest(doc.id, data);
+
+          // Check if overtime is currently active (between start and end time)
+          if (now.isAfter(request.startTime) && now.isBefore(request.endTime)) {
+            activeOvertime.add(request);
           }
+        } catch (e) {
+          debugPrint("Error parsing active overtime ${doc.id}: $e");
         }
       }
 
-      return employees;
+      debugPrint("Found ${activeOvertime.length} active overtime assignments");
+      return activeOvertime;
     } catch (e) {
-      debugPrint("Error getting employee details: $e");
+      debugPrint("Error getting active overtime: $e");
       return [];
     }
   }
 
-  // ✅ NEW: Get comprehensive statistics
-  Future<Map<String, dynamic>> getRequestStatistics({
-    String? requesterId,
-    String? approverId,
-    DateTime? startDate,
-    DateTime? endDate,
-  }) async {
+  // ✅ Get today's overtime schedule for an employee
+  Future<List<OvertimeRequest>> getTodayOvertimeForEmployee(String employeeId) async {
     try {
-      Query query = _firestore.collection('overtime_requests');
+      debugPrint("Getting today's overtime schedule for: $employeeId");
 
-      if (requesterId != null) {
-        query = query.where('requesterId', isEqualTo: requesterId);
-      }
+      DateTime now = DateTime.now();
+      DateTime today = DateTime(now.year, now.month, now.day);
+      DateTime tomorrow = today.add(Duration(days: 1));
 
-      if (approverId != null) {
-        List<String> approverIds = [
-          approverId,
-          approverId.startsWith('EMP') ? approverId.substring(3) : 'EMP$approverId',
-        ];
-        query = query.where('approverEmpId', whereIn: approverIds);
-      }
+      QuerySnapshot snapshot = await _firestore
+          .collection('overtime_requests')
+          .where('status', isEqualTo: 'approved')
+          .where('employeeIds', arrayContains: employeeId)
+          .where('startTime', isGreaterThanOrEqualTo: Timestamp.fromDate(today))
+          .where('startTime', isLessThan: Timestamp.fromDate(tomorrow))
+          .get();
 
-      if (startDate != null) {
-        query = query.where('requestTime', isGreaterThanOrEqualTo: Timestamp.fromDate(startDate));
-      }
-
-      if (endDate != null) {
-        query = query.where('requestTime', isLessThanOrEqualTo: Timestamp.fromDate(endDate));
-      }
-
-      QuerySnapshot snapshot = await query.get();
-
-      Map<String, int> statusCounts = {
-        'total': 0,
-        'pending': 0,
-        'approved': 0,
-        'rejected': 0,
-        'cancelled': 0,
-      };
-
-      double totalHours = 0;
-      int totalEmployees = 0;
-      int multiProjectRequests = 0;
-      Map<String, int> projectBreakdown = {};
-
+      List<OvertimeRequest> todayOvertime = [];
       for (var doc in snapshot.docs) {
-        Map<String, dynamic> data = doc.data() as Map<String, dynamic>;
-        String status = data['status'] ?? 'pending';
-
-        statusCounts['total'] = statusCounts['total']! + 1;
-        statusCounts[status] = (statusCounts[status] ?? 0) + 1;
-
-        totalHours += (data['totalHours'] ?? 0).toDouble();
-        totalEmployees += ((data['totalEmployees'] ?? 0) as num).toInt();
-
-        int projects = data['totalProjects'] ?? 1;
-        if (projects > 1) {
-          multiProjectRequests++;
+        try {
+          Map<String, dynamic> data = doc.data() as Map<String, dynamic>;
+          todayOvertime.add(_mapToOvertimeRequest(doc.id, data));
+        } catch (e) {
+          debugPrint("Error parsing today's overtime ${doc.id}: $e");
         }
-
-        String projectName = projects > 1 ? 'Multi-Project' : (data['projectName'] ?? 'Unknown');
-        projectBreakdown[projectName] = (projectBreakdown[projectName] ?? 0) + 1;
       }
 
-      return {
-        'statusCounts': statusCounts,
-        'totalHours': totalHours,
-        'totalEmployees': totalEmployees,
-        'multiProjectRequests': multiProjectRequests,
-        'singleProjectRequests': statusCounts['total']! - multiProjectRequests,
-        'projectBreakdown': projectBreakdown,
-        'averageHoursPerRequest': statusCounts['total']! > 0 ? totalHours / statusCounts['total']! : 0,
-        'averageEmployeesPerRequest': statusCounts['total']! > 0 ? totalEmployees / statusCounts['total']! : 0,
-        'approvalRate': _calculateApprovalRate(statusCounts),
-      };
+      debugPrint("Found ${todayOvertime.length} overtime assignments for today");
+      return todayOvertime;
     } catch (e) {
-      debugPrint("Error getting request statistics: $e");
-      return {
-        'statusCounts': {'total': 0, 'pending': 0, 'approved': 0, 'rejected': 0, 'cancelled': 0},
-        'totalHours': 0.0,
-        'totalEmployees': 0,
-        'multiProjectRequests': 0,
-        'singleProjectRequests': 0,
-        'projectBreakdown': {},
-        'averageHoursPerRequest': 0.0,
-        'averageEmployeesPerRequest': 0.0,
-        'approvalRate': 0.0,
-      };
+      debugPrint("Error getting today's overtime: $e");
+      return [];
     }
   }
 
-  // ✅ HELPER: Calculate approval rate
-  double _calculateApprovalRate(Map<String, int> statusCounts) {
-    int approved = statusCounts['approved'] ?? 0;
-    int rejected = statusCounts['rejected'] ?? 0;
-    int total = approved + rejected;
-
-    if (total == 0) return 0.0;
-    return (approved / total) * 100;
-  }
-
-  // ✅ FIXED: Map Firestore data to OvertimeRequest object with correct constructor
+  // ✅ Map Firestore data to OvertimeRequest object
   OvertimeRequest _mapToOvertimeRequest(String id, Map<String, dynamic> data) {
     // Handle projects (new multi-project format or legacy single project)
     List<OvertimeProjectEntry> projects = [];
@@ -770,7 +676,7 @@ class OvertimeRepository {
     );
   }
 
-  // ✅ FIXED: Map local database data to OvertimeRequest object
+  // ✅ Map local database data to OvertimeRequest object
   OvertimeRequest _mapLocalToOvertimeRequest(Map<String, dynamic> map) {
     return OvertimeRequest(
       id: map['id'] ?? '',
@@ -802,7 +708,7 @@ class OvertimeRepository {
     );
   }
 
-  // ✅ FIXED: Helper method to parse status string to enum
+  // ✅ Helper method to parse status string to enum
   OvertimeRequestStatus _parseStatus(String? status) {
     switch (status?.toLowerCase()) {
       case 'approved':
@@ -817,7 +723,7 @@ class OvertimeRepository {
     }
   }
 
-  // ✅ ENHANCED: Cache overtime request with correct properties
+  // ✅ Cache overtime request
   Future<void> _cacheOvertimeRequest(OvertimeRequest request) async {
     try {
       final requestMap = {
@@ -850,7 +756,7 @@ class OvertimeRepository {
     }
   }
 
-  // ✅ ENHANCED: Send overtime notifications with multi-project support
+  // ✅ Send overtime notifications
   Future<void> _sendOvertimeNotifications({
     required String requestId,
     required String approverId,
@@ -934,7 +840,7 @@ class OvertimeRepository {
     }
   }
 
-  // ✅ NEW: Send status update notification
+  // ✅ Send status update notification
   Future<void> _sendStatusUpdateNotification({
     required String requestId,
     required Map<String, dynamic> requestData,
@@ -981,7 +887,7 @@ class OvertimeRepository {
         },
       );
 
-      // ✅ FIXED: If approved, notify each selected employee (correct for loop syntax)
+      // If approved, notify each selected employee
       if (newStatus == OvertimeRequestStatus.approved && employeeIds.isNotEmpty) {
         String employeeTitle = totalProjects > 1
             ? "You're Approved for Multi-Project Overtime!"
@@ -991,7 +897,6 @@ class OvertimeRepository {
             ? "You have been approved for overtime work across $totalProjects projects (${totalHours.toStringAsFixed(1)}h total)."
             : "You have been approved for overtime work in $projectName.";
 
-        // ✅ CORRECT: Use 'in' instead of 'of' for Dart for-loops
         for (String employeeId in employeeIds) {
           try {
             await _sendNotificationToUser(
@@ -1018,7 +923,7 @@ class OvertimeRepository {
     }
   }
 
-  // ✅ ENHANCED: Send notification to user with multiple strategies
+  // ✅ Send notification to user (Direct FCM + Topic + Firestore)
   Future<void> _sendNotificationToUser({
     required String userId,
     required String title,
@@ -1044,7 +949,7 @@ class OvertimeRepository {
     }
   }
 
-  // ✅ ENHANCED: Direct FCM notification with better token handling
+  // ✅ Direct FCM notification
   Future<bool> _sendDirectFCMNotification(
       String userId,
       String title,
@@ -1182,166 +1087,7 @@ class OvertimeRepository {
       debugPrint("Error creating Firestore notification: $e");
     }
   }
-
-  // ✅ Setup overtime approver
-  Future<void> setupOvertimeApprover(String employeeId) async {
-    try {
-      debugPrint("=== SETTING UP OVERTIME APPROVER: $employeeId ===");
-
-      // 1. Register FCM token specifically for this user
-      await _notificationService.updateTokenForUser(employeeId);
-
-      // 2. Subscribe to overtime-related topics
-      await _notificationService.subscribeToTopic('overtime_requests');
-      await _notificationService.subscribeToTopic('overtime_approver_$employeeId');
-
-      // Try alternative ID format too
-      String altId = employeeId.startsWith('EMP') ? employeeId.substring(3) : 'EMP$employeeId';
-      await _notificationService.subscribeToTopic('overtime_approver_$altId');
-
-      // 3. Mark as overtime approver in Firestore
-      await _firestore.collection('overtime_approvers').doc(employeeId).set({
-        'approverId': employeeId,
-        'approverName': 'Overtime Approver',
-        'isActive': true,
-        'setupAt': FieldValue.serverTimestamp(),
-        'lastLogin': FieldValue.serverTimestamp(),
-      }, SetOptions(merge: true));
-
-      // 4. Also update employee record
-      await _firestore.collection('employees').doc(employeeId).update({
-        'hasOvertimeApprovalAccess': true,
-        'overtimeApproverSetupAt': FieldValue.serverTimestamp(),
-      });
-
-      debugPrint("Overtime approver setup completed for $employeeId");
-
-    } catch (e) {
-      debugPrint("Error setting up overtime approver: $e");
-    }
-  }
-
-  // ✅ Delete a request (admin only)
-  Future<bool> deleteRequest(String requestId) async {
-    try {
-      await _firestore.collection('overtime_requests').doc(requestId).update({
-        'isActive': false,
-        'deletedAt': FieldValue.serverTimestamp(),
-      });
-      debugPrint("Request marked as deleted: $requestId");
-      return true;
-    } catch (e) {
-      debugPrint("Error deleting request: $e");
-      return false;
-    }
-  }
-
-  // Add these methods to OvertimeRepository class
-
-// ✅ NEW: Get active overtime assignments for an employee
-  Future<List<OvertimeRequest>> getActiveOvertimeForEmployee(String employeeId) async {
-    try {
-      debugPrint("=== GETTING ACTIVE OVERTIME FOR EMPLOYEE: $employeeId ===");
-
-      DateTime now = DateTime.now();
-      DateTime today = DateTime(now.year, now.month, now.day);
-      DateTime tomorrow = today.add(Duration(days: 1));
-
-      // Get approved overtime requests for today where this employee is included
-      QuerySnapshot snapshot = await _firestore
-          .collection('overtime_requests')
-          .where('status', isEqualTo: 'approved')
-          .where('employeeIds', arrayContains: employeeId)
-          .where('startTime', isGreaterThanOrEqualTo: Timestamp.fromDate(today))
-          .where('startTime', isLessThan: Timestamp.fromDate(tomorrow))
-          .get();
-
-      List<OvertimeRequest> activeOvertime = [];
-      for (var doc in snapshot.docs) {
-        try {
-          Map<String, dynamic> data = doc.data() as Map<String, dynamic>;
-          OvertimeRequest request = _mapToOvertimeRequest(doc.id, data);
-
-          // Check if overtime is currently active (between start and end time)
-          if (now.isAfter(request.startTime) && now.isBefore(request.endTime)) {
-            activeOvertime.add(request);
-          }
-        } catch (e) {
-          debugPrint("Error parsing active overtime ${doc.id}: $e");
-        }
-      }
-
-      debugPrint("Found ${activeOvertime.length} active overtime assignments");
-      return activeOvertime;
-    } catch (e) {
-      debugPrint("Error getting active overtime: $e");
-      return [];
-    }
-  }
-
-// ✅ NEW: Get today's overtime schedule for an employee
-  Future<List<OvertimeRequest>> getTodayOvertimeForEmployee(String employeeId) async {
-    try {
-      debugPrint("Getting today's overtime schedule for: $employeeId");
-
-      DateTime now = DateTime.now();
-      DateTime today = DateTime(now.year, now.month, now.day);
-      DateTime tomorrow = today.add(Duration(days: 1));
-
-      QuerySnapshot snapshot = await _firestore
-          .collection('overtime_requests')
-          .where('status', isEqualTo: 'approved')
-          .where('employeeIds', arrayContains: employeeId)
-          .where('startTime', isGreaterThanOrEqualTo: Timestamp.fromDate(today))
-          .where('startTime', isLessThan: Timestamp.fromDate(tomorrow))
-          .get();
-
-      List<OvertimeRequest> todayOvertime = [];
-      for (var doc in snapshot.docs) {
-        try {
-          Map<String, dynamic> data = doc.data() as Map<String, dynamic>;
-          todayOvertime.add(_mapToOvertimeRequest(doc.id, data));
-        } catch (e) {
-          debugPrint("Error parsing today's overtime ${doc.id}: $e");
-        }
-      }
-
-      debugPrint("Found ${todayOvertime.length} overtime assignments for today");
-      return todayOvertime;
-    } catch (e) {
-      debugPrint("Error getting today's overtime: $e");
-      return [];
-    }
-  }
-
-  // ✅ Get requests for a specific date range
-  Future<List<OvertimeRequest>> getRequestsForDateRange(
-      DateTime startDate,
-      DateTime endDate,
-      ) async {
-    try {
-      QuerySnapshot snapshot = await _firestore
-          .collection('overtime_requests')
-          .where('requestTime', isGreaterThanOrEqualTo: Timestamp.fromDate(startDate))
-          .where('requestTime', isLessThanOrEqualTo: Timestamp.fromDate(endDate))
-          .orderBy('requestTime', descending: true)
-          .get();
-
-
-      List<OvertimeRequest> requests = [];
-      for (var doc in snapshot.docs) {
-        try {
-          Map<String, dynamic> data = doc.data() as Map<String, dynamic>;
-          requests.add(_mapToOvertimeRequest(doc.id, data));
-        } catch (e) {
-          debugPrint("Error parsing request ${doc.id}: $e");
-        }
-      }
-
-      return requests;
-    } catch (e) {
-      debugPrint("Error getting requests for date range: $e");
-      return [];
-    }
-  }
 }
+
+
+

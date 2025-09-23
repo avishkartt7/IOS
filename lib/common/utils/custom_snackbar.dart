@@ -1,270 +1,188 @@
-import 'package:face_auth/constants/theme.dart';
+import 'package:face_auth_compatible/constants/theme.dart';
 import 'package:flutter/material.dart';
 
+/// CustomSnackBar with backward compatibility support
 class CustomSnackBar {
-  // Keep the static context for backwards compatibility
+  // Static variable to hold context, nullable for safety
   static BuildContext? context;
 
-  // Method overloading for errorSnackBar - supports both formats
-  static void errorSnackBar(dynamic contextOrMessage, [String? message]) {
-    BuildContext? targetContext;
-    String targetMessage;
+  /// Show an error snackbar with the given message
+  /// Supports both old API (just message) and new API (context + message)
+  static void errorSnackBar([dynamic contextOrMessage, String? message]) {
+    // If only one parameter and it's a String, use the old API
+    if (message == null && contextOrMessage is String) {
+      _showErrorWithStaticContext(contextOrMessage);
+      return;
+    }
 
-    // Determine if first parameter is context or message
+    // If two parameters with first being BuildContext, use the new API
     if (contextOrMessage is BuildContext) {
-      // Format: errorSnackBar(context, message)
-      targetContext = contextOrMessage;
-      targetMessage = message ?? '';
-    } else if (contextOrMessage is String) {
-      // Format: errorSnackBar(message) - use static context
-      targetContext = context;
-      targetMessage = contextOrMessage;
-    } else {
-      return; // Invalid parameters
+      _showErrorWithContext(contextOrMessage, message ?? "");
+      return;
     }
 
-    if (targetContext != null && targetContext.mounted) {
-      ScaffoldMessenger.of(targetContext).showSnackBar(
-        SnackBar(
-          content: Row(
-            children: [
-              const Icon(
-                Icons.error_outline,
-                color: Colors.white,
-                size: 20,
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Text(
-                  targetMessage,
-                  style: const TextStyle(
-                    color: Colors.white,
-                    fontSize: 14,
-                    fontWeight: FontWeight.w500,
-                  ),
-                ),
-              ),
-            ],
-          ),
-          backgroundColor: errorColor,
-          behavior: SnackBarBehavior.floating,
-          margin: const EdgeInsets.all(16),
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(8),
-          ),
-          duration: const Duration(seconds: 4),
-        ),
-      );
-    }
+    // Fallback case - try to use static context
+    _showErrorWithStaticContext(contextOrMessage?.toString() ?? "Error occurred");
   }
 
-  // Method overloading for successSnackBar - supports both formats
-  static void successSnackBar(dynamic contextOrMessage, [String? message]) {
-    BuildContext? targetContext;
-    String targetMessage;
+  /// Show a success snackbar with the given message
+  /// Supports both old API (just message) and new API (context + message)
+  static void successSnackBar([dynamic contextOrMessage, String? message]) {
+    // If only one parameter and it's a String, use the old API
+    if (message == null && contextOrMessage is String) {
+      _showSuccessWithStaticContext(contextOrMessage);
+      return;
+    }
 
-    // Determine if first parameter is context or message
+    // If two parameters with first being BuildContext, use the new API
     if (contextOrMessage is BuildContext) {
-      // Format: successSnackBar(context, message)
-      targetContext = contextOrMessage;
-      targetMessage = message ?? '';
-    } else if (contextOrMessage is String) {
-      // Format: successSnackBar(message) - use static context
-      targetContext = context;
-      targetMessage = contextOrMessage;
-    } else {
-      return; // Invalid parameters
+      _showSuccessWithContext(contextOrMessage, message ?? "");
+      return;
     }
 
-    if (targetContext != null && targetContext.mounted) {
-      ScaffoldMessenger.of(targetContext).showSnackBar(
-        SnackBar(
-          content: Row(
-            children: [
-              const Icon(
-                Icons.check_circle_outline,
-                color: Colors.white,
-                size: 20,
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Text(
-                  targetMessage,
-                  style: const TextStyle(
-                    color: Colors.white,
-                    fontSize: 14,
-                    fontWeight: FontWeight.w500,
-                  ),
-                ),
-              ),
-            ],
-          ),
-          backgroundColor: successColor,
-          behavior: SnackBarBehavior.floating,
-          margin: const EdgeInsets.all(16),
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(8),
-          ),
-          duration: const Duration(seconds: 3),
-        ),
-      );
-    }
+    // Fallback case - try to use static context
+    _showSuccessWithStaticContext(contextOrMessage?.toString() ?? "Success");
   }
 
-  // Method overloading for warningSnackBar - supports both formats
-  static void warningSnackBar(dynamic contextOrMessage, [String? message]) {
-    BuildContext? targetContext;
-    String targetMessage;
+  /// Show an info snackbar with the given message
+  /// Supports both old API (just message) and new API (context + message)
+  static void infoSnackBar([dynamic contextOrMessage, String? message]) {
+    // If only one parameter and it's a String, use the old API
+    if (message == null && contextOrMessage is String) {
+      _showInfoWithStaticContext(contextOrMessage);
+      return;
+    }
 
-    // Determine if first parameter is context or message
+    // If two parameters with first being BuildContext, use the new API
     if (contextOrMessage is BuildContext) {
-      // Format: warningSnackBar(context, message)
-      targetContext = contextOrMessage;
-      targetMessage = message ?? '';
-    } else if (contextOrMessage is String) {
-      // Format: warningSnackBar(message) - use static context
-      targetContext = context;
-      targetMessage = contextOrMessage;
-    } else {
-      return; // Invalid parameters
+      _showInfoWithContext(contextOrMessage, message ?? "");
+      return;
     }
 
-    if (targetContext != null && targetContext.mounted) {
-      ScaffoldMessenger.of(targetContext).showSnackBar(
+    // Fallback case - try to use static context
+    _showInfoWithStaticContext(contextOrMessage?.toString() ?? "Info");
+  }
+
+  /// Show a warning snackbar with the given message
+  static void warningSnackBar(BuildContext context, String message) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(message),
+        behavior: SnackBarBehavior.floating,
+        backgroundColor: Colors.orange,
+      ),
+    );
+  }
+
+  // Private helper methods
+
+  // Show error snackbar using static context
+  static void _showErrorWithStaticContext(String message) {
+    if (context == null) {
+      print("WARNING: CustomSnackBar's static context is null. Cannot show error: $message");
+      return;
+    }
+
+    try {
+      ScaffoldMessenger.of(context!).showSnackBar(
         SnackBar(
-          content: Row(
-            children: [
-              const Icon(
-                Icons.warning_amber_outlined,
-                color: Colors.white,
-                size: 20,
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Text(
-                  targetMessage,
-                  style: const TextStyle(
-                    color: Colors.white,
-                    fontSize: 14,
-                    fontWeight: FontWeight.w500,
-                  ),
-                ),
-              ),
-            ],
-          ),
-          backgroundColor: warningColor,
+          content: Text(message),
+          backgroundColor: Theme.of(context!).colorScheme.error,
           behavior: SnackBarBehavior.floating,
-          margin: const EdgeInsets.all(16),
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(8),
-          ),
-          duration: const Duration(seconds: 3),
         ),
       );
+    } catch (e) {
+      print("Error showing snackbar: $e");
     }
   }
 
-  // Method overloading for infoSnackBar - supports both formats
-  static void infoSnackBar(dynamic contextOrMessage, [String? message]) {
-    BuildContext? targetContext;
-    String targetMessage;
-
-    // Determine if first parameter is context or message
-    if (contextOrMessage is BuildContext) {
-      // Format: infoSnackBar(context, message)
-      targetContext = contextOrMessage;
-      targetMessage = message ?? '';
-    } else if (contextOrMessage is String) {
-      // Format: infoSnackBar(message) - use static context
-      targetContext = context;
-      targetMessage = contextOrMessage;
-    } else {
-      return; // Invalid parameters
-    }
-
-    if (targetContext != null && targetContext.mounted) {
-      ScaffoldMessenger.of(targetContext).showSnackBar(
+  // Show error snackbar using passed context
+  static void _showErrorWithContext(BuildContext context, String message) {
+    try {
+      ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Row(
-            children: [
-              const Icon(
-                Icons.info_outline,
-                color: Colors.white,
-                size: 20,
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Text(
-                  targetMessage,
-                  style: const TextStyle(
-                    color: Colors.white,
-                    fontSize: 14,
-                    fontWeight: FontWeight.w500,
-                  ),
-                ),
-              ),
-            ],
-          ),
-          backgroundColor: infoColor,
+          content: Text(message),
+          backgroundColor: Theme.of(context).colorScheme.error,
           behavior: SnackBarBehavior.floating,
-          margin: const EdgeInsets.all(16),
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(8),
-          ),
-          duration: const Duration(seconds: 3),
         ),
       );
+    } catch (e) {
+      print("Error showing snackbar: $e");
     }
   }
 
-  // Flexible customSnackBar - supports both formats
-  static void customSnackBar({
-    BuildContext? context,
-    required String message,
-    required Color backgroundColor,
-    required IconData icon,
-    Duration duration = const Duration(seconds: 3),
-  }) {
-    // Use provided context or fall back to static context
-    BuildContext? targetContext = context ?? CustomSnackBar.context;
 
-    if (targetContext != null && targetContext.mounted) {
-      ScaffoldMessenger.of(targetContext).showSnackBar(
+
+  // Show success snackbar using static context
+  static void _showSuccessWithStaticContext(String message) {
+    if (context == null) {
+      print("WARNING: CustomSnackBar's static context is null. Cannot show success: $message");
+      return;
+    }
+
+    try {
+      ScaffoldMessenger.of(context!).showSnackBar(
         SnackBar(
-          content: Row(
-            children: [
-              Icon(
-                icon,
-                color: Colors.white,
-                size: 20,
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Text(
-                  message,
-                  style: const TextStyle(
-                    color: Colors.white,
-                    fontSize: 14,
-                    fontWeight: FontWeight.w500,
-                  ),
-                ),
-              ),
-            ],
-          ),
-          backgroundColor: backgroundColor,
+          content: Text(message),
           behavior: SnackBarBehavior.floating,
-          margin: const EdgeInsets.all(16),
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(8),
-          ),
-          duration: duration,
+          backgroundColor: accentColor,
         ),
       );
+    } catch (e) {
+      print("Error showing snackbar: $e");
     }
   }
 
-  // Helper method to set static context (optional, for convenience)
-  static void setContext(BuildContext ctx) {
-    context = ctx;
+  // Show success snackbar using passed context
+  static void _showSuccessWithContext(BuildContext context, String message) {
+    try {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(message),
+          behavior: SnackBarBehavior.floating,
+          backgroundColor: accentColor,
+        ),
+      );
+    } catch (e) {
+      print("Error showing snackbar: $e");
+    }
+  }
+
+  // Show info snackbar using static context
+  static void _showInfoWithStaticContext(String message) {
+    if (context == null) {
+      print("WARNING: CustomSnackBar's static context is null. Cannot show info: $message");
+      return;
+    }
+
+    try {
+      ScaffoldMessenger.of(context!).showSnackBar(
+        SnackBar(
+          content: Text(message),
+          behavior: SnackBarBehavior.floating,
+          backgroundColor: Colors.blue,
+        ),
+      );
+    } catch (e) {
+      print("Error showing snackbar: $e");
+    }
+  }
+
+  // Show info snackbar using passed context
+  static void _showInfoWithContext(BuildContext context, String message) {
+    try {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(message),
+          behavior: SnackBarBehavior.floating,
+          backgroundColor: Colors.blue,
+        ),
+      );
+    } catch (e) {
+      print("Error showing snackbar: $e");
+    }
   }
 }
+
+
+

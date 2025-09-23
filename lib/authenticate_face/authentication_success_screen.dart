@@ -1,4 +1,4 @@
-// lib/authenticate_face/authentication_success_screen.dart - Clean Fixed Version
+// lib/authenticate_face/authentication_success_screen.dart - COMPATIBLE WITH GEOLOCATOR 9.0.2
 
 import 'dart:async';
 import 'dart:io';
@@ -6,7 +6,7 @@ import 'package:flutter/material.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:geocoding/geocoding.dart';
 import 'package:intl/intl.dart';
-import 'package:face_auth/constants/theme.dart';
+import 'package:face_auth_compatible/constants/theme.dart';
 
 class AuthenticationSuccessScreen extends StatefulWidget {
   final String employeeName;
@@ -45,18 +45,22 @@ class _AuthenticationSuccessScreenState extends State<AuthenticationSuccessScree
   String _geofenceStatus = "Checking location...";
   DateTime _authenticationTime = DateTime.now();
 
+  // Timer for auto-close
   Timer? _autoCloseTimer;
   int _countdownSeconds = 10;
 
+  // Loading state management
   bool _isLoadingLocation = true;
   bool _locationPermissionDenied = false;
   bool _locationTimeout = false;
 
+  // Platform detection
   bool get _isIOS => Platform.isIOS;
 
   @override
   void initState() {
     super.initState();
+    debugPrint("🚀 AuthenticationSuccessScreen initState - Platform: ${_isIOS ? 'iOS' : 'Android'}");
 
     _initializeAnimations();
     _startLocationWithTimeout();
@@ -64,6 +68,8 @@ class _AuthenticationSuccessScreenState extends State<AuthenticationSuccessScree
   }
 
   void _initializeAnimations() {
+    debugPrint("🎨 Initializing animations");
+
     _fadeController = AnimationController(
       duration: const Duration(milliseconds: 800),
       vsync: this,
@@ -92,12 +98,15 @@ class _AuthenticationSuccessScreenState extends State<AuthenticationSuccessScree
       CurvedAnimation(parent: _scaleController, curve: Curves.easeOut),
     );
 
+    debugPrint("▶️ Starting animations");
     _fadeController.forward();
     _slideController.forward();
     _scaleController.forward();
   }
 
   void _startAutoCloseCountdown() {
+    debugPrint("⏰ Starting auto-close countdown");
+
     _autoCloseTimer = Timer.periodic(const Duration(seconds: 1), (timer) {
       if (mounted) {
         setState(() {
@@ -106,6 +115,7 @@ class _AuthenticationSuccessScreenState extends State<AuthenticationSuccessScree
 
         if (_countdownSeconds <= 0) {
           timer.cancel();
+          debugPrint("⏰ Auto-close triggered");
           if (mounted) {
             Navigator.of(context).pop();
           }
@@ -117,10 +127,14 @@ class _AuthenticationSuccessScreenState extends State<AuthenticationSuccessScree
   }
 
   void _startLocationWithTimeout() {
+    debugPrint("📍 Starting location request with timeout");
+
+    // Timeout for location request
     int timeoutSeconds = _isIOS ? 6 : 8;
 
     Timer(Duration(seconds: timeoutSeconds), () {
       if (_isLoadingLocation && mounted) {
+        debugPrint("⏰ Location request timed out");
         setState(() {
           _isLoadingLocation = false;
           _locationTimeout = true;
@@ -133,12 +147,17 @@ class _AuthenticationSuccessScreenState extends State<AuthenticationSuccessScree
     _getCurrentLocationSafely();
   }
 
+  // FIXED: Compatible with geolocator 9.0.2
   Future<void> _getCurrentLocationSafely() async {
     try {
+      debugPrint("🔄 Starting location request");
+
+      // Check location services
       bool serviceEnabled = await Geolocator.isLocationServiceEnabled()
           .timeout(const Duration(seconds: 2));
 
       if (!serviceEnabled) {
+        debugPrint("❌ Location services disabled");
         if (mounted) {
           setState(() {
             _isLoadingLocation = false;
@@ -149,14 +168,18 @@ class _AuthenticationSuccessScreenState extends State<AuthenticationSuccessScree
         return;
       }
 
+      // Check permissions
       LocationPermission permission = await Geolocator.checkPermission()
           .timeout(Duration(seconds: _isIOS ? 3 : 2));
 
       if (permission == LocationPermission.denied) {
+        debugPrint("📍 Requesting location permission");
+
         permission = await Geolocator.requestPermission()
             .timeout(Duration(seconds: _isIOS ? 8 : 5));
 
         if (permission == LocationPermission.denied) {
+          debugPrint("❌ Location permission denied");
           if (mounted) {
             setState(() {
               _isLoadingLocation = false;
@@ -170,6 +193,7 @@ class _AuthenticationSuccessScreenState extends State<AuthenticationSuccessScree
       }
 
       if (permission == LocationPermission.deniedForever) {
+        debugPrint("❌ Location permission denied forever");
         if (mounted) {
           setState(() {
             _isLoadingLocation = false;
@@ -181,10 +205,15 @@ class _AuthenticationSuccessScreenState extends State<AuthenticationSuccessScree
         return;
       }
 
+      debugPrint("✅ Getting current position");
+
+      // FIXED: Using old geolocator 9.0.2 API
       Position position = await Geolocator.getCurrentPosition(
         desiredAccuracy: LocationAccuracy.medium,
         timeLimit: Duration(seconds: _isIOS ? 5 : 4),
       ).timeout(Duration(seconds: _isIOS ? 6 : 5));
+
+      debugPrint("✅ Got position: ${position.latitude}, ${position.longitude}");
 
       if (mounted) {
         setState(() {
@@ -195,10 +224,14 @@ class _AuthenticationSuccessScreenState extends State<AuthenticationSuccessScree
         });
       }
 
+      // Get address in background
       _getAddressInBackground(position.latitude, position.longitude);
+
+      // Check geofence
       _checkGeofence(position.latitude, position.longitude);
 
     } on TimeoutException catch (e) {
+      debugPrint("⏰ Location timeout: $e");
       if (mounted) {
         setState(() {
           _isLoadingLocation = false;
@@ -208,6 +241,7 @@ class _AuthenticationSuccessScreenState extends State<AuthenticationSuccessScree
         });
       }
     } catch (e) {
+      debugPrint("❌ Location error: $e");
       if (mounted) {
         setState(() {
           _isLoadingLocation = false;
@@ -231,6 +265,8 @@ class _AuthenticationSuccessScreenState extends State<AuthenticationSuccessScree
 
   void _getAddressInBackground(double latitude, double longitude) async {
     try {
+      debugPrint("🏠 Getting address for coordinates");
+
       List<Placemark> placemarks = await placemarkFromCoordinates(
         latitude,
         longitude,
@@ -243,8 +279,11 @@ class _AuthenticationSuccessScreenState extends State<AuthenticationSuccessScree
         setState(() {
           _currentAddress = address.isEmpty ? "Unknown location" : address;
         });
+
+        debugPrint("✅ Address updated: $address");
       }
     } catch (e) {
+      debugPrint("⚠️ Address error: $e");
       if (mounted) {
         setState(() {
           _currentAddress = "Address unavailable";
@@ -274,7 +313,9 @@ class _AuthenticationSuccessScreenState extends State<AuthenticationSuccessScree
 
   void _checkGeofence(double latitude, double longitude) {
     try {
-      // Replace with your actual office coordinates
+      debugPrint("🎯 Checking geofence");
+
+      // TODO: Replace with your actual office coordinates
       const double officeLatitude = 25.2048; // Dubai example - REPLACE WITH YOUR COORDINATES
       const double officeLongitude = 55.2708; // Dubai example - REPLACE WITH YOUR COORDINATES
       const double geofenceRadius = 500; // 500 meters - ADJUST AS NEEDED
@@ -290,13 +331,16 @@ class _AuthenticationSuccessScreenState extends State<AuthenticationSuccessScree
         setState(() {
           _isWithinGeofence = distance <= geofenceRadius;
           if (_isWithinGeofence) {
-            _geofenceStatus = "Within office premises";
+            _geofenceStatus = "✅ Within office premises";
           } else {
-            _geofenceStatus = "Outside office area (${distance.toInt()}m away)";
+            _geofenceStatus = "⚠️ Outside office area (${distance.toInt()}m away)";
           }
         });
       }
+
+      debugPrint("📍 Geofence check: ${_isWithinGeofence ? 'Inside' : 'Outside'} (${distance.toInt()}m)");
     } catch (e) {
+      debugPrint("⚠️ Geofence error: $e");
       if (mounted) {
         setState(() {
           _geofenceStatus = "Unable to verify location";
@@ -307,6 +351,7 @@ class _AuthenticationSuccessScreenState extends State<AuthenticationSuccessScree
 
   @override
   void dispose() {
+    debugPrint("🗑️ AuthenticationSuccessScreen dispose");
     _autoCloseTimer?.cancel();
     _fadeController.dispose();
     _slideController.dispose();
@@ -360,6 +405,8 @@ class _AuthenticationSuccessScreenState extends State<AuthenticationSuccessScree
 
   @override
   Widget build(BuildContext context) {
+    debugPrint("🏗️ Building AuthenticationSuccessScreen");
+
     return Scaffold(
       backgroundColor: Colors.white,
       body: Container(
@@ -415,6 +462,7 @@ class _AuthenticationSuccessScreenState extends State<AuthenticationSuccessScree
       children: [
         IconButton(
           onPressed: () {
+            debugPrint("❌ Manual close button pressed");
             Navigator.of(context).pop();
           },
           icon: Container(
@@ -591,6 +639,7 @@ class _AuthenticationSuccessScreenState extends State<AuthenticationSuccessScree
         Expanded(
           child: ElevatedButton.icon(
             onPressed: () {
+              debugPrint("✅ Continue button pressed");
               Navigator.of(context).pop();
             },
             icon: const Icon(Icons.check, color: Colors.white),
@@ -616,6 +665,7 @@ class _AuthenticationSuccessScreenState extends State<AuthenticationSuccessScree
             onPressed: () {
               String debugInfo = """
 Platform: ${_isIOS ? 'iOS' : 'Android'}
+Geolocator Version: 9.0.2 (Compatible)
 Location Loading: $_isLoadingLocation
 Permission Denied: $_locationPermissionDenied
 Location Timeout: $_locationTimeout
@@ -626,7 +676,7 @@ Within Geofence: $_isWithinGeofence
               showDialog(
                 context: context,
                 builder: (context) => AlertDialog(
-                  title: const Text("System Information"),
+                  title: const Text("Debug Information"),
                   content: SingleChildScrollView(
                     child: Text(debugInfo),
                   ),
@@ -641,7 +691,7 @@ Within Geofence: $_isWithinGeofence
             },
             icon: Icon(Icons.info_outline, color: _actionColor),
             label: Text(
-              "System Info",
+              "Debug Info",
               style: TextStyle(
                 color: _actionColor,
                 fontWeight: FontWeight.w600,
@@ -747,3 +797,6 @@ Within Geofence: $_isWithinGeofence
     );
   }
 }
+
+
+

@@ -1,11 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:face_auth/constants/theme.dart';
-import 'package:face_auth/common/utils/custom_snackbar.dart';
-import 'package:face_auth/model/check_out_request_model.dart';
-import 'package:face_auth/repositories/check_out_request_repository.dart';
-import 'package:face_auth/services/service_locator.dart';
-import 'package:face_auth/services/notification_service.dart';
+import 'package:face_auth_compatible/constants/theme.dart';
+import 'package:face_auth_compatible/common/utils/custom_snackbar.dart';
+import 'package:face_auth_compatible/model/check_out_request_model.dart';
+import 'package:face_auth_compatible/repositories/check_out_request_repository.dart';
+import 'package:face_auth_compatible/services/service_locator.dart';
+import 'package:face_auth_compatible/services/notification_service.dart';
 import 'package:intl/intl.dart';
 
 class ManagerPendingRequestsView extends StatefulWidget {
@@ -888,3 +888,6 @@ class _ManagerPendingRequestsViewState extends State<ManagerPendingRequestsView>
     );
   }
 }
+
+
+

@@ -1,11 +1,11 @@
 import 'dart:developer';
 
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:face_auth/common/utils/custom_snackbar.dart';
-import 'package:face_auth/common/utils/custom_text_field.dart';
-import 'package:face_auth/common/views/custom_button.dart';
-import 'package:face_auth/constants/theme.dart';
-import 'package:face_auth/model/user_model.dart';
+import 'package:face_auth_compatible/common/utils/custom_snackbar.dart';
+import 'package:face_auth_compatible/common/utils/custom_text_field.dart';
+import 'package:face_auth_compatible/common/views/custom_button.dart';
+import 'package:face_auth_compatible/constants/theme.dart';
+import 'package:face_auth_compatible/model/user_model.dart';
 import 'package:flutter/material.dart';
 import 'package:uuid/uuid.dart';
 
@@ -116,3 +116,6 @@ class _EnterDetailsViewState extends State<EnterDetailsView> {
     );
   }
 }
+
+
+

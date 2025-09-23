@@ -1,347 +1,585 @@
-// lib/debug/debug_data_screen.dart
+// lib/debug/debug_data_screen.dart - ENHANCED DEBUG SCREEN WITH ATTENDANCE STATE ANALYSIS
 
-import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:face_auth/services/database_helper.dart';
-import 'package:face_auth/services/service_locator.dart';
-import 'package:shared_preferences/shared_preferences.dart';
-import 'package:face_auth/common/utils/custom_snackbar.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:face_auth_compatible/services/database_helper.dart';
+import 'package:face_auth_compatible/services/service_locator.dart';
+import 'package:face_auth_compatible/repositories/attendance_repository.dart';
+import 'package:face_auth_compatible/services/connectivity_service.dart';
+import 'package:face_auth_compatible/common/utils/custom_snackbar.dart';
+import 'package:intl/intl.dart';
+import 'dart:convert';
 
 class DebugDataScreen extends StatefulWidget {
   final String employeeId;
+  final Map<String, dynamic>? userData;
 
-  const DebugDataScreen({Key? key, required this.employeeId}) : super(key: key);
+  const DebugDataScreen({
+    Key? key,
+    required this.employeeId,
+    this.userData,
+  }) : super(key: key);
 
   @override
-  _DebugDataScreenState createState() => _DebugDataScreenState();
+  State<DebugDataScreen> createState() => _DebugDataScreenState();
 }
 
-class _DebugDataScreenState extends State<DebugDataScreen> with TickerProviderStateMixin {
-  late TabController _tabController;
-
-  // Database data
-  List<Map<String, dynamic>> attendanceData = [];
-  List<Map<String, dynamic>> locationData = [];
-  List<Map<String, dynamic>> polygonLocationData = [];
-
-  // SharedPreferences data
-  Map<String, dynamic> sharedPrefsData = {};
-
-  bool _isLoading = true;
-  bool _isDarkMode = false;
+class _DebugDataScreenState extends State<DebugDataScreen> {
+  bool _isLoading = false;
+  Map<String, dynamic> _debugData = {};
+  List<Map<String, dynamic>> _attendanceAnalysis = [];
+  Map<String, dynamic>? _stateComparison;
 
   @override
   void initState() {
     super.initState();
-    _tabController = TabController(length: 4, vsync: this);
-    _loadAllData();
+    _loadDebugData();
   }
 
-  @override
-  void dispose() {
-    _tabController.dispose();
-    super.dispose();
-  }
-
-  Future<void> _loadAllData() async {
+  Future<void> _loadDebugData() async {
     setState(() => _isLoading = true);
 
     try {
-      await _loadDatabaseData();
-      await _loadSharedPreferencesData();
-    } catch (e) {
-      debugPrint("Error loading debug data: $e");
-    }
+      // Gather comprehensive debug information
+      Map<String, dynamic> debugData = {};
 
-    setState(() => _isLoading = false);
-  }
-
-  Future<void> _loadDatabaseData() async {
-    try {
+      // 1. Database statistics
       final dbHelper = getIt<DatabaseHelper>();
+      debugData['database'] = await dbHelper.getDatabaseStats();
 
-      // Load attendance data
-      final attendance = await dbHelper.query('attendance');
+      // 2. Connectivity status
+      final connectivityService = getIt<ConnectivityService>();
+      debugData['connectivity'] = {
+        'status': connectivityService.currentStatus.toString(),
+        'isOnline': connectivityService.currentStatus == ConnectionStatus.online,
+      };
 
-      // Load location data
-      final locations = await dbHelper.query('locations');
+      // 3. Today's attendance analysis
+      await _analyzeAttendanceState();
 
-      // Load polygon location data
-      final polygonLocations = await dbHelper.query('polygon_locations');
+      // 4. Recent attendance records
+      final attendanceRepo = getIt<AttendanceRepository>();
+      final recentRecords = await attendanceRepo.getRecentAttendance(widget.employeeId, 7);
+
+      debugData['recentAttendance'] = recentRecords.map((record) => {
+        'date': record.date,
+        'hasCheckIn': record.hasCheckIn,
+        'hasCheckOut': record.hasCheckOut,
+        'checkInTime': record.checkIn,
+        'checkOutTime': record.checkOut,
+        'isSynced': record.isSynced,
+        'locationSummary': record.locationSummary,
+      }).toList();
+
+      // 5. Pending sync records
+      final pendingRecords = await attendanceRepo.getPendingRecords();
+      debugData['pendingSync'] = pendingRecords.where((record) =>
+      record.employeeId == widget.employeeId).map((record) => {
+        'date': record.date,
+        'hasCheckIn': record.hasCheckIn,
+        'hasCheckOut': record.hasCheckOut,
+        'syncError': record.syncError,
+      }).toList();
 
       setState(() {
-        attendanceData = attendance;
-        locationData = locations;
-        polygonLocationData = polygonLocations;
+        _debugData = debugData;
+        _isLoading = false;
       });
 
-      debugPrint("✅ Database data loaded:");
-      debugPrint("   - Attendance records: ${attendance.length}");
-      debugPrint("   - Location records: ${locations.length}");
-      debugPrint("   - Polygon location records: ${polygonLocations.length}");
-
     } catch (e) {
-      debugPrint("❌ Error loading database data: $e");
+      setState(() => _isLoading = false);
+      CustomSnackBar.errorSnackBar("Error loading debug data: $e");
     }
   }
 
-  Future<void> _loadSharedPreferencesData() async {
+  // ✅ NEW: Analyze attendance state discrepancies
+  Future<void> _analyzeAttendanceState() async {
     try {
-      SharedPreferences prefs = await SharedPreferences.getInstance();
-      Set<String> keys = prefs.getKeys();
+      String today = DateFormat('yyyy-MM-dd').format(DateTime.now());
 
-      Map<String, dynamic> data = {};
-      for (String key in keys) {
-        var value = prefs.get(key);
-        data[key] = value;
+      Map<String, dynamic> analysis = {
+        'date': today,
+        'timestamp': DateTime.now().toIso8601String(),
+      };
+
+      // Get local data
+      final attendanceRepo = getIt<AttendanceRepository>();
+      final localRecord = await attendanceRepo.getTodaysAttendance(widget.employeeId);
+
+      analysis['local'] = {
+        'exists': localRecord != null,
+        'hasCheckIn': localRecord?.hasCheckIn ?? false,
+        'hasCheckOut': localRecord?.hasCheckOut ?? false,
+        'checkInTime': localRecord?.checkIn,
+        'checkOutTime': localRecord?.checkOut,
+        'locationSummary': localRecord?.locationSummary ?? 'No location data',
+        'isSynced': localRecord?.isSynced ?? false,
+        'syncError': localRecord?.syncError,
+      };
+
+      // Get Firestore data
+      Map<String, dynamic>? firestoreData;
+      try {
+        DocumentSnapshot doc = await FirebaseFirestore.instance
+            .collection('Attendance_Records')
+            .doc('PTSEmployees')
+            .collection('Records')
+            .doc('${widget.employeeId}-$today')
+            .get()
+            .timeout(const Duration(seconds: 10));
+
+        if (doc.exists) {
+          firestoreData = doc.data() as Map<String, dynamic>;
+        }
+      } catch (e) {
+        analysis['firestoreError'] = e.toString();
+      }
+
+      if (firestoreData != null) {
+        // Parse Firestore timestamps
+        DateTime? firestoreCheckIn;
+        DateTime? firestoreCheckOut;
+
+        if (firestoreData['checkIn'] != null) {
+          if (firestoreData['checkIn'] is Timestamp) {
+            firestoreCheckIn = (firestoreData['checkIn'] as Timestamp).toDate();
+          } else if (firestoreData['checkIn'] is String) {
+            try {
+              firestoreCheckIn = DateTime.parse(firestoreData['checkIn']);
+            } catch (e) {
+              analysis['firestoreParseError'] = 'checkIn: $e';
+            }
+          }
+        }
+
+        if (firestoreData['checkOut'] != null) {
+          if (firestoreData['checkOut'] is Timestamp) {
+            firestoreCheckOut = (firestoreData['checkOut'] as Timestamp).toDate();
+          } else if (firestoreData['checkOut'] is String) {
+            try {
+              firestoreCheckOut = DateTime.parse(firestoreData['checkOut']);
+            } catch (e) {
+              analysis['firestoreParseError'] = 'checkOut: $e';
+            }
+          }
+        }
+
+        analysis['firestore'] = {
+          'exists': true,
+          'hasCheckIn': firestoreCheckIn != null,
+          'hasCheckOut': firestoreCheckOut != null,
+          'checkInTime': firestoreCheckIn?.toIso8601String(),
+          'checkOutTime': firestoreCheckOut?.toIso8601String(),
+          'rawCheckIn': firestoreData['checkIn']?.toString(),
+          'rawCheckOut': firestoreData['checkOut']?.toString(),
+          'locationName': firestoreData['locationName'] ?? firestoreData['checkInLocationName'],
+          'workStatus': firestoreData['workStatus'],
+        };
+
+        // Determine expected states
+        bool localExpectedState = localRecord?.hasCheckIn == true && localRecord?.hasCheckOut != true;
+        bool firestoreExpectedState = firestoreCheckIn != null && firestoreCheckOut == null;
+
+        analysis['stateComparison'] = {
+          'localShouldBeCheckedIn': localExpectedState,
+          'firestoreShouldBeCheckedIn': firestoreExpectedState,
+          'statesMatch': localExpectedState == firestoreExpectedState,
+          'discrepancy': localExpectedState != firestoreExpectedState,
+        };
+
+      } else {
+        analysis['firestore'] = {
+          'exists': false,
+          'message': 'No Firestore record found for today',
+        };
       }
 
       setState(() {
-        sharedPrefsData = data;
+        _stateComparison = analysis;
+        _attendanceAnalysis = [analysis];
       });
 
-      debugPrint("✅ SharedPreferences data loaded: ${keys.length} keys");
+    } catch (e) {
+      print("Error analyzing attendance state: $e");
+    }
+  }
+
+  // ✅ NEW: Force sync specific record
+  Future<void> _forceSyncRecord(String date) async {
+    try {
+      setState(() => _isLoading = true);
+
+      final attendanceRepo = getIt<AttendanceRepository>();
+      final record = await attendanceRepo.getAttendanceForDate(widget.employeeId, date);
+
+      if (record != null) {
+        // Mark as unsynced and trigger sync
+        final dbHelper = getIt<DatabaseHelper>();
+        await dbHelper.update(
+          'attendance',
+          {'is_synced': 0, 'sync_error': null},
+          where: 'employee_id = ? AND date = ?',
+          whereArgs: [widget.employeeId, date],
+        );
+
+        // Trigger sync
+        bool success = await attendanceRepo.syncPendingRecords();
+
+        CustomSnackBar.successSnackBar(success
+            ? "Record synced successfully"
+            : "Sync attempted - check for errors");
+      } else {
+        CustomSnackBar.errorSnackBar("No record found for $date");
+      }
+
+      // Refresh data
+      await _loadDebugData();
 
     } catch (e) {
-      debugPrint("❌ Error loading SharedPreferences data: $e");
+      setState(() => _isLoading = false);
+      CustomSnackBar.errorSnackBar("Error syncing record: $e");
+    }
+  }
+
+  // ✅ NEW: Fix attendance state discrepancy
+  Future<void> _fixAttendanceState() async {
+    try {
+      setState(() => _isLoading = true);
+
+      String today = DateFormat('yyyy-MM-dd').format(DateTime.now());
+
+      // Get fresh data from Firestore
+      DocumentSnapshot doc = await FirebaseFirestore.instance
+          .collection('Attendance_Records')
+          .doc('PTSEmployees')
+          .collection('Records')
+          .doc('${widget.employeeId}-$today')
+          .get();
+
+      if (doc.exists) {
+        Map<String, dynamic> firestoreData = doc.data() as Map<String, dynamic>;
+
+        // Update local database with Firestore data
+        final attendanceRepo = getIt<AttendanceRepository>();
+        await attendanceRepo.forceRefreshTodayFromFirestore(widget.employeeId);
+
+        CustomSnackBar.successSnackBar("Attendance state synchronized with server");
+      } else {
+        CustomSnackBar.infoSnackBar("No server record found - local state is authoritative");
+      }
+
+      // Refresh debug data
+      await _loadDebugData();
+
+    } catch (e) {
+      setState(() => _isLoading = false);
+      CustomSnackBar.errorSnackBar("Error fixing attendance state: $e");
     }
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: _isDarkMode ? const Color(0xFF0A0E1A) : const Color(0xFFF8FAFC),
+      backgroundColor: Colors.grey[100],
       appBar: AppBar(
-        title: const Text("🐛 Debug Data Viewer"),
-        backgroundColor: _isDarkMode ? const Color(0xFF1E293B) : Colors.white,
-        foregroundColor: _isDarkMode ? Colors.white : Colors.black87,
+        title: const Text('Debug Data & State Analysis'),
+        backgroundColor: Colors.blue[600],
+        foregroundColor: Colors.white,
         elevation: 0,
-        bottom: TabBar(
-          controller: _tabController,
-          labelColor: _isDarkMode ? Colors.white : Colors.black87,
-          unselectedLabelColor: _isDarkMode ? Colors.grey : Colors.grey,
-          indicatorColor: Colors.blue,
-          tabs: const [
-            Tab(icon: Icon(Icons.access_time), text: "Attendance"),
-            Tab(icon: Icon(Icons.location_on), text: "Locations"),
-            Tab(icon: Icon(Icons.hexagon), text: "Polygons"),
-            Tab(icon: Icon(Icons.settings), text: "Preferences"),
-          ],
-        ),
         actions: [
           IconButton(
-            onPressed: _loadAllData,
             icon: const Icon(Icons.refresh),
-            tooltip: "Refresh Data",
-          ),
-          IconButton(
-            onPressed: _exportAllData,
-            icon: const Icon(Icons.download),
-            tooltip: "Export Data",
-          ),
-          PopupMenuButton(
-            itemBuilder: (context) => [
-              PopupMenuItem(
-                child: const Text("🌙 Toggle Dark Mode"),
-                onTap: () => setState(() => _isDarkMode = !_isDarkMode),
-              ),
-              PopupMenuItem(
-                child: const Text("🗑️ Clear All Data"),
-                onTap: _showClearDataDialog,
-              ),
-              PopupMenuItem(
-                child: const Text("📊 Database Stats"),
-                onTap: _showDatabaseStats,
-              ),
-            ],
+            onPressed: _isLoading ? null : _loadDebugData,
           ),
         ],
       ),
       body: _isLoading
           ? const Center(child: CircularProgressIndicator())
-          : TabBarView(
-        controller: _tabController,
-        children: [
-          _buildAttendanceTab(),
-          _buildLocationsTab(),
-          _buildPolygonLocationsTab(),
-          _buildSharedPreferencesTab(),
-        ],
+          : SingleChildScrollView(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // ✅ Attendance State Analysis (Priority)
+            _buildAttendanceStateCard(),
+            const SizedBox(height: 16),
+
+            // Quick Actions
+            _buildQuickActionsCard(),
+            const SizedBox(height: 16),
+
+            // System Status
+            _buildSystemStatusCard(),
+            const SizedBox(height: 16),
+
+            // Recent Attendance
+            _buildRecentAttendanceCard(),
+            const SizedBox(height: 16),
+
+            // Database Stats
+            _buildDatabaseStatsCard(),
+            const SizedBox(height: 16),
+
+            // Raw Debug Data
+            _buildRawDebugDataCard(),
+          ],
+        ),
       ),
     );
   }
 
-  Widget _buildAttendanceTab() {
-    return Column(
-      children: [
-        _buildSectionHeader(
-          "📅 Attendance Records",
-          attendanceData.length,
-          Icons.access_time,
-        ),
-        Expanded(
-          child: attendanceData.isEmpty
-              ? _buildEmptyState("No attendance records found")
-              : ListView.builder(
-            padding: const EdgeInsets.all(16),
-            itemCount: attendanceData.length,
-            itemBuilder: (context, index) {
-              final record = attendanceData[index];
-              return _buildAttendanceCard(record);
-            },
-          ),
-        ),
-      ],
-    );
-  }
+  // ✅ NEW: Priority card for attendance state analysis
+  Widget _buildAttendanceStateCard() {
+    if (_stateComparison == null) return Container();
 
-  Widget _buildLocationsTab() {
-    return Column(
-      children: [
-        _buildSectionHeader(
-          "📍 Location Records",
-          locationData.length,
-          Icons.location_on,
-        ),
-        Expanded(
-          child: locationData.isEmpty
-              ? _buildEmptyState("No location records found")
-              : ListView.builder(
-            padding: const EdgeInsets.all(16),
-            itemCount: locationData.length,
-            itemBuilder: (context, index) {
-              final record = locationData[index];
-              return _buildLocationCard(record);
-            },
-          ),
-        ),
-      ],
-    );
-  }
+    bool hasDiscrepancy = _stateComparison!['stateComparison']?['discrepancy'] ?? false;
+    Color cardColor = hasDiscrepancy ? Colors.red : Colors.green;
 
-  Widget _buildPolygonLocationsTab() {
-    return Column(
-      children: [
-        _buildSectionHeader(
-          "🗺️ Polygon Locations",
-          polygonLocationData.length,
-          Icons.hexagon,
+    return Card(
+      child: Container(
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(8),
+          border: Border.all(color: cardColor, width: 2),
         ),
-        Expanded(
-          child: polygonLocationData.isEmpty
-              ? _buildEmptyState("No polygon location records found")
-              : ListView.builder(
-            padding: const EdgeInsets.all(16),
-            itemCount: polygonLocationData.length,
-            itemBuilder: (context, index) {
-              final record = polygonLocationData[index];
-              return _buildPolygonLocationCard(record);
-            },
-          ),
-        ),
-      ],
-    );
-  }
-
-  Widget _buildSharedPreferencesTab() {
-    return Column(
-      children: [
-        _buildSectionHeader(
-          "⚙️ SharedPreferences",
-          sharedPrefsData.length,
-          Icons.settings,
-        ),
-        Expanded(
-          child: sharedPrefsData.isEmpty
-              ? _buildEmptyState("No preferences found")
-              : ListView.builder(
-            padding: const EdgeInsets.all(16),
-            itemCount: sharedPrefsData.keys.length,
-            itemBuilder: (context, index) {
-              final key = sharedPrefsData.keys.elementAt(index);
-              final value = sharedPrefsData[key];
-              return _buildPreferenceCard(key, value);
-            },
-          ),
-        ),
-      ],
-    );
-  }
-
-  Widget _buildSectionHeader(String title, int count, IconData icon) {
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.all(20),
-      decoration: BoxDecoration(
-        color: _isDarkMode ? const Color(0xFF1E293B) : Colors.white,
-        border: Border(
-          bottom: BorderSide(
-            color: _isDarkMode ? Colors.white.withOpacity(0.1) : Colors.grey.withOpacity(0.2),
-          ),
-        ),
-      ),
-      child: Row(
-        children: [
-          Container(
-            padding: const EdgeInsets.all(8),
-            decoration: BoxDecoration(
-              color: Colors.blue.withOpacity(0.1),
-              borderRadius: BorderRadius.circular(8),
-            ),
-            child: Icon(icon, color: Colors.blue, size: 24),
-          ),
-          const SizedBox(width: 16),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  title,
-                  style: TextStyle(
-                    fontSize: 18,
-                    fontWeight: FontWeight.bold,
-                    color: _isDarkMode ? Colors.white : Colors.black87,
+        child: Padding(
+          padding: const EdgeInsets.all(16),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  Icon(hasDiscrepancy ? Icons.warning : Icons.check_circle,
+                      color: cardColor, size: 24),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      hasDiscrepancy ? 'ATTENDANCE STATE DISCREPANCY DETECTED' : 'Attendance State: Synchronized',
+                      style: TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.bold,
+                        color: cardColor,
+                      ),
+                    ),
                   ),
-                ),
-                const SizedBox(height: 4),
-                Text(
-                  "$count items stored locally",
-                  style: TextStyle(
-                    fontSize: 14,
-                    color: _isDarkMode ? Colors.grey[400] : Colors.grey[600],
+                ],
+              ),
+
+              const SizedBox(height: 16),
+
+              // Local vs Firestore comparison
+              Row(
+                children: [
+                  Expanded(child: _buildStateColumn('Local Database', _stateComparison!['local'])),
+                  Container(width: 1, height: 60, color: Colors.grey[300]),
+                  Expanded(child: _buildStateColumn('Firestore', _stateComparison!['firestore'])),
+                ],
+              ),
+
+              if (hasDiscrepancy) ...[
+                const SizedBox(height: 16),
+                Container(
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: Colors.orange[50],
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Text('Recommended Action:',
+                          style: TextStyle(fontWeight: FontWeight.bold)),
+                      const SizedBox(height: 8),
+                      const Text('Local and server states don\'t match. This can cause the check-in/check-out button to show incorrectly.'),
+                      const SizedBox(height: 12),
+                      ElevatedButton.icon(
+                        icon: const Icon(Icons.sync),
+                        label: const Text('Fix State Discrepancy'),
+                        onPressed: _fixAttendanceState,
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: Colors.orange[600],
+                          foregroundColor: Colors.white,
+                        ),
+                      ),
+                    ],
                   ),
                 ),
               ],
-            ),
+            ],
           ),
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-            decoration: BoxDecoration(
-              color: count > 0 ? Colors.green.withOpacity(0.1) : Colors.orange.withOpacity(0.1),
-              borderRadius: BorderRadius.circular(12),
-              border: Border.all(
-                color: count > 0 ? Colors.green : Colors.orange,
-              ),
-            ),
-            child: Text(
-              count.toString(),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildStateColumn(String title, Map<String, dynamic> data) {
+    bool exists = data['exists'] ?? false;
+    bool hasCheckIn = data['hasCheckIn'] ?? false;
+    bool hasCheckOut = data['hasCheckOut'] ?? false;
+
+    return Padding(
+      padding: const EdgeInsets.all(8),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(title, style: const TextStyle(fontWeight: FontWeight.bold)),
+          const SizedBox(height: 8),
+
+          if (exists) ...[
+            _buildStatusRow('Check-in', hasCheckIn),
+            _buildStatusRow('Check-out', hasCheckOut),
+            Text(
+              'Expected State: ${hasCheckIn && !hasCheckOut ? "CHECKED IN" : "CHECKED OUT"}',
               style: TextStyle(
-                color: count > 0 ? Colors.green : Colors.orange,
-                fontWeight: FontWeight.bold,
-                fontSize: 16,
+                fontSize: 12,
+                color: hasCheckIn && !hasCheckOut ? Colors.green : Colors.orange,
+                fontWeight: FontWeight.w600,
               ),
             ),
+          ] else ...[
+            const Text('No record found', style: TextStyle(color: Colors.grey)),
+          ],
+        ],
+      ),
+    );
+  }
+
+  Widget _buildStatusRow(String label, bool status) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 2),
+      child: Row(
+        children: [
+          Icon(status ? Icons.check : Icons.close,
+              color: status ? Colors.green : Colors.red, size: 16),
+          const SizedBox(width: 4),
+          Text('$label: ${status ? "Yes" : "No"}', style: const TextStyle(fontSize: 12)),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildQuickActionsCard() {
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text('Quick Actions', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+            const SizedBox(height: 12),
+
+            Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              children: [
+                ElevatedButton.icon(
+                  icon: const Icon(Icons.sync, size: 16),
+                  label: const Text('Force Sync Today'),
+                  onPressed: () => _forceSyncRecord(DateFormat('yyyy-MM-dd').format(DateTime.now())),
+                  style: ElevatedButton.styleFrom(backgroundColor: Colors.blue[600], foregroundColor: Colors.white),
+                ),
+                ElevatedButton.icon(
+                  icon: const Icon(Icons.refresh, size: 16),
+                  label: const Text('Refresh Data'),
+                  onPressed: _loadDebugData,
+                ),
+                ElevatedButton.icon(
+                  icon: const Icon(Icons.cleaning_services, size: 16),
+                  label: const Text('Clear Cache'),
+                  onPressed: _clearLocalCache,
+                  style: ElevatedButton.styleFrom(backgroundColor: Colors.orange[600], foregroundColor: Colors.white),
+                ),
+                ElevatedButton.icon(
+                  icon: const Icon(Icons.bug_report, size: 16),
+                  label: const Text('Run Diagnostics'),
+                  onPressed: _runDiagnostics,
+                  style: ElevatedButton.styleFrom(backgroundColor: Colors.purple[600], foregroundColor: Colors.white),
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildSystemStatusCard() {
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text('System Status', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+            const SizedBox(height: 12),
+
+            if (_debugData['connectivity'] != null) ...[
+              _buildStatusItem(
+                'Connectivity',
+                _debugData['connectivity']['isOnline'] ? 'Online' : 'Offline',
+                _debugData['connectivity']['isOnline'] ? Colors.green : Colors.red,
+              ),
+            ],
+
+            if (_debugData['database'] != null) ...[
+              _buildStatusItem(
+                'Database Version',
+                _debugData['database']['version']?.toString() ?? 'Unknown',
+                Colors.blue,
+              ),
+              _buildStatusItem(
+                'Total Tables',
+                _debugData['database']['totalTables']?.toString() ?? '0',
+                Colors.blue,
+              ),
+            ],
+
+            _buildStatusItem(
+              'Employee ID',
+              widget.employeeId,
+              Colors.grey[600]!,
+            ),
+
+            if (widget.userData != null) ...[
+              _buildStatusItem(
+                'Employee Name',
+                widget.userData!['name'] ?? 'Unknown',
+                Colors.grey[600]!,
+              ),
+              _buildStatusItem(
+                'Employee PIN',
+                widget.userData!['pin']?.toString() ?? 'Not set',
+                Colors.grey[600]!,
+              ),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildStatusItem(String label, String value, Color color) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 4),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          SizedBox(
+            width: 120,
+            child: Text('$label:', style: const TextStyle(fontWeight: FontWeight.w500)),
+          ),
+          Expanded(
+            child: Text(value, style: TextStyle(color: color)),
           ),
         ],
       ),
     );
   }
 
-  Widget _buildAttendanceCard(Map<String, dynamic> record) {
+  Widget _buildRecentAttendanceCard() {
+    List<dynamic> recentAttendance = _debugData['recentAttendance'] ?? [];
+
     return Card(
-      margin: const EdgeInsets.only(bottom: 12),
-      color: _isDarkMode ? const Color(0xFF1E293B) : Colors.white,
       child: Padding(
         padding: const EdgeInsets.all(16),
         child: Column(
@@ -350,43 +588,134 @@ class _DebugDataScreenState extends State<DebugDataScreen> with TickerProviderSt
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
+                const Text('Recent Attendance (7 days)',
+                    style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+                Text('${recentAttendance.length} records',
+                    style: TextStyle(color: Colors.grey[600])),
+              ],
+            ),
+            const SizedBox(height: 12),
+
+            if (recentAttendance.isEmpty) ...[
+              const Text('No recent attendance records found',
+                  style: TextStyle(color: Colors.grey)),
+            ] else ...[
+              ...recentAttendance.map<Widget>((record) => _buildAttendanceRow(record)).toList(),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildAttendanceRow(Map<String, dynamic> record) {
+    bool hasCheckIn = record['hasCheckIn'] ?? false;
+    bool hasCheckOut = record['hasCheckOut'] ?? false;
+    bool isSynced = record['isSynced'] ?? false;
+    String date = record['date'] ?? '';
+
+    Color statusColor = hasCheckIn
+        ? (hasCheckOut ? Colors.green : Colors.orange)
+        : Colors.red;
+
+    String status = hasCheckIn
+        ? (hasCheckOut ? 'Complete' : 'In Progress')
+        : 'Absent';
+
+    return Card(
+      margin: const EdgeInsets.symmetric(vertical: 4),
+      child: Padding(
+        padding: const EdgeInsets.all(12),
+        child: Row(
+          children: [
+            Container(
+              width: 8,
+              height: 8,
+              decoration: BoxDecoration(
+                color: statusColor,
+                shape: BoxShape.circle,
+              ),
+            ),
+            const SizedBox(width: 12),
+
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(date, style: const TextStyle(fontWeight: FontWeight.w600)),
+                  const SizedBox(height: 2),
+                  Text(
+                    status,
+                    style: TextStyle(color: statusColor, fontSize: 12),
+                  ),
+                  if (record['locationSummary'] != null) ...[
+                    Text(
+                      record['locationSummary'],
+                      style: TextStyle(color: Colors.grey[600], fontSize: 11),
+                    ),
+                  ],
+                ],
+              ),
+            ),
+
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.end,
+              children: [
+                Icon(
+                  isSynced ? Icons.cloud_done : Icons.cloud_off,
+                  color: isSynced ? Colors.green : Colors.orange,
+                  size: 16,
+                ),
                 Text(
-                  "👤 ${record['employee_id'] ?? 'Unknown'}",
+                  isSynced ? 'Synced' : 'Pending',
                   style: TextStyle(
-                    fontWeight: FontWeight.bold,
-                    fontSize: 16,
-                    color: _isDarkMode ? Colors.white : Colors.black87,
-                  ),
-                ),
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                  decoration: BoxDecoration(
-                    color: (record['is_synced'] == 1) ? Colors.green.withOpacity(0.1) : Colors.orange.withOpacity(0.1),
-                    borderRadius: BorderRadius.circular(8),
-                  ),
-                  child: Text(
-                    (record['is_synced'] == 1) ? "✅ Synced" : "⏳ Pending",
-                    style: TextStyle(
-                      color: (record['is_synced'] == 1) ? Colors.green : Colors.orange,
-                      fontSize: 12,
-                      fontWeight: FontWeight.bold,
-                    ),
+                    fontSize: 10,
+                    color: isSynced ? Colors.green : Colors.orange,
                   ),
                 ),
               ],
             ),
+
+            const SizedBox(width: 8),
+
+            PopupMenuButton<String>(
+              icon: const Icon(Icons.more_vert, size: 16),
+              onSelected: (value) {
+                if (value == 'sync') {
+                  _forceSyncRecord(date);
+                } else if (value == 'copy') {
+                  _copyRecordData(record);
+                }
+              },
+              itemBuilder: (context) => [
+                const PopupMenuItem(value: 'sync', child: Text('Force Sync')),
+                const PopupMenuItem(value: 'copy', child: Text('Copy Data')),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildDatabaseStatsCard() {
+    Map<String, dynamic>? dbStats = _debugData['database'];
+    if (dbStats == null) return Container();
+
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text('Database Statistics',
+                style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
             const SizedBox(height: 12),
-            _buildDetailRow("📅 Date", record['date']?.toString() ?? 'Not set'),
-            _buildDetailRow("🕐 Check In", record['check_in']?.toString() ?? 'Not recorded'),
-            _buildDetailRow("🕑 Check Out", record['check_out']?.toString() ?? 'Not recorded'),
-            _buildDetailRow("📍 Location", record['location_id']?.toString() ?? 'Unknown'),
-            if (record['raw_data'] != null) ...[
-              const SizedBox(height: 8),
-              TextButton.icon(
-                onPressed: () => _showRawData("Attendance Raw Data", record['raw_data']),
-                icon: const Icon(Icons.data_object, size: 16),
-                label: const Text("View Raw Data"),
-              ),
+
+            if (dbStats['tableStats'] != null) ...[
+              ...dbStats['tableStats'].entries.map<Widget>((entry) =>
+                  _buildStatusItem(entry.key, '${entry.value} records', Colors.grey[600]!)
+              ).toList(),
             ],
           ],
         ),
@@ -394,423 +723,88 @@ class _DebugDataScreenState extends State<DebugDataScreen> with TickerProviderSt
     );
   }
 
-  Widget _buildLocationCard(Map<String, dynamic> record) {
+  Widget _buildRawDebugDataCard() {
     return Card(
-      margin: const EdgeInsets.only(bottom: 12),
-      color: _isDarkMode ? const Color(0xFF1E293B) : Colors.white,
       child: Padding(
         padding: const EdgeInsets.all(16),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                Container(
-                  width: 12,
-                  height: 12,
-                  decoration: BoxDecoration(
-                    color: (record['is_active'] == 1) ? Colors.green : Colors.red,
-                    shape: BoxShape.circle,
-                  ),
-                ),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: Text(
-                    record['name']?.toString() ?? 'Unnamed Location',
-                    style: TextStyle(
-                      fontWeight: FontWeight.bold,
-                      fontSize: 16,
-                      color: _isDarkMode ? Colors.white : Colors.black87,
-                    ),
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 12),
-            _buildDetailRow("📍 Address", record['address']?.toString() ?? 'No address'),
-            _buildDetailRow("🌐 Latitude", record['latitude']?.toString() ?? '0.0'),
-            _buildDetailRow("🌐 Longitude", record['longitude']?.toString() ?? '0.0'),
-            _buildDetailRow("📏 Radius", "${record['radius']?.toString() ?? '0'}m"),
-            _buildDetailRow("🏃 Active", (record['is_active'] == 1) ? "Yes" : "No"),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildPolygonLocationCard(Map<String, dynamic> record) {
-    return Card(
-      margin: const EdgeInsets.only(bottom: 12),
-      color: _isDarkMode ? const Color(0xFF1E293B) : Colors.white,
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              record['name']?.toString() ?? 'Unnamed Polygon',
-              style: TextStyle(
-                fontWeight: FontWeight.bold,
-                fontSize: 16,
-                color: _isDarkMode ? Colors.white : Colors.black87,
-              ),
-            ),
-            const SizedBox(height: 12),
-            _buildDetailRow("📝 Description", record['description']?.toString() ?? 'No description'),
-            _buildDetailRow("🌐 Center Lat", record['center_latitude']?.toString() ?? '0.0'),
-            _buildDetailRow("🌐 Center Lng", record['center_longitude']?.toString() ?? '0.0'),
-            _buildDetailRow("🏃 Active", (record['is_active'] == 1) ? "Yes" : "No"),
-            if (record['coordinates'] != null) ...[
-              const SizedBox(height: 8),
-              TextButton.icon(
-                onPressed: () => _showRawData("Polygon Coordinates", record['coordinates']),
-                icon: const Icon(Icons.hexagon, size: 16),
-                label: const Text("View Coordinates"),
-              ),
-            ],
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildPreferenceCard(String key, dynamic value) {
-    String displayValue = value.toString();
-    if (displayValue.length > 100) {
-      displayValue = displayValue.substring(0, 100) + "...";
-    }
-
-    return Card(
-      margin: const EdgeInsets.only(bottom: 12),
-      color: _isDarkMode ? const Color(0xFF1E293B) : Colors.white,
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              children: [
-                Expanded(
-                  child: Text(
-                    key,
-                    style: TextStyle(
-                      fontWeight: FontWeight.bold,
-                      fontSize: 14,
-                      color: _isDarkMode ? Colors.white : Colors.black87,
-                    ),
-                  ),
-                ),
-                IconButton(
-                  onPressed: () => _copyToClipboard(key, value.toString()),
+                const Text('Raw Debug Data',
+                    style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+                TextButton.icon(
                   icon: const Icon(Icons.copy, size: 16),
-                  tooltip: "Copy Value",
+                  label: const Text('Copy All'),
+                  onPressed: _copyAllDebugData,
                 ),
               ],
             ),
-            const SizedBox(height: 8),
+            const SizedBox(height: 12),
+
             Container(
               width: double.infinity,
-              padding: const EdgeInsets.all(12),
+              constraints: const BoxConstraints(maxHeight: 200),
               decoration: BoxDecoration(
-                color: _isDarkMode ? Colors.grey[800] : Colors.grey[100],
+                color: Colors.grey[100],
                 borderRadius: BorderRadius.circular(8),
+                border: Border.all(color: Colors.grey[300]!),
               ),
-              child: Text(
-                displayValue,
-                style: TextStyle(
-                  fontSize: 12,
-                  fontFamily: 'monospace',
-                  color: _isDarkMode ? Colors.grey[300] : Colors.grey[700],
+              child: SingleChildScrollView(
+                padding: const EdgeInsets.all(12),
+                child: SelectableText(
+                  const JsonEncoder.withIndent('  ').convert(_debugData),
+                  style: const TextStyle(fontFamily: 'monospace', fontSize: 12),
                 ),
               ),
             ),
-            if (value.toString().length > 100) ...[
-              const SizedBox(height: 8),
-              TextButton.icon(
-                onPressed: () => _showRawData("Preference: $key", value.toString()),
-                icon: const Icon(Icons.visibility, size: 16),
-                label: const Text("View Full Value"),
-              ),
-            ],
           ],
         ),
       ),
     );
   }
 
-  Widget _buildDetailRow(String label, String value) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 4),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          SizedBox(
-            width: 100,
-            child: Text(
-              label,
-              style: TextStyle(
-                color: _isDarkMode ? Colors.grey[400] : Colors.grey[600],
-                fontSize: 12,
-                fontWeight: FontWeight.w500,
-              ),
-            ),
-          ),
-          Expanded(
-            child: Text(
-              value,
-              style: TextStyle(
-                color: _isDarkMode ? Colors.white : Colors.black87,
-                fontSize: 12,
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildEmptyState(String message) {
-    return Center(
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Icon(
-            Icons.inbox_outlined,
-            size: 64,
-            color: _isDarkMode ? Colors.grey[600] : Colors.grey[400],
-          ),
-          const SizedBox(height: 16),
-          Text(
-            message,
-            style: TextStyle(
-              fontSize: 16,
-              color: _isDarkMode ? Colors.grey[400] : Colors.grey[600],
-            ),
-          ),
-          const SizedBox(height: 16),
-          ElevatedButton.icon(
-            onPressed: _loadAllData,
-            icon: const Icon(Icons.refresh),
-            label: const Text("Refresh"),
-          ),
-        ],
-      ),
-    );
-  }
-
-  void _showRawData(String title, String data) {
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        backgroundColor: _isDarkMode ? const Color(0xFF1E293B) : Colors.white,
-        title: Text(
-          title,
-          style: TextStyle(
-            color: _isDarkMode ? Colors.white : Colors.black87,
-          ),
-        ),
-        content: Container(
-          width: double.maxFinite,
-          height: 400,
-          child: SingleChildScrollView(
-            child: Container(
-              padding: const EdgeInsets.all(12),
-              decoration: BoxDecoration(
-                color: _isDarkMode ? Colors.grey[800] : Colors.grey[100],
-                borderRadius: BorderRadius.circular(8),
-              ),
-              child: SelectableText(
-                data,
-                style: TextStyle(
-                  fontSize: 12,
-                  fontFamily: 'monospace',
-                  color: _isDarkMode ? Colors.grey[300] : Colors.grey[700],
-                ),
-              ),
-            ),
-          ),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => _copyToClipboard(title, data),
-            child: const Text("Copy"),
-          ),
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text("Close"),
-          ),
-        ],
-      ),
-    );
-  }
-
-  void _copyToClipboard(String title, String data) {
-    Clipboard.setData(ClipboardData(text: data));
-    CustomSnackBar.successSnackBar(context, "Copied to clipboard: $title");
-  }
-
-  void _exportAllData() async {
+  // Additional action methods
+  Future<void> _clearLocalCache() async {
     try {
-      Map<String, dynamic> allData = {
-        'export_timestamp': DateTime.now().toIso8601String(),
-        'employee_id': widget.employeeId,
-        'database_data': {
-          'attendance': attendanceData,
-          'locations': locationData,
-          'polygon_locations': polygonLocationData,
-        },
-        'shared_preferences': sharedPrefsData,
-        'stats': {
-          'total_attendance_records': attendanceData.length,
-          'total_location_records': locationData.length,
-          'total_polygon_records': polygonLocationData.length,
-          'total_preferences': sharedPrefsData.length,
-        }
-      };
+      final attendanceRepo = getIt<AttendanceRepository>();
+      await attendanceRepo.clearAttendanceData(employeeId: widget.employeeId);
 
-      String jsonData = const JsonEncoder.withIndent('  ').convert(allData);
-
-      await Clipboard.setData(ClipboardData(text: jsonData));
-
-      CustomSnackBar.successSnackBar(context, "✅ All data exported to clipboard!");
-
-      print("=== EXPORTED DATA ===");
-      print(jsonData);
-
+      CustomSnackBar.successSnackBar("Local cache cleared");
+      await _loadDebugData();
     } catch (e) {
-      CustomSnackBar.errorSnackBar(context, "❌ Export failed: $e");
+      CustomSnackBar.errorSnackBar("Error clearing cache: $e");
     }
   }
 
-  void _showClearDataDialog() {
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        backgroundColor: _isDarkMode ? const Color(0xFF1E293B) : Colors.white,
-        title: Row(
-          children: [
-            const Icon(Icons.warning, color: Colors.red),
-            const SizedBox(width: 8),
-            Text(
-              "⚠️ Clear All Data",
-              style: TextStyle(
-                color: _isDarkMode ? Colors.white : Colors.black87,
-              ),
-            ),
-          ],
-        ),
-        content: const Text(
-          "This will permanently delete ALL local data including attendance records, locations, and preferences. This action cannot be undone!\n\nAre you sure?",
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text("Cancel"),
-          ),
-          ElevatedButton(
-            onPressed: () {
-              Navigator.pop(context);
-              _clearAllData();
-            },
-            style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
-            child: const Text("Clear All Data", style: TextStyle(color: Colors.white)),
-          ),
-        ],
-      ),
-    );
-  }
-
-  void _clearAllData() async {
+  Future<void> _runDiagnostics() async {
     try {
+      setState(() => _isLoading = true);
+
       final dbHelper = getIt<DatabaseHelper>();
+      await dbHelper.runDiagnostics();
 
-      // Clear database tables
-      await dbHelper.delete('attendance');
-      await dbHelper.delete('locations');
-      await dbHelper.delete('polygon_locations');
-
-      // Clear SharedPreferences
-      SharedPreferences prefs = await SharedPreferences.getInstance();
-      await prefs.clear();
-
-      // Reload data
-      await _loadAllData();
-
-      CustomSnackBar.successSnackBar(context, "🗑️ All local data cleared!");
-
+      CustomSnackBar.successSnackBar("Diagnostics completed - check console logs");
+      await _loadDebugData();
     } catch (e) {
-      CustomSnackBar.errorSnackBar(context, "❌ Failed to clear data: $e");
+      setState(() => _isLoading = false);
+      CustomSnackBar.errorSnackBar("Error running diagnostics: $e");
     }
   }
 
-  void _showDatabaseStats() {
-    int totalRecords = attendanceData.length + locationData.length + polygonLocationData.length;
-    int syncedAttendance = attendanceData.where((r) => r['is_synced'] == 1).length;
-    int pendingAttendance = attendanceData.length - syncedAttendance;
-
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        backgroundColor: _isDarkMode ? const Color(0xFF1E293B) : Colors.white,
-        title: Row(
-          children: [
-            const Icon(Icons.analytics, color: Colors.blue),
-            const SizedBox(width: 8),
-            Text(
-              "📊 Database Statistics",
-              style: TextStyle(
-                color: _isDarkMode ? Colors.white : Colors.black87,
-              ),
-            ),
-          ],
-        ),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            _buildStatRow("Total Records", totalRecords.toString()),
-            _buildStatRow("Attendance Records", attendanceData.length.toString()),
-            _buildStatRow("- Synced", syncedAttendance.toString()),
-            _buildStatRow("- Pending Sync", pendingAttendance.toString()),
-            _buildStatRow("Location Records", locationData.length.toString()),
-            _buildStatRow("Polygon Records", polygonLocationData.length.toString()),
-            _buildStatRow("Preferences", sharedPrefsData.length.toString()),
-            const Divider(),
-            _buildStatRow("Employee ID", widget.employeeId),
-            _buildStatRow("Last Refresh", DateTime.now().toString().split('.')[0]),
-          ],
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text("Close"),
-          ),
-        ],
-      ),
-    );
+  void _copyRecordData(Map<String, dynamic> record) {
+    String data = const JsonEncoder.withIndent('  ').convert(record);
+    Clipboard.setData(ClipboardData(text: data));
+    CustomSnackBar.successSnackBar("Record data copied to clipboard");
   }
 
-  Widget _buildStatRow(String label, String value) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 4),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-        children: [
-          Text(
-            label,
-            style: TextStyle(
-              color: _isDarkMode ? Colors.grey[400] : Colors.grey[600],
-            ),
-          ),
-          Text(
-            value,
-            style: TextStyle(
-              fontWeight: FontWeight.bold,
-              color: _isDarkMode ? Colors.white : Colors.black87,
-            ),
-          ),
-        ],
-      ),
-    );
+  void _copyAllDebugData() {
+    String data = const JsonEncoder.withIndent('  ').convert(_debugData);
+    Clipboard.setData(ClipboardData(text: data));
+    CustomSnackBar.successSnackBar("All debug data copied to clipboard");
   }
 }
+
+

@@ -1,3 +1,4 @@
+// lib/services/notification_service.dart - FIXED WITH showLocalNotification METHOD
 
 import 'dart:async';
 import 'dart:convert';
@@ -17,6 +18,7 @@ class NotificationService {
   // Channel IDs for Android
   static const String _channelId = 'high_importance_channel';
   static const String _channelIdCheckRequests = 'check_requests_channel';
+  static const String _channelIdGeofenceExit = 'geofence_exit_channel'; // NEW
 
   // Stream controller for handling notification taps
   final StreamController<Map<String, dynamic>> _notificationStreamController =
@@ -177,6 +179,16 @@ class NotificationService {
         playSound: true,
       );
 
+      // ✅ NEW: Geofence exit monitoring channel
+      const AndroidNotificationChannel geofenceExitChannel = AndroidNotificationChannel(
+        _channelIdGeofenceExit,
+        'Work Area Monitoring',
+        description: 'Notifications about work area exits and returns.',
+        importance: Importance.high,
+        enableVibration: true,
+        playSound: true,
+      );
+
       await _flutterLocalNotificationsPlugin
           .resolvePlatformSpecificImplementation<AndroidFlutterLocalNotificationsPlugin>()
           ?.createNotificationChannel(channel);
@@ -188,6 +200,11 @@ class NotificationService {
       await _flutterLocalNotificationsPlugin
           .resolvePlatformSpecificImplementation<AndroidFlutterLocalNotificationsPlugin>()
           ?.createNotificationChannel(overtimeRequestsChannel);
+
+      // ✅ NEW: Create geofence exit channel
+      await _flutterLocalNotificationsPlugin
+          .resolvePlatformSpecificImplementation<AndroidFlutterLocalNotificationsPlugin>()
+          ?.createNotificationChannel(geofenceExitChannel);
 
       debugPrint("Android notification channels created successfully");
     } catch (e) {
@@ -287,13 +304,21 @@ class NotificationService {
             channelDescription = 'Notifications about check-in and check-out approval requests';
             debugPrint('Using check requests channel');
           }
+          // ✅ NEW: Handle geofence exit notifications
+          else if (notificationType == 'geofence_exit_prompt' ||
+              notificationType == 'geofence_exit_notification') {
+            channelId = _channelIdGeofenceExit;
+            channelName = 'Work Area Monitoring';
+            channelDescription = 'Notifications about work area exits and returns';
+            debugPrint('Using geofence exit channel');
+          }
         }
 
         await _showLocalNotification(
-          message,
-          channelId,
-          channelName,
-          channelDescription
+            message,
+            channelId,
+            channelName,
+            channelDescription
         );
       } else {
         debugPrint('Message does not contain notification, only data');
@@ -378,6 +403,70 @@ class NotificationService {
       }
     } catch (e) {
       debugPrint("Error showing local notification: $e");
+    }
+  }
+
+  // ✅ NEW: The missing showLocalNotification method that your GeofenceExitMonitoringService needs
+  Future<void> showLocalNotification(
+      String title,
+      String body, {
+        Map<String, dynamic>? data,
+        String? channelId,
+      }) async {
+    try {
+      debugPrint('📱 Showing local notification: $title');
+
+      // Use geofence channel by default, or specified channel
+      final String notificationChannelId = channelId ?? _channelIdGeofenceExit;
+
+      // Create platform-specific notification details
+      final AndroidNotificationDetails androidPlatformChannelSpecifics =
+      AndroidNotificationDetails(
+        notificationChannelId,
+        notificationChannelId == _channelIdGeofenceExit
+            ? 'Work Area Monitoring'
+            : 'High Importance Notifications',
+        channelDescription: notificationChannelId == _channelIdGeofenceExit
+            ? 'Notifications about work area exits and returns'
+            : 'This channel is used for important notifications.',
+        importance: Importance.max,
+        priority: Priority.high,
+        showWhen: true,
+        icon: '@mipmap/ic_launcher',
+        color: Colors.orange, // Orange for geofence notifications
+        enableLights: true,
+        enableVibration: true,
+        styleInformation: BigTextStyleInformation(body),
+      );
+
+      const DarwinNotificationDetails iOSPlatformChannelSpecifics =
+      DarwinNotificationDetails(
+        presentAlert: true,
+        presentBadge: true,
+        presentSound: true,
+        interruptionLevel: InterruptionLevel.timeSensitive,
+      );
+
+      final NotificationDetails platformChannelSpecifics = NotificationDetails(
+        android: androidPlatformChannelSpecifics,
+        iOS: iOSPlatformChannelSpecifics,
+      );
+
+      // Generate unique notification ID
+      final int notificationId = DateTime.now().millisecondsSinceEpoch ~/ 1000;
+
+      // Show the notification
+      await _flutterLocalNotificationsPlugin.show(
+        notificationId,
+        title,
+        body,
+        platformChannelSpecifics,
+        payload: data != null ? jsonEncode(data) : null,
+      );
+
+      debugPrint("✅ Local notification displayed successfully: $title");
+    } catch (e) {
+      debugPrint("❌ Error showing local notification: $e");
     }
   }
 
@@ -671,5 +760,19 @@ class NotificationService {
   // Clean up
   void dispose() {
     _notificationStreamController.close();
+  }
+
+  // Geofence notification method (stub for compatibility)
+  Future<void> sendNotificationToTopic(
+      String topic,
+      String title,
+      String body, {
+        Map<String, dynamic>? data,
+      }) async {
+    // This is a stub - actual cloud messaging would be handled by your backend
+    debugPrint("Geofence notification (local only): $title - $body");
+
+    // Show as local notification for testing
+    await showLocalNotification(title, body, data: data);
   }
 }

@@ -1,14 +1,15 @@
-// lib/dashboard/my_attendance_view.dart - FINAL FIXED VERSION WITH CROSS-DEVICE SYNC
+// lib/dashboard/my_attendance_view.dart - MOBILE-OPTIMIZED WITH WEEKLY VIEW
 
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
-import 'package:face_auth/constants/theme.dart';
-import 'package:face_auth/common/utils/custom_snackbar.dart';
-import 'package:face_auth/model/overtime_request_model.dart';
-import 'package:face_auth/model/attendance_model.dart';
-import 'package:face_auth/repositories/attendance_repository.dart';
-import 'package:face_auth/services/employee_overtime_service.dart';
-import 'package:face_auth/services/service_locator.dart';
+import 'package:face_auth_compatible/constants/theme.dart';
+import 'package:face_auth_compatible/common/utils/custom_snackbar.dart';
+import 'package:face_auth_compatible/model/overtime_request_model.dart';
+import 'package:face_auth_compatible/model/attendance_model.dart';
+import 'package:face_auth_compatible/repositories/attendance_repository.dart';
+import 'package:face_auth_compatible/services/employee_overtime_service.dart';
+import 'package:face_auth_compatible/services/service_locator.dart';
+import 'package:face_auth_compatible/model/local_attendance_model.dart';
 
 class MyAttendanceView extends StatefulWidget {
   final String employeeId;
@@ -26,7 +27,7 @@ class MyAttendanceView extends StatefulWidget {
 
 class _MyAttendanceViewState extends State<MyAttendanceView> with TickerProviderStateMixin {
   late TabController _tabController;
-  final ScrollController _scrollController = ScrollController();
+  final PageController _weekPageController = PageController();
 
   // Services and repositories
   late EmployeeOvertimeService _overtimeService;
@@ -34,8 +35,10 @@ class _MyAttendanceViewState extends State<MyAttendanceView> with TickerProvider
 
   // Attendance data
   List<AttendanceRecord> _attendanceRecords = [];
+  List<List<AttendanceRecord>> _weeklyRecords = [];
   bool _isLoadingAttendance = true;
   String _selectedMonth = DateFormat('yyyy-MM').format(DateTime.now());
+  int _currentWeekIndex = 0;
 
   // Overtime data
   List<OvertimeRequest> _overtimeHistory = [];
@@ -59,18 +62,19 @@ class _MyAttendanceViewState extends State<MyAttendanceView> with TickerProvider
   @override
   void dispose() {
     _tabController.dispose();
-    _scrollController.dispose();
+    _weekPageController.dispose();
     super.dispose();
   }
 
   // ===== INITIALIZATION METHODS =====
   Future<void> _initializeEverything() async {
     try {
-      debugPrint("🚀 === INITIALIZING ATTENDANCE VIEW FOR ${widget.employeeId} ===");
+      debugPrint("🚀 === INITIALIZING MOBILE ATTENDANCE VIEW FOR ${widget.employeeId} ===");
 
       await _initializeServices();
       await _checkOvertimeAccess();
       await _fetchInitialData();
+      await _resolveExistingLocationNames();
 
     } catch (e) {
       debugPrint("❌ Error during initialization: $e");
@@ -80,8 +84,6 @@ class _MyAttendanceViewState extends State<MyAttendanceView> with TickerProvider
 
   Future<void> _initializeServices() async {
     try {
-      debugPrint("🔧 Initializing services...");
-
       _attendanceRepository = getIt<AttendanceRepository>();
       debugPrint("✅ Successfully got AttendanceRepository from GetIt");
 
@@ -92,7 +94,6 @@ class _MyAttendanceViewState extends State<MyAttendanceView> with TickerProvider
         debugPrint("❌ Error getting EmployeeOvertimeService from GetIt: $e");
         _overtimeService = EmployeeOvertimeService();
       }
-
     } catch (e) {
       debugPrint("❌ Error initializing services: $e");
       rethrow;
@@ -101,19 +102,13 @@ class _MyAttendanceViewState extends State<MyAttendanceView> with TickerProvider
 
   Future<void> _checkOvertimeAccess() async {
     try {
-      debugPrint("🔐 Checking overtime access for ${widget.employeeId}...");
-
       bool hasAccess = await _overtimeService.hasOvertimeAccess(widget.employeeId);
-      debugPrint("📋 Overtime access result: $hasAccess");
-
       setState(() {
         _hasOvertimeAccess = hasAccess;
         _tabController.dispose();
         _tabController = TabController(length: _hasOvertimeAccess ? 2 : 1, vsync: this);
       });
-
       debugPrint("✅ Updated UI: ${_hasOvertimeAccess ? '2 tabs (Attendance + Overtime)' : '1 tab (Attendance only)'}");
-
     } catch (e) {
       debugPrint("❌ Error checking overtime access: $e");
       _setupAttendanceOnlyView();
@@ -121,14 +116,17 @@ class _MyAttendanceViewState extends State<MyAttendanceView> with TickerProvider
   }
 
   Future<void> _fetchInitialData() async {
-    // ✅ IMPROVED: Always force refresh on initial load to get latest data
     await _fetchAttendanceRecords(forceRefresh: true);
-    
     if (_hasOvertimeAccess) {
-      debugPrint("📊 Fetching overtime data...");
       _fetchOvertimeData();
-    } else {
-      debugPrint("⏭️ Skipping overtime data (no access)");
+    }
+  }
+
+  Future<void> _resolveExistingLocationNames() async {
+    try {
+      _attendanceRepository.bulkResolveLocationNames(widget.employeeId);
+    } catch (e) {
+      debugPrint("❌ Error starting location name resolution: $e");
     }
   }
 
@@ -141,196 +139,163 @@ class _MyAttendanceViewState extends State<MyAttendanceView> with TickerProvider
     _fetchAttendanceRecords();
   }
 
-  // ===== FIXED ATTENDANCE METHODS FOR CROSS-DEVICE SYNC =====
+  // ===== ATTENDANCE METHODS =====
   Future<void> _fetchAttendanceRecords({bool forceRefresh = false}) async {
     setState(() => _isLoadingAttendance = true);
 
     try {
-      debugPrint("📅 Fetching attendance records for ${widget.employeeId} in month $_selectedMonth (force: $forceRefresh)");
-
-      // Parse the selected month to get start and end dates
       DateTime selectedDate = DateFormat('yyyy-MM').parse(_selectedMonth);
       int year = selectedDate.year;
       int month = selectedDate.month;
 
-      debugPrint("📅 Fetching for year: $year, month: $month");
-
-      // ✅ FIXED: Use repository method with force refresh capability
       List<AttendanceRecord> existingRecords = await _attendanceRepository.getAttendanceRecordsForMonth(
         employeeId: widget.employeeId,
         year: year,
         month: month,
-        forceRefresh: forceRefresh, // ✅ Use force refresh parameter
+        forceRefresh: forceRefresh,
       );
 
-      debugPrint("📅 Found ${existingRecords.length} attendance records from repository");
-
-      // Generate complete month view with all days
       List<AttendanceRecord> completeRecords = await _generateCompleteMonthView(year, month, existingRecords);
+      List<List<AttendanceRecord>> weeklyData = _generateWeeklyView(completeRecords);
 
       setState(() {
         _attendanceRecords = completeRecords;
+        _weeklyRecords = weeklyData;
+        _currentWeekIndex = _findCurrentWeekIndex(weeklyData);
         _isLoadingAttendance = false;
       });
 
-      debugPrint("✅ Generated complete month view: ${completeRecords.length} days total");
-      debugPrint("📊 Days with records: ${existingRecords.length}");
-      debugPrint("📊 Absent days: ${completeRecords.length - existingRecords.length}");
-
+      debugPrint("✅ Generated weekly view: ${weeklyData.length} weeks");
     } catch (e) {
       debugPrint("❌ Error fetching attendance records: $e");
       setState(() => _isLoadingAttendance = false);
-
       if (mounted) {
         CustomSnackBar.errorSnackBar("Error loading attendance records: $e");
       }
     }
   }
 
-  // ✅ NEW: Generate complete month view with all days
   Future<List<AttendanceRecord>> _generateCompleteMonthView(int year, int month, List<AttendanceRecord> existingRecords) async {
-    try {
-      // Create a map of existing records by date
-      Map<String, AttendanceRecord> existingRecordsMap = {};
-      for (var record in existingRecords) {
-        existingRecordsMap[record.date] = record;
+    Map<String, AttendanceRecord> existingRecordsMap = {};
+    for (var record in existingRecords) {
+      existingRecordsMap[record.date] = record;
+    }
+
+    List<AttendanceRecord> completeRecords = [];
+    DateTime startOfMonth = DateTime(year, month, 1);
+    DateTime endOfMonth = DateTime(year, month + 1, 0);
+    DateTime currentDay = startOfMonth;
+
+    while (currentDay.isBefore(endOfMonth) || currentDay.isAtSameMomentAs(endOfMonth)) {
+      String currentDateStr = DateFormat('yyyy-MM-dd').format(currentDay);
+
+      if (existingRecordsMap.containsKey(currentDateStr)) {
+        completeRecords.add(existingRecordsMap[currentDateStr]!);
+      } else {
+        completeRecords.add(AttendanceRecord(
+          date: currentDateStr,
+          checkIn: null,
+          checkOut: null,
+          checkInLocation: null,
+          checkOutLocation: null,
+          checkInLocationName: null,
+          checkOutLocationName: null,
+          workStatus: 'Absent',
+          totalHours: 0.0,
+          regularHours: 0.0,
+          overtimeHours: 0.0,
+          isWithinGeofence: false,
+          rawData: {
+            'hasRecord': false,
+            'dayType': currentDay.weekday == DateTime.sunday ? 'sunday' : 'working',
+            'isDayOff': currentDay.weekday == DateTime.sunday,
+            'shouldCountAsPresent': currentDay.weekday == DateTime.sunday,
+            'reason': currentDay.weekday == DateTime.sunday ? 'Sunday Holiday' : 'Absent',
+            'date': currentDateStr,
+          },
+        ));
       }
+      currentDay = currentDay.add(const Duration(days: 1));
+    }
 
-      // Generate ALL days of the month
-      List<AttendanceRecord> completeRecords = [];
-      DateTime startOfMonth = DateTime(year, month, 1);
-      DateTime endOfMonth = DateTime(year, month + 1, 0);
-      DateTime currentDay = startOfMonth;
+    completeRecords.sort((a, b) => a.date.compareTo(b.date));
+    return completeRecords;
+  }
 
-      while (currentDay.isBefore(endOfMonth) || currentDay.isAtSameMomentAs(endOfMonth)) {
-        String currentDateStr = DateFormat('yyyy-MM-dd').format(currentDay);
+  List<List<AttendanceRecord>> _generateWeeklyView(List<AttendanceRecord> records) {
+    if (records.isEmpty) return [];
 
-        if (existingRecordsMap.containsKey(currentDateStr)) {
-          // Day has attendance record
-          completeRecords.add(existingRecordsMap[currentDateStr]!);
+    List<List<AttendanceRecord>> weeks = [];
+    List<AttendanceRecord> currentWeek = [];
+
+    for (var record in records) {
+      DateTime date = DateFormat('yyyy-MM-dd').parse(record.date);
+
+      if (currentWeek.isEmpty) {
+        currentWeek.add(record);
+      } else {
+        DateTime lastDate = DateFormat('yyyy-MM-dd').parse(currentWeek.last.date);
+
+        if (date.weekday < lastDate.weekday ||
+            date.difference(lastDate).inDays > 1) {
+          weeks.add(List.from(currentWeek));
+          currentWeek = [record];
         } else {
-          // Day is absent - create empty attendance record
-          completeRecords.add(AttendanceRecord(
-            date: currentDateStr,
-            checkIn: null,
-            checkOut: null,
-            location: 'No Location',
-            workStatus: 'Absent',
-            totalHours: 0.0,
-            regularHours: 0.0,
-            overtimeHours: 0.0,
-            isWithinGeofence: false,
-            rawData: {'hasRecord': false},
-          ));
+          currentWeek.add(record);
         }
-
-        currentDay = currentDay.add(const Duration(days: 1));
-      }
-
-      // Sort by date (newest first)
-      completeRecords.sort((a, b) => b.date.compareTo(a.date));
-
-      return completeRecords;
-    } catch (e) {
-      debugPrint("❌ Error generating complete month view: $e");
-      return [];
-    }
-  }
-
-  // ✅ NEW: Force refresh with user feedback
-  Future<void> _forceRefreshAttendance() async {
-    try {
-      debugPrint("🔄 Force refreshing attendance data from Firestore...");
-
-      // Show loading state
-      if (mounted) {
-        CustomSnackBar.infoSnackBar("🔄 Syncing latest data from server...");
-      }
-
-      // Force refresh the data
-      await _fetchAttendanceRecords(forceRefresh: true);
-
-      if (mounted) {
-        CustomSnackBar.successSnackBar("✅ Data synced successfully!");
-      }
-    } catch (e) {
-      debugPrint("❌ Error during force refresh: $e");
-      if (mounted) {
-        CustomSnackBar.errorSnackBar("❌ Error syncing data: $e");
       }
     }
+
+    if (currentWeek.isNotEmpty) {
+      weeks.add(currentWeek);
+    }
+
+    return weeks;
   }
 
-  // ✅ NEW: Force refresh today's data specifically (for same-day cross-device sync)
-  Future<void> _forceRefreshToday() async {
-    try {
-      debugPrint("🔄 Force refreshing today's data from Firestore...");
+  int _findCurrentWeekIndex(List<List<AttendanceRecord>> weeks) {
+    DateTime now = DateTime.now();
+    String today = DateFormat('yyyy-MM-dd').format(now);
 
-      // Show loading feedback
-      if (mounted) {
-        CustomSnackBar.infoSnackBar("🔄 Getting today's latest data...");
-      }
-
-      // Force refresh today's data
-      await _attendanceRepository.forceRefreshTodayFromFirestore(widget.employeeId);
-
-      // Refresh the current view
-      await _fetchAttendanceRecords(forceRefresh: true);
-
-      if (mounted) {
-        CustomSnackBar.successSnackBar("✅ Today's data updated!");
-      }
-    } catch (e) {
-      debugPrint("❌ Error refreshing today's data: $e");
-      if (mounted) {
-        CustomSnackBar.errorSnackBar("❌ Error updating today's data: $e");
+    for (int i = 0; i < weeks.length; i++) {
+      for (var record in weeks[i]) {
+        if (record.date == today) {
+          return i;
+        }
       }
     }
+    return weeks.isNotEmpty ? weeks.length - 1 : 0;
   }
 
-  // ===== OVERTIME METHODS (keeping existing) =====
+  // ===== OVERTIME METHODS =====
   Future<void> _fetchOvertimeData() async {
     if (!_hasOvertimeAccess) return;
 
     setState(() => _isLoadingOvertime = true);
 
     try {
-      debugPrint("📊 === FETCHING ALL OVERTIME DATA ===");
-
       final futures = await Future.wait([
         _overtimeService.getOvertimeHistoryForEmployee(widget.employeeId),
         _overtimeService.getTodayOvertimeForEmployee(widget.employeeId),
         _overtimeService.getOvertimeStatistics(widget.employeeId),
       ]);
 
-      final List<OvertimeRequest> history = futures[0] as List<OvertimeRequest>;
-      final List<OvertimeRequest> todayRequests = futures[1] as List<OvertimeRequest>;
-      final Map<String, dynamic> statistics = futures[2] as Map<String, dynamic>;
-
       setState(() {
-        _overtimeHistory = history;
-        _filteredOvertimeHistory = history;
-        _todayOvertimeRequests = todayRequests;
-        _overtimeStatistics = statistics;
+        _overtimeHistory = futures[0] as List<OvertimeRequest>;
+        _filteredOvertimeHistory = futures[0] as List<OvertimeRequest>;
+        _todayOvertimeRequests = futures[1] as List<OvertimeRequest>;
+        _overtimeStatistics = futures[2] as Map<String, dynamic>;
         _isLoadingOvertime = false;
       });
-
-      debugPrint("✅ Successfully loaded overtime data:");
-      debugPrint("  - History: ${history.length} requests");
-      debugPrint("  - Today: ${todayRequests.length} requests");
-      debugPrint("  - Statistics: $statistics");
-
     } catch (e) {
       debugPrint("❌ Error fetching overtime data: $e");
       setState(() => _isLoadingOvertime = false);
-
       if (mounted) {
         CustomSnackBar.errorSnackBar("Error loading overtime data: $e");
       }
     }
   }
 
-  // ===== OVERTIME FILTER METHODS =====
   void _filterOvertimeHistory() {
     List<OvertimeRequest> filtered = _overtimeHistory;
 
@@ -368,83 +333,17 @@ class _MyAttendanceViewState extends State<MyAttendanceView> with TickerProvider
       backgroundColor: Colors.grey.shade50,
       appBar: AppBar(
         title: Text(
-          'My ${_hasOvertimeAccess ? 'Attendance & Overtime' : 'Attendance'}',
+          'My ${_hasOvertimeAccess ? 'Work Records' : 'Attendance'}',
           style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w600),
         ),
         backgroundColor: accentColor,
         foregroundColor: Colors.white,
         elevation: 0,
         actions: [
-          // ✅ IMPROVED: Enhanced sync options with better UX
-          PopupMenuButton<String>(
+          IconButton(
             icon: const Icon(Icons.sync_rounded, size: 22),
-            tooltip: 'Sync Options',
-            onSelected: (value) async {
-              switch (value) {
-                case 'refresh':
-                  await _fetchAttendanceRecords();
-                  if (_hasOvertimeAccess) {
-                    await _fetchOvertimeData();
-                  }
-                  break;
-                case 'force_refresh':
-                  await _forceRefreshAttendance();
-                  break;
-                case 'refresh_today':
-                  await _forceRefreshToday();
-                  break;
-              }
-            },
-            itemBuilder: (context) => [
-              const PopupMenuItem(
-                value: 'refresh',
-                child: Row(
-                  children: [
-                    Icon(Icons.refresh_rounded, size: 18, color: Colors.blue),
-                    SizedBox(width: 8),
-                    Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text('Refresh'),
-                        Text('Normal data refresh', style: TextStyle(fontSize: 11, color: Colors.grey)),
-                      ],
-                    ),
-                  ],
-                ),
-              ),
-              const PopupMenuItem(
-                value: 'force_refresh',
-                child: Row(
-                  children: [
-                    Icon(Icons.cloud_sync_rounded, size: 18, color: Colors.orange),
-                    SizedBox(width: 8),
-                    Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text('Force Sync'),
-                        Text('Sync from server', style: TextStyle(fontSize: 11, color: Colors.grey)),
-                      ],
-                    ),
-                  ],
-                ),
-              ),
-              const PopupMenuItem(
-                value: 'refresh_today',
-                child: Row(
-                  children: [
-                    Icon(Icons.today_rounded, size: 18, color: Colors.green),
-                    SizedBox(width: 8),
-                    Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text('Sync Today'),
-                        Text('Get today\'s latest data', style: TextStyle(fontSize: 11, color: Colors.grey)),
-                      ],
-                    ),
-                  ],
-                ),
-              ),
-            ],
+            tooltip: 'Sync Data',
+            onPressed: () => _showSyncOptions(context),
           ),
         ],
         bottom: _hasOvertimeAccess
@@ -490,769 +389,290 @@ class _MyAttendanceViewState extends State<MyAttendanceView> with TickerProvider
     );
   }
 
+  void _showSyncOptions(BuildContext context) {
+    showModalBottomSheet(
+      context: context,
+      builder: (context) => Container(
+        padding: const EdgeInsets.all(20),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Text(
+              'Sync Options',
+              style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+            ),
+            const SizedBox(height: 20),
+            ListTile(
+              leading: const Icon(Icons.refresh_rounded, color: Colors.blue),
+              title: const Text('Refresh'),
+              subtitle: const Text('Normal data refresh'),
+              onTap: () {
+                Navigator.pop(context);
+                _fetchAttendanceRecords();
+                if (_hasOvertimeAccess) _fetchOvertimeData();
+              },
+            ),
+            ListTile(
+              leading: const Icon(Icons.cloud_sync_rounded, color: Colors.orange),
+              title: const Text('Force Sync'),
+              subtitle: const Text('Sync from server'),
+              onTap: () {
+                Navigator.pop(context);
+                _fetchAttendanceRecords(forceRefresh: true);
+              },
+            ),
+            ListTile(
+              leading: const Icon(Icons.location_on_rounded, color: Colors.purple),
+              title: const Text('Fix Locations'),
+              subtitle: const Text('Resolve location names'),
+              onTap: () {
+                Navigator.pop(context);
+                _resolveLocationNames();
+              },
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Future<void> _resolveLocationNames() async {
+    try {
+      CustomSnackBar.infoSnackBar("Resolving location names...");
+      await _attendanceRepository.bulkResolveLocationNames(widget.employeeId);
+      await _fetchAttendanceRecords(forceRefresh: true);
+      CustomSnackBar.successSnackBar("Location names resolved!");
+    } catch (e) {
+      CustomSnackBar.errorSnackBar("Error resolving locations: $e");
+    }
+  }
+
   // ===== ATTENDANCE TAB =====
   Widget _buildAttendanceTab() {
     return Column(
       children: [
-        // Month selector
         _buildMonthSelector(),
-
-        // ✅ NEW: Enhanced sync status indicator
-        if (_isLoadingAttendance)
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-            decoration: BoxDecoration(
-              color: Colors.blue.shade50,
-              border: Border(bottom: BorderSide(color: Colors.blue.shade100)),
-            ),
-            child: Row(
-              children: [
-                SizedBox(
-                  width: 16,
-                  height: 16,
-                  child: CircularProgressIndicator(strokeWidth: 2, color: Colors.blue.shade600),
-                ),
-                const SizedBox(width: 12),
-                Text(
-                  'Syncing attendance data from server...',
-                  style: TextStyle(
-                    fontSize: 12,
-                    color: Colors.blue.shade700,
-                    fontWeight: FontWeight.w500,
-                  ),
-                ),
-                const Spacer(),
-                Icon(Icons.cloud_sync_rounded, size: 16, color: Colors.blue.shade600),
-              ],
-            ),
-          ),
-
-        // Summary cards
-        if (!_isLoadingAttendance && _attendanceRecords.isNotEmpty)
-          _buildSummaryCards(),
-
-        // Attendance table
+        if (_isLoadingAttendance) _buildLoadingIndicator(),
         Expanded(
           child: _isLoadingAttendance
-              ? const Center(
-            child: CircularProgressIndicator(color: accentColor),
-          )
-              : _attendanceRecords.isEmpty
+              ? const Center(child: CircularProgressIndicator(color: accentColor))
+              : _weeklyRecords.isEmpty
               ? _buildEmptyState()
-              : _buildAttendanceTable(),
+              : _buildWeeklyView(),
         ),
       ],
     );
   }
 
-  // ===== KEEPING ALL EXISTING UI METHODS =====
-  Widget _buildSummaryCards() {
-    int totalDaysInMonth = _attendanceRecords.length;
-    double totalWorkHours = 0;
-    double totalOvertimeHours = 0;
-    int absentDays = 0;
-    int presentDays = 0;
-
-    for (var record in _attendanceRecords) {
-      bool hasRecord = record.rawData['hasRecord'] ?? true;
-
-      if (!hasRecord || (!record.hasCheckIn && !record.hasCheckOut)) {
-        absentDays++;
-      } else {
-        presentDays++;
-      }
-
-      totalWorkHours += record.totalHours;
-      totalOvertimeHours += record.overtimeHours;
-    }
-
+  Widget _buildLoadingIndicator() {
     return Container(
-      padding: const EdgeInsets.all(16),
-      decoration: const BoxDecoration(
-        color: Colors.white,
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+      decoration: BoxDecoration(
+        color: Colors.blue.shade50,
+        border: Border(bottom: BorderSide(color: Colors.blue.shade100)),
       ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
+      child: Row(
         children: [
+          SizedBox(
+            width: 16,
+            height: 16,
+            child: CircularProgressIndicator(strokeWidth: 2, color: Colors.blue.shade600),
+          ),
+          const SizedBox(width: 12),
           Text(
-            'Summary for ${DateFormat('MMMM yyyy').format(DateFormat('yyyy-MM').parse(_selectedMonth))}',
-            style: const TextStyle(
-              fontSize: 18,
-              fontWeight: FontWeight.bold,
-              color: accentColor,
-            ),
+            'Syncing attendance data...',
+            style: TextStyle(fontSize: 12, color: Colors.blue.shade700, fontWeight: FontWeight.w500),
           ),
-          const SizedBox(height: 16),
-          Row(
-            children: [
-              Expanded(
-                child: _buildSummaryCard(
-                  'Total Days',
-                  totalDaysInMonth.toString(),
-                  Icons.calendar_today,
-                  Colors.blue,
-                ),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: _buildSummaryCard(
-                  'Present Days',
-                  presentDays.toString(),
-                  Icons.check_circle,
-                  Colors.green,
-                ),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: _buildSummaryCard(
-                  'Absent Days',
-                  absentDays.toString(),
-                  Icons.cancel,
-                  Colors.red,
-                ),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: _buildSummaryCard(
-                  'Total Hours',
-                  '${totalWorkHours.toStringAsFixed(1)}h',
-                  Icons.access_time,
-                  Colors.indigo,
-                ),
-              ),
-            ],
-          ),
+          const Spacer(),
+          Icon(Icons.location_on_rounded, size: 16, color: Colors.blue.shade600),
         ],
       ),
     );
   }
 
-  Widget _buildAttendanceTable() {
-    return Container(
-      decoration: const BoxDecoration(
-        color: Colors.white,
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Container(
-            padding: const EdgeInsets.all(16),
-            child: Row(
-              children: [
-                const Text(
-                  'Attendance Records',
-                  style: TextStyle(
-                    fontSize: 18,
-                    fontWeight: FontWeight.bold,
-                    color: accentColor,
-                  ),
-                ),
-                const Spacer(),
-                // ✅ NEW: Quick sync button for table
-                TextButton.icon(
-                  onPressed: () => _forceRefreshToday(),
-                  icon: const Icon(Icons.sync_rounded, size: 16),
-                  label: const Text('Sync Today', style: TextStyle(fontSize: 12)),
-                  style: TextButton.styleFrom(
-                    foregroundColor: accentColor,
-                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                  ),
-                ),
-              ],
-            ),
-          ),
-          Expanded(
-            child: SingleChildScrollView(
-              controller: _scrollController,
-              child: SingleChildScrollView(
-                scrollDirection: Axis.horizontal,
-                child: DataTable(
-                  columnSpacing: 16,
-                  headingRowColor: MaterialStateProperty.all(Colors.grey.shade100),
-                  columns: [
-                    const DataColumn(
-                      label: Text(
-                        'Date',
-                        style: TextStyle(fontWeight: FontWeight.bold),
-                      ),
-                    ),
-                    const DataColumn(
-                      label: Text(
-                        'Check In',
-                        style: TextStyle(fontWeight: FontWeight.bold),
-                      ),
-                    ),
-                    const DataColumn(
-                      label: Text(
-                        'Check Out',
-                        style: TextStyle(fontWeight: FontWeight.bold),
-                      ),
-                    ),
-                    const DataColumn(
-                      label: Text(
-                        'Total Hours',
-                        style: TextStyle(fontWeight: FontWeight.bold),
-                      ),
-                    ),
-                    if (_hasOvertimeAccess)
-                      const DataColumn(
-                        label: Text(
-                          'Overtime',
-                          style: TextStyle(fontWeight: FontWeight.bold),
-                        ),
-                      ),
-                    const DataColumn(
-                      label: Text(
-                        'Location',
-                        style: TextStyle(fontWeight: FontWeight.bold),
-                      ),
-                    ),
-                    const DataColumn(
-                      label: Text(
-                        'Status',
-                        style: TextStyle(fontWeight: FontWeight.bold),
-                      ),
-                    ),
-                    const DataColumn(
-                      label: Text(
-                        'Attendance',
-                        style: TextStyle(fontWeight: FontWeight.bold),
-                      ),
-                    ),
-                  ],
-                  rows: _attendanceRecords.map((record) => _buildDataRow(record)).toList(),
-                ),
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  DataRow _buildDataRow(AttendanceRecord record) {
-    bool hasRecord = record.rawData['hasRecord'] ?? true;
-
-    // Determine attendance status
-    String attendanceStatus = 'Present';
-    Color attendanceColor = Colors.green;
-    IconData attendanceIcon = Icons.check_circle;
-
-    if (!hasRecord || (!record.hasCheckIn && !record.hasCheckOut)) {
-      attendanceStatus = 'Absent';
-      attendanceColor = Colors.red;
-      attendanceIcon = Icons.cancel;
-    } else if (!record.hasCheckIn || !record.hasCheckOut) {
-      attendanceStatus = 'Incomplete';
-      attendanceColor = Colors.orange;
-      attendanceIcon = Icons.warning;
-    }
-
-    // Format date
-    String formattedDate = '';
-    String dayOfWeek = '';
-    try {
-      DateTime dateTime = DateFormat('yyyy-MM-dd').parse(record.date);
-      formattedDate = DateFormat('MMM dd').format(dateTime);
-      dayOfWeek = DateFormat('EEE').format(dateTime);
-    } catch (e) {
-      formattedDate = record.date;
-    }
-
-    return DataRow(
-      color: attendanceStatus == 'Absent'
-          ? MaterialStateProperty.all(Colors.red.withOpacity(0.05))
-          : attendanceStatus == 'Incomplete'
-          ? MaterialStateProperty.all(Colors.orange.withOpacity(0.05))
-          : null,
-      cells: [
-        DataCell(
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Text(
-                formattedDate,
-                style: TextStyle(
-                  fontWeight: FontWeight.w600,
-                  color: attendanceStatus == 'Absent' ? Colors.red.shade700 : Colors.black,
-                ),
-              ),
-              if (dayOfWeek.isNotEmpty)
-                Text(
-                  dayOfWeek,
-                  style: TextStyle(
-                    fontSize: 12,
-                    color: attendanceStatus == 'Absent'
-                        ? Colors.red.shade500
-                        : Colors.grey.shade600,
-                  ),
-                ),
-            ],
-          ),
-        ),
-        DataCell(
-          Text(
-            record.formattedCheckIn,
-            style: TextStyle(
-              color: record.hasCheckIn ? Colors.green.shade700 : Colors.grey,
-              fontWeight: record.hasCheckIn ? FontWeight.w600 : FontWeight.normal,
-            ),
-          ),
-        ),
-        DataCell(
-          Text(
-            record.formattedCheckOut,
-            style: TextStyle(
-              color: record.hasCheckOut ? Colors.red.shade700 : Colors.grey,
-              fontWeight: record.hasCheckOut ? FontWeight.w600 : FontWeight.normal,
-            ),
-          ),
-        ),
-        DataCell(
-          Text(
-            record.formattedTotalHours,
-            style: TextStyle(
-              color: record.totalHours > 0 ? Colors.blue.shade700 : Colors.grey,
-              fontWeight: FontWeight.w600,
-            ),
-          ),
-        ),
-        if (_hasOvertimeAccess)
-          DataCell(
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-              decoration: BoxDecoration(
-                color: record.hasOvertime ? Colors.orange.withOpacity(0.2) : Colors.transparent,
-                borderRadius: BorderRadius.circular(8),
-              ),
-              child: Text(
-                record.formattedOvertimeHours,
-                style: TextStyle(
-                  color: record.hasOvertime ? Colors.orange.shade800 : Colors.grey,
-                  fontWeight: record.hasOvertime ? FontWeight.bold : FontWeight.normal,
-                  fontSize: 12,
-                ),
-              ),
-            ),
-          ),
-        DataCell(
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Text(
-                record.location,
-                style: TextStyle(
-                  fontSize: 12,
-                  color: attendanceStatus == 'Absent' ? Colors.grey : Colors.black,
-                ),
-                overflow: TextOverflow.ellipsis,
-              ),
-              if (attendanceStatus != 'Absent' && hasRecord)
-                Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Icon(
-                      record.isWithinGeofence ? Icons.location_on : Icons.location_off,
-                      size: 12,
-                      color: record.isWithinGeofence ? Colors.green : Colors.red,
-                    ),
-                    const SizedBox(width: 4),
-                    Text(
-                      record.isWithinGeofence ? 'Inside' : 'Outside',
-                      style: TextStyle(
-                        fontSize: 10,
-                        color: record.isWithinGeofence ? Colors.green : Colors.red,
-                      ),
-                    ),
-                  ],
-                ),
-            ],
-          ),
-        ),
-        DataCell(
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-            decoration: BoxDecoration(
-              color: _getStatusColor(record.workStatus).withOpacity(0.2),
-              borderRadius: BorderRadius.circular(8),
-            ),
-            child: Text(
-              record.workStatus,
-              style: TextStyle(
-                color: _getStatusColor(record.workStatus),
-                fontSize: 12,
-                fontWeight: FontWeight.bold,
-              ),
-            ),
-          ),
-        ),
-        DataCell(
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-            decoration: BoxDecoration(
-              color: attendanceColor.withOpacity(0.2),
-              borderRadius: BorderRadius.circular(8),
-            ),
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Icon(
-                  attendanceIcon,
-                  size: 14,
-                  color: attendanceColor,
-                ),
-                const SizedBox(width: 4),
-                Text(
-                  attendanceStatus,
-                  style: TextStyle(
-                    color: attendanceColor,
-                    fontSize: 12,
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ),
-      ],
-    );
-  }
-
-  // ===== KEEPING ALL OTHER EXISTING METHODS (overtime tab, helper methods, etc.) =====
-  Widget _buildOvertimeTab() {
+  Widget _buildWeeklyView() {
     return Column(
       children: [
-        if (_todayOvertimeRequests.isNotEmpty) _buildTodayOvertimeCompact(),
-        if (!_isLoadingOvertime && _overtimeHistory.isNotEmpty)
-          _buildOvertimeSummary(),
+        // Week navigation header
+        Container(
+          padding: const EdgeInsets.all(16),
+          decoration: const BoxDecoration(
+            color: Colors.white,
+            border: Border(bottom: BorderSide(color: Colors.grey, width: 0.2)),
+          ),
+          child: Row(
+            children: [
+              IconButton(
+                onPressed: _currentWeekIndex > 0 ? () => _previousWeek() : null,
+                icon: const Icon(Icons.chevron_left),
+                color: _currentWeekIndex > 0 ? accentColor : Colors.grey,
+              ),
+              Expanded(
+                child: Column(
+                  children: [
+                    Text(
+                      'Week ${_currentWeekIndex + 1} of ${_weeklyRecords.length}',
+                      style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                    ),
+                    if (_weeklyRecords.isNotEmpty && _currentWeekIndex < _weeklyRecords.length)
+                      Text(
+                        _getWeekDateRange(_weeklyRecords[_currentWeekIndex]),
+                        style: TextStyle(fontSize: 12, color: Colors.grey.shade600),
+                      ),
+                  ],
+                ),
+              ),
+              IconButton(
+                onPressed: _currentWeekIndex < _weeklyRecords.length - 1 ? () => _nextWeek() : null,
+                icon: const Icon(Icons.chevron_right),
+                color: _currentWeekIndex < _weeklyRecords.length - 1 ? accentColor : Colors.grey,
+              ),
+            ],
+          ),
+        ),
+
+        // Week cards
         Expanded(
-          child: _isLoadingOvertime
-              ? const Center(
-            child: CircularProgressIndicator(color: accentColor),
-          )
-              : _overtimeHistory.isEmpty
-              ? _buildEmptyOvertimeState()
-              : _buildOvertimeHistoryList(),
+          child: PageView.builder(
+            controller: _weekPageController,
+            onPageChanged: (index) => setState(() => _currentWeekIndex = index),
+            itemCount: _weeklyRecords.length,
+            itemBuilder: (context, index) => _buildWeekCard(_weeklyRecords[index]),
+          ),
         ),
       ],
     );
   }
 
-  // [All other existing overtime methods remain the same - _buildTodayOvertimeCompact, _buildOvertimeSummary, etc.]
+  void _previousWeek() {
+    if (_currentWeekIndex > 0) {
+      _weekPageController.previousPage(
+        duration: const Duration(milliseconds: 300),
+        curve: Curves.easeInOut,
+      );
+    }
+  }
 
-  Widget _buildTodayOvertimeCompact() {
+  void _nextWeek() {
+    if (_currentWeekIndex < _weeklyRecords.length - 1) {
+      _weekPageController.nextPage(
+        duration: const Duration(milliseconds: 300),
+        curve: Curves.easeInOut,
+      );
+    }
+  }
+
+  String _getWeekDateRange(List<AttendanceRecord> weekRecords) {
+    if (weekRecords.isEmpty) return '';
+
+    DateTime startDate = DateFormat('yyyy-MM-dd').parse(weekRecords.first.date);
+    DateTime endDate = DateFormat('yyyy-MM-dd').parse(weekRecords.last.date);
+
+    return '${DateFormat('MMM dd').format(startDate)} - ${DateFormat('MMM dd').format(endDate)}';
+  }
+
+  Widget _buildWeekCard(List<AttendanceRecord> weekRecords) {
+    return ListView.builder(
+      padding: const EdgeInsets.all(16),
+      itemCount: weekRecords.length,
+      itemBuilder: (context, index) => _buildDayCard(weekRecords[index]),
+    );
+  }
+
+  Widget _buildDayCard(AttendanceRecord record) {
+    DateTime date = DateFormat('yyyy-MM-dd').parse(record.date);
+    String dayName = DateFormat('EEEE').format(date);
+    String dayDate = DateFormat('MMM dd').format(date);
+    bool isToday = DateFormat('yyyy-MM-dd').format(DateTime.now()) == record.date;
+
+    String dayType = record.rawData['dayType'] ?? 'working';
+    bool hasRecord = record.rawData['hasRecord'] ?? true;
+
+    Color cardColor = Colors.white;
+    Color borderColor = Colors.grey.shade200;
+    IconData statusIcon = Icons.check_circle;
+    Color statusColor = Colors.green;
+    String statusText = 'Present';
+
+    if (isToday) {
+      borderColor = accentColor;
+    }
+
+    if (dayType == 'sunday') {
+      cardColor = record.hasCheckIn ? Colors.orange.shade50 : Colors.green.shade50;
+      statusIcon = record.hasCheckIn ? Icons.work_history : Icons.weekend;
+      statusColor = record.hasCheckIn ? Colors.orange : Colors.green;
+      statusText = record.hasCheckIn ? 'Sunday Work' : 'Holiday';
+    } else if (!hasRecord || (!record.hasCheckIn && !record.hasCheckOut)) {
+      cardColor = Colors.red.shade50;
+      statusIcon = Icons.cancel;
+      statusColor = Colors.red;
+      statusText = 'Absent';
+    } else if (!record.hasCheckIn || !record.hasCheckOut) {
+      cardColor = Colors.orange.shade50;
+      statusIcon = Icons.warning;
+      statusColor = Colors.orange;
+      statusText = 'Incomplete';
+    }
+
     return Container(
-      margin: const EdgeInsets.all(12),
+      margin: const EdgeInsets.only(bottom: 12),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: cardColor,
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: Colors.blue.shade100),
+        border: Border.all(color: borderColor, width: isToday ? 2 : 1),
         boxShadow: [
           BoxShadow(
-            color: Colors.blue.withOpacity(0.08),
-            blurRadius: 6,
+            color: Colors.black.withOpacity(0.05),
+            blurRadius: 4,
             offset: const Offset(0, 2),
           ),
         ],
       ),
-      child: Column(
-        children: [
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-            decoration: BoxDecoration(
-              color: Colors.blue.shade50,
-              borderRadius: const BorderRadius.only(
-                topLeft: Radius.circular(12),
-                topRight: Radius.circular(12),
-              ),
-            ),
-            child: Row(
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // Header row
+            Row(
               children: [
-                Container(
-                  padding: const EdgeInsets.all(6),
-                  decoration: BoxDecoration(
-                    color: Colors.blue.shade100,
-                    borderRadius: BorderRadius.circular(8),
-                  ),
-                  child: Icon(Icons.today_rounded, color: Colors.blue.shade600, size: 18),
-                ),
-                const SizedBox(width: 12),
-                const Text(
-                  "Today's Overtime",
-                  style: TextStyle(
-                    fontSize: 16,
-                    fontWeight: FontWeight.w600,
-                    color: Colors.black87,
-                  ),
-                ),
-                const Spacer(),
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                  decoration: BoxDecoration(
-                    color: Colors.blue.shade600,
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                  child: Text(
-                    '${_todayOvertimeRequests.length}',
-                    style: const TextStyle(
-                      color: Colors.white,
-                      fontSize: 12,
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          ),
-          Padding(
-            padding: const EdgeInsets.all(12),
-            child: Column(
-              children: _todayOvertimeRequests.map((request) => Container(
-                margin: const EdgeInsets.only(bottom: 8),
-                padding: const EdgeInsets.all(12),
-                decoration: BoxDecoration(
-                  color: Colors.grey.shade50,
-                  borderRadius: BorderRadius.circular(8),
-                  border: Border.all(color: Colors.grey.shade200),
-                ),
-                child: Row(
-                  children: [
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            request.projectName,
-                            style: const TextStyle(
-                              fontSize: 14,
-                              fontWeight: FontWeight.w600,
-                              color: Colors.black87,
-                            ),
-                          ),
-                          const SizedBox(height: 2),
-                          Text(
-                            "Code: ${request.projectCode}",
-                            style: TextStyle(
-                              fontSize: 12,
-                              color: Colors.grey.shade600,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                    Column(
-                      crossAxisAlignment: CrossAxisAlignment.end,
-                      children: [
-                        Text(
-                          "${DateFormat('h:mm a').format(request.startTime)} - ${DateFormat('h:mm a').format(request.endTime)}",
-                          style: const TextStyle(
-                            fontSize: 12,
-                            fontWeight: FontWeight.w500,
-                            color: Colors.black87,
-                          ),
-                        ),
-                        const SizedBox(height: 2),
-                        Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                          decoration: BoxDecoration(
-                            color: Colors.blue.shade100,
-                            borderRadius: BorderRadius.circular(4),
-                          ),
-                          child: Text(
-                            "${request.totalDurationHours.toStringAsFixed(1)}h",
-                            style: TextStyle(
-                              fontSize: 11,
-                              fontWeight: FontWeight.bold,
-                              color: Colors.blue.shade700,
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ],
-                ),
-              )).toList(),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildOvertimeSummary() {
-    int totalRequests = _overtimeStatistics['totalRequests'] ?? 0;
-    int approvedRequests = _overtimeStatistics['approvedRequests'] ?? 0;
-    int pendingRequests = _overtimeStatistics['pendingRequests'] ?? 0;
-    double totalOvertimeHours = _overtimeStatistics['totalApprovedHours'] ?? 0.0;
-
-    return Container(
-      margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: Colors.grey.shade200),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          const Text(
-            'Overtime Summary',
-            style: TextStyle(
-              fontSize: 16,
-              fontWeight: FontWeight.w600,
-              color: Colors.black87,
-            ),
-          ),
-          const SizedBox(height: 12),
-          Row(
-            children: [
-              Expanded(
-                child: _buildCompactSummaryCard(
-                  'Total',
-                  totalRequests.toString(),
-                  Icons.assignment_rounded,
-                  Colors.blue,
-                ),
-              ),
-              const SizedBox(width: 8),
-              Expanded(
-                child: _buildCompactSummaryCard(
-                  'Approved',
-                  approvedRequests.toString(),
-                  Icons.check_circle_rounded,
-                  Colors.green,
-                ),
-              ),
-              const SizedBox(width: 8),
-              Expanded(
-                child: _buildCompactSummaryCard(
-                  'Pending',
-                  pendingRequests.toString(),
-                  Icons.pending_rounded,
-                  Colors.orange,
-                ),
-              ),
-              const SizedBox(width: 8),
-              Expanded(
-                child: _buildCompactSummaryCard(
-                  'Hours',
-                  '${totalOvertimeHours.toStringAsFixed(1)}h',
-                  Icons.timer_rounded,
-                  Colors.purple,
-                ),
-              ),
-            ],
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildCompactSummaryCard(String title, String value, IconData icon, Color color) {
-    return Container(
-      padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        color: color.withOpacity(0.08),
-        borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: color.withOpacity(0.2)),
-      ),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(icon, color: color, size: 20),
-          const SizedBox(height: 4),
-          Text(
-            value,
-            style: TextStyle(
-              fontSize: 16,
-              fontWeight: FontWeight.bold,
-              color: color,
-            ),
-          ),
-          Text(
-            title,
-            style: TextStyle(
-              fontSize: 10,
-              color: Colors.grey.shade600,
-              fontWeight: FontWeight.w500,
-            ),
-            textAlign: TextAlign.center,
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildOvertimeHistoryList() {
-    return Column(
-      children: [
-        _buildOvertimeSearchAndFilter(),
-        Expanded(
-          child: _filteredOvertimeHistory.isEmpty
-              ? _buildNoResultsState()
-              : ListView.builder(
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-            itemCount: _filteredOvertimeHistory.length,
-            itemBuilder: (context, index) {
-              final request = _filteredOvertimeHistory[index];
-              return _buildCompactOvertimeCard(request);
-            },
-          ),
-        ),
-      ],
-    );
-  }
-
-  Widget _buildCompactOvertimeCard(OvertimeRequest request) {
-    Color statusColor = _getOvertimeStatusColor(request.status);
-    IconData statusIcon = _getOvertimeStatusIcon(request.status);
-
-    return Container(
-      margin: const EdgeInsets.only(bottom: 8),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(10),
-        border: Border.all(color: statusColor.withOpacity(0.2)),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.04),
-            blurRadius: 3,
-            offset: const Offset(0, 1),
-          ),
-        ],
-      ),
-      child: Column(
-        children: [
-          Container(
-            padding: const EdgeInsets.all(12),
-            decoration: BoxDecoration(
-              color: statusColor.withOpacity(0.06),
-              borderRadius: const BorderRadius.only(
-                topLeft: Radius.circular(10),
-                topRight: Radius.circular(10),
-              ),
-            ),
-            child: Row(
-              children: [
-                Icon(statusIcon, color: statusColor, size: 18),
-                const SizedBox(width: 8),
                 Expanded(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text(
-                        request.projectName,
-                        style: const TextStyle(
-                          fontSize: 14,
-                          fontWeight: FontWeight.w600,
-                          color: Colors.black87,
-                        ),
+                      Row(
+                        children: [
+                          Text(
+                            dayName,
+                            style: TextStyle(
+                              fontSize: 16,
+                              fontWeight: FontWeight.bold,
+                              color: isToday ? accentColor : Colors.black87,
+                            ),
+                          ),
+                          if (isToday) ...[
+                            const SizedBox(width: 8),
+                            Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                              decoration: BoxDecoration(
+                                color: accentColor,
+                                borderRadius: BorderRadius.circular(8),
+                              ),
+                              child: const Text(
+                                'TODAY',
+                                style: TextStyle(
+                                  color: Colors.white,
+                                  fontSize: 10,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ],
                       ),
                       Text(
-                        request.projectCode,
+                        dayDate,
                         style: TextStyle(
                           fontSize: 12,
                           color: Colors.grey.shade600,
@@ -1262,107 +682,193 @@ class _MyAttendanceViewState extends State<MyAttendanceView> with TickerProvider
                   ),
                 ),
                 Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
                   decoration: BoxDecoration(
-                    color: statusColor,
-                    borderRadius: BorderRadius.circular(12),
+                    color: statusColor.withOpacity(0.2),
+                    borderRadius: BorderRadius.circular(20),
                   ),
-                  child: Text(
-                    request.status.displayName.toUpperCase(),
-                    style: const TextStyle(
-                      color: Colors.white,
-                      fontSize: 10,
-                      fontWeight: FontWeight.bold,
-                    ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(statusIcon, size: 16, color: statusColor),
+                      const SizedBox(width: 4),
+                      Text(
+                        statusText,
+                        style: TextStyle(
+                          color: statusColor,
+                          fontSize: 12,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                    ],
                   ),
                 ),
               ],
             ),
-          ),
-          Padding(
-            padding: const EdgeInsets.all(12),
-            child: Column(
-              children: [
-                Row(
-                  children: [
-                    Icon(Icons.schedule_rounded, size: 14, color: Colors.grey.shade600),
-                    const SizedBox(width: 4),
-                    Expanded(
-                      child: Text(
-                        "${DateFormat('MMM dd').format(request.startTime)} • ${DateFormat('h:mm a').format(request.startTime)} - ${DateFormat('h:mm a').format(request.endTime)}",
-                        style: TextStyle(
-                          fontSize: 12,
-                          color: Colors.grey.shade700,
-                        ),
-                      ),
+
+            const SizedBox(height: 12),
+
+            // Time and location info
+            if (record.hasCheckIn || record.hasCheckOut) ...[
+              Row(
+                children: [
+                  // Check-in
+                  Expanded(
+                    child: _buildTimeCard(
+                      'Check In',
+                      record.formattedCheckIn,
+                      record.checkInLocationName ?? record.checkInLocation,
+                      Icons.login,
+                      Colors.green,
+                      record.hasCheckIn,
                     ),
-                    Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                      decoration: BoxDecoration(
-                        color: Colors.blue.shade50,
-                        borderRadius: BorderRadius.circular(4),
-                      ),
-                      child: Text(
-                        "${request.totalDurationHours.toStringAsFixed(1)}h",
-                        style: TextStyle(
-                          fontSize: 11,
-                          fontWeight: FontWeight.bold,
-                          color: Colors.blue.shade700,
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 8),
-                Row(
-                  children: [
-                    Icon(Icons.person_rounded, size: 14, color: Colors.grey.shade600),
-                    const SizedBox(width: 4),
-                    Expanded(
-                      child: Text(
-                        "By: ${request.requesterName}",
-                        style: TextStyle(
-                          fontSize: 12,
-                          color: Colors.grey.shade700,
-                        ),
-                      ),
-                    ),
-                    Text(
-                      "${request.totalEmployeeCount} ${request.totalEmployeeCount == 1 ? 'person' : 'people'}",
-                      style: TextStyle(
-                        fontSize: 11,
-                        color: Colors.grey.shade600,
-                      ),
-                    ),
-                  ],
-                ),
-                if (request.responseMessage != null && request.responseMessage!.isNotEmpty) ...[
-                  const SizedBox(height: 8),
-                  Container(
-                    padding: const EdgeInsets.all(8),
-                    decoration: BoxDecoration(
-                      color: statusColor.withOpacity(0.08),
-                      borderRadius: BorderRadius.circular(6),
-                    ),
-                    child: Row(
-                      children: [
-                        Icon(Icons.message_rounded, size: 12, color: statusColor),
-                        const SizedBox(width: 6),
-                        Expanded(
-                          child: Text(
-                            request.responseMessage!,
-                            style: TextStyle(
-                              fontSize: 11,
-                              color: statusColor,
-                              fontWeight: FontWeight.w500,
-                            ),
-                          ),
-                        ),
-                      ],
+                  ),
+                  const SizedBox(width: 12),
+                  // Check-out
+                  Expanded(
+                    child: _buildTimeCard(
+                      'Check Out',
+                      record.formattedCheckOut,
+                      record.checkOutLocationName ?? record.checkOutLocation,
+                      Icons.logout,
+                      Colors.red,
+                      record.hasCheckOut,
                     ),
                   ),
                 ],
-              ],
+              ),
+
+              const SizedBox(height: 12),
+
+              // Summary row
+              Row(
+                children: [
+                  _buildSummaryChip(
+                    'Total Hours',
+                    record.formattedTotalHours,
+                    Icons.schedule,
+                    Colors.blue,
+                  ),
+                  if (_hasOvertimeAccess && record.hasOvertime) ...[
+                    const SizedBox(width: 8),
+                    _buildSummaryChip(
+                      'Overtime',
+                      record.formattedOvertimeHours,
+                      Icons.access_time_filled,
+                      Colors.orange,
+                    ),
+                  ],
+                ],
+              ),
+            ] else ...[
+              // No attendance data
+              Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: Colors.grey.shade100,
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Row(
+                  children: [
+                    Icon(Icons.info_outline, color: Colors.grey.shade600, size: 20),
+                    const SizedBox(width: 8),
+                    Text(
+                      dayType == 'sunday' ? 'Sunday Holiday' : 'No attendance recorded',
+                      style: TextStyle(
+                        color: Colors.grey.shade600,
+                        fontStyle: FontStyle.italic,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildTimeCard(String label, String time, String? location, IconData icon, Color color, bool hasData) {
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: hasData ? color.withOpacity(0.1) : Colors.grey.shade100,
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(
+          color: hasData ? color.withOpacity(0.3) : Colors.grey.shade300,
+        ),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(icon, size: 16, color: hasData ? color : Colors.grey),
+              const SizedBox(width: 4),
+              Text(
+                label,
+                style: TextStyle(
+                  fontSize: 11,
+                  fontWeight: FontWeight.w600,
+                  color: hasData ? color : Colors.grey,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 4),
+          Text(
+            time,
+            style: TextStyle(
+              fontSize: 14,
+              fontWeight: FontWeight.bold,
+              color: hasData ? Colors.black87 : Colors.grey,
+            ),
+          ),
+          if (location != null && location.isNotEmpty) ...[
+            const SizedBox(height: 2),
+            Text(
+              _truncateLocationName(location),
+              style: TextStyle(
+                fontSize: 10,
+                color: Colors.grey.shade600,
+              ),
+              overflow: TextOverflow.ellipsis,
+            ),
+          ] else if (hasData) ...[
+            const SizedBox(height: 2),
+            Text(
+              'No location',
+              style: TextStyle(
+                fontSize: 10,
+                color: Colors.grey.shade500,
+                fontStyle: FontStyle.italic,
+              ),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+
+  Widget _buildSummaryChip(String label, String value, IconData icon, Color color) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+      decoration: BoxDecoration(
+        color: color.withOpacity(0.1),
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, size: 12, color: color),
+          const SizedBox(width: 4),
+          Text(
+            value,
+            style: TextStyle(
+              fontSize: 11,
+              fontWeight: FontWeight.bold,
+              color: color,
             ),
           ),
         ],
@@ -1370,9 +876,246 @@ class _MyAttendanceViewState extends State<MyAttendanceView> with TickerProvider
     );
   }
 
+  String _truncateLocationName(String name) {
+    if (name.length <= 20) return name;
+    if (name.contains('-') && name.length > 30) {
+      return 'Location ${name.substring(0, 8)}...';
+    }
+    return '${name.substring(0, 17)}...';
+  }
+
+  // ===== OVERTIME TAB =====
+  Widget _buildOvertimeTab() {
+    return Column(
+      children: [
+        // Today's overtime section
+        _buildTodayOvertimeSection(),
+
+        // Search and filter
+        _buildOvertimeSearchAndFilter(),
+
+        // Overtime history
+        Expanded(
+          child: _isLoadingOvertime
+              ? const Center(child: CircularProgressIndicator(color: accentColor))
+              : _buildOvertimeList(),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildTodayOvertimeSection() {
+    return Container(
+      margin: const EdgeInsets.all(16),
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(12),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.05),
+            blurRadius: 4,
+            offset: const Offset(0, 2),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(Icons.today_rounded, color: accentColor, size: 20),
+              const SizedBox(width: 8),
+              const Text(
+                'Today\'s Overtime',
+                style: TextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.bold,
+                  color: accentColor,
+                ),
+              ),
+              const Spacer(),
+              IconButton(
+                onPressed: () => _fetchOvertimeData(),
+                icon: const Icon(Icons.refresh_rounded, size: 18),
+                color: accentColor,
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+
+          if (_todayOvertimeRequests.isEmpty) ...[
+            Container(
+              padding: const EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                color: Colors.grey.shade50,
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(color: Colors.grey.shade200),
+              ),
+              child: Row(
+                children: [
+                  Icon(Icons.schedule_rounded, color: Colors.grey.shade500, size: 24),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          'No Overtime Assigned',
+                          style: TextStyle(
+                            fontSize: 14,
+                            fontWeight: FontWeight.w600,
+                            color: Colors.grey.shade700,
+                          ),
+                        ),
+                        Text(
+                          'You have no overtime requests for today',
+                          style: TextStyle(
+                            fontSize: 12,
+                            color: Colors.grey.shade600,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ] else ...[
+            // Show today's overtime requests
+            ...(_todayOvertimeRequests.map((request) => _buildTodayOvertimeCard(request)).toList()),
+          ],
+        ],
+      ),
+    );
+  }
+
+  Widget _buildTodayOvertimeCard(OvertimeRequest request) {
+    Color statusColor = _getOvertimeStatusColor(request.status);
+    IconData statusIcon = _getOvertimeStatusIcon(request.status);
+
+    return Container(
+      margin: const EdgeInsets.only(bottom: 8),
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: statusColor.withOpacity(0.05),
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: statusColor.withOpacity(0.2)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      request.projectName,
+                      style: const TextStyle(
+                        fontSize: 14,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                    Text(
+                      request.projectCode,
+                      style: TextStyle(
+                        fontSize: 12,
+                        color: Colors.grey.shade600,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                decoration: BoxDecoration(
+                  color: statusColor,
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(statusIcon, size: 12, color: Colors.white),
+                    const SizedBox(width: 4),
+                    Text(
+                      request.status.displayName.toUpperCase(),
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 10,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          Row(
+            children: [
+              Icon(Icons.access_time, size: 16, color: Colors.grey.shade600),
+              const SizedBox(width: 4),
+              Text(
+                '${DateFormat('h:mm a').format(request.startTime)} - ${DateFormat('h:mm a').format(request.endTime)}',
+                style: TextStyle(
+                  fontSize: 12,
+                  color: Colors.grey.shade700,
+                  fontWeight: FontWeight.w500,
+                ),
+              ),
+              const Spacer(),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                decoration: BoxDecoration(
+                  color: Colors.blue.withOpacity(0.1),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Text(
+                  '${request.totalDurationHours.toStringAsFixed(1)}h',
+                  style: TextStyle(
+                    fontSize: 11,
+                    fontWeight: FontWeight.bold,
+                    color: Colors.blue.shade700,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          if (request.responseMessage != null) ...[
+            const SizedBox(height: 8),
+            Container(
+              padding: const EdgeInsets.all(8),
+              decoration: BoxDecoration(
+                color: Colors.grey.shade100,
+                borderRadius: BorderRadius.circular(6),
+              ),
+              child: Row(
+                children: [
+                  Icon(Icons.message, size: 14, color: Colors.grey.shade600),
+                  const SizedBox(width: 6),
+                  Expanded(
+                    child: Text(
+                      request.responseMessage!,
+                      style: TextStyle(
+                        fontSize: 11,
+                        color: Colors.grey.shade700,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+
   Widget _buildOvertimeSearchAndFilter() {
     return Container(
-      margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+      margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
         color: Colors.white,
@@ -1383,14 +1126,13 @@ class _MyAttendanceViewState extends State<MyAttendanceView> with TickerProvider
         children: [
           Row(
             children: [
-              const Icon(Icons.history_rounded, color: accentColor, size: 20),
+              const Icon(Icons.filter_list_rounded, color: accentColor, size: 20),
               const SizedBox(width: 8),
               const Text(
-                'Overtime History',
+                'Filter Overtime History',
                 style: TextStyle(
-                  fontSize: 16,
+                  fontSize: 14,
                   fontWeight: FontWeight.w600,
-                  color: Colors.black87,
                 ),
               ),
               const Spacer(),
@@ -1407,13 +1149,13 @@ class _MyAttendanceViewState extends State<MyAttendanceView> with TickerProvider
             ],
           ),
           const SizedBox(height: 10),
+
+          // Search field
           SizedBox(
             height: 36,
             child: TextField(
               onChanged: (value) {
-                setState(() {
-                  _overtimeSearchQuery = value;
-                });
+                setState(() => _overtimeSearchQuery = value);
                 _filterOvertimeHistory();
               },
               decoration: InputDecoration(
@@ -1424,9 +1166,7 @@ class _MyAttendanceViewState extends State<MyAttendanceView> with TickerProvider
                     ? IconButton(
                   icon: const Icon(Icons.clear_rounded, size: 16),
                   onPressed: () {
-                    setState(() {
-                      _overtimeSearchQuery = '';
-                    });
+                    setState(() => _overtimeSearchQuery = '');
                     _filterOvertimeHistory();
                   },
                 )
@@ -1448,56 +1188,31 @@ class _MyAttendanceViewState extends State<MyAttendanceView> with TickerProvider
             ),
           ),
           const SizedBox(height: 10),
+
+          // Status filter chips
           SingleChildScrollView(
             scrollDirection: Axis.horizontal,
             child: Row(
               children: [
-                _buildCompactFilterChip(
-                  label: 'All',
-                  isSelected: _selectedOvertimeStatus == null,
-                  onTap: () {
-                    setState(() {
-                      _selectedOvertimeStatus = null;
-                    });
-                    _filterOvertimeHistory();
-                  },
-                ),
+                _buildFilterChip('All', _selectedOvertimeStatus == null, null, () {
+                  setState(() => _selectedOvertimeStatus = null);
+                  _filterOvertimeHistory();
+                }),
                 const SizedBox(width: 6),
-                _buildCompactFilterChip(
-                  label: 'Pending',
-                  isSelected: _selectedOvertimeStatus == OvertimeRequestStatus.pending,
-                  color: Colors.orange,
-                  onTap: () {
-                    setState(() {
-                      _selectedOvertimeStatus = OvertimeRequestStatus.pending;
-                    });
-                    _filterOvertimeHistory();
-                  },
-                ),
+                _buildFilterChip('Pending', _selectedOvertimeStatus == OvertimeRequestStatus.pending, Colors.orange, () {
+                  setState(() => _selectedOvertimeStatus = OvertimeRequestStatus.pending);
+                  _filterOvertimeHistory();
+                }),
                 const SizedBox(width: 6),
-                _buildCompactFilterChip(
-                  label: 'Approved',
-                  isSelected: _selectedOvertimeStatus == OvertimeRequestStatus.approved,
-                  color: Colors.green,
-                  onTap: () {
-                    setState(() {
-                      _selectedOvertimeStatus = OvertimeRequestStatus.approved;
-                    });
-                    _filterOvertimeHistory();
-                  },
-                ),
+                _buildFilterChip('Approved', _selectedOvertimeStatus == OvertimeRequestStatus.approved, Colors.green, () {
+                  setState(() => _selectedOvertimeStatus = OvertimeRequestStatus.approved);
+                  _filterOvertimeHistory();
+                }),
                 const SizedBox(width: 6),
-                _buildCompactFilterChip(
-                  label: 'Rejected',
-                  isSelected: _selectedOvertimeStatus == OvertimeRequestStatus.rejected,
-                  color: Colors.red,
-                  onTap: () {
-                    setState(() {
-                      _selectedOvertimeStatus = OvertimeRequestStatus.rejected;
-                    });
-                    _filterOvertimeHistory();
-                  },
-                ),
+                _buildFilterChip('Rejected', _selectedOvertimeStatus == OvertimeRequestStatus.rejected, Colors.red, () {
+                  setState(() => _selectedOvertimeStatus = OvertimeRequestStatus.rejected);
+                  _filterOvertimeHistory();
+                }),
               ],
             ),
           ),
@@ -1506,12 +1221,7 @@ class _MyAttendanceViewState extends State<MyAttendanceView> with TickerProvider
     );
   }
 
-  Widget _buildCompactFilterChip({
-    required String label,
-    required bool isSelected,
-    required VoidCallback onTap,
-    Color? color,
-  }) {
+  Widget _buildFilterChip(String label, bool isSelected, Color? color, VoidCallback onTap) {
     return GestureDetector(
       onTap: onTap,
       child: Container(
@@ -1535,56 +1245,247 @@ class _MyAttendanceViewState extends State<MyAttendanceView> with TickerProvider
     );
   }
 
-  Widget _buildNoResultsState() {
-    return Center(
+  Widget _buildOvertimeList() {
+    if (_filteredOvertimeHistory.isEmpty) {
+      return _buildEmptyOvertimeState();
+    }
+
+    return ListView.builder(
+      padding: const EdgeInsets.all(16),
+      itemCount: _filteredOvertimeHistory.length,
+      itemBuilder: (context, index) => _buildOvertimeHistoryCard(_filteredOvertimeHistory[index]),
+    );
+  }
+
+  Widget _buildOvertimeHistoryCard(OvertimeRequest request) {
+    Color statusColor = _getOvertimeStatusColor(request.status);
+    IconData statusIcon = _getOvertimeStatusIcon(request.status);
+
+    String formattedDate = DateFormat('MMM dd, yyyy').format(request.startTime);
+    String dayOfWeek = DateFormat('EEE').format(request.startTime);
+
+    return Container(
+      margin: const EdgeInsets.only(bottom: 12),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: Colors.grey.shade200),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.03),
+            blurRadius: 3,
+            offset: const Offset(0, 1),
+          ),
+        ],
+      ),
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // Header row
+            Row(
+              children: [
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        request.projectName,
+                        style: const TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                      Text(
+                        request.projectCode,
+                        style: TextStyle(
+                          fontSize: 12,
+                          color: Colors.grey.shade600,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                  decoration: BoxDecoration(
+                    color: statusColor.withOpacity(0.2),
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(statusIcon, size: 12, color: statusColor),
+                      const SizedBox(width: 4),
+                      Text(
+                        request.status.displayName.toUpperCase(),
+                        style: TextStyle(
+                          color: statusColor,
+                          fontSize: 10,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+
+            const SizedBox(height: 12),
+
+            // Date and time info
+            Container(
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: Colors.grey.shade50,
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: Column(
+                children: [
+                  Row(
+                    children: [
+                      Icon(Icons.calendar_today, size: 16, color: Colors.grey.shade600),
+                      const SizedBox(width: 8),
+                      Text(
+                        '$formattedDate ($dayOfWeek)',
+                        style: TextStyle(
+                          fontSize: 13,
+                          fontWeight: FontWeight.w600,
+                          color: Colors.grey.shade800,
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 8),
+                  Row(
+                    children: [
+                      Icon(Icons.access_time, size: 16, color: Colors.grey.shade600),
+                      const SizedBox(width: 8),
+                      Text(
+                        '${DateFormat('h:mm a').format(request.startTime)} - ${DateFormat('h:mm a').format(request.endTime)}',
+                        style: TextStyle(
+                          fontSize: 13,
+                          color: Colors.grey.shade700,
+                        ),
+                      ),
+                      const Spacer(),
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                        decoration: BoxDecoration(
+                          color: Colors.blue.withOpacity(0.1),
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        child: Text(
+                          '${request.totalDurationHours.toStringAsFixed(1)}h',
+                          style: TextStyle(
+                            fontSize: 12,
+                            fontWeight: FontWeight.bold,
+                            color: Colors.blue.shade700,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+
+            const SizedBox(height: 12),
+
+            // Requester and approver info
+            Row(
+              children: [
+                Expanded(
+                  child: _buildPersonInfo('Requested by', request.requesterName, Icons.person),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: _buildPersonInfo('Approved by', request.approverName, Icons.person_outline),
+                ),
+              ],
+            ),
+
+            // Response message
+            if (request.responseMessage != null) ...[
+              const SizedBox(height: 12),
+              Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: statusColor.withOpacity(0.05),
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(color: statusColor.withOpacity(0.2)),
+                ),
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Icon(Icons.message_outlined, size: 16, color: statusColor),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            'Response:',
+                            style: TextStyle(
+                              fontSize: 11,
+                              fontWeight: FontWeight.w600,
+                              color: statusColor,
+                            ),
+                          ),
+                          const SizedBox(height: 2),
+                          Text(
+                            request.responseMessage!,
+                            style: TextStyle(
+                              fontSize: 12,
+                              color: Colors.grey.shade700,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildPersonInfo(String label, String name, IconData icon) {
+    return Container(
+      padding: const EdgeInsets.all(8),
+      decoration: BoxDecoration(
+        color: Colors.grey.shade50,
+        borderRadius: BorderRadius.circular(6),
+      ),
       child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Icon(
-            Icons.search_off_rounded,
-            size: 48,
-            color: Colors.grey.shade400,
+          Row(
+            children: [
+              Icon(icon, size: 14, color: Colors.grey.shade600),
+              const SizedBox(width: 4),
+              Text(
+                label,
+                style: TextStyle(
+                  fontSize: 10,
+                  color: Colors.grey.shade600,
+                  fontWeight: FontWeight.w500,
+                ),
+              ),
+            ],
           ),
-          const SizedBox(height: 12),
+          const SizedBox(height: 4),
           Text(
-            'No overtime requests found',
-            style: TextStyle(
-              fontSize: 16,
-              color: Colors.grey.shade600,
-              fontWeight: FontWeight.w500,
-            ),
-          ),
-          const SizedBox(height: 6),
-          Text(
-            _overtimeSearchQuery.isNotEmpty || _selectedOvertimeStatus != null
-                ? 'Try adjusting your filters'
-                : 'Your overtime requests will appear here',
-            style: TextStyle(
+            name,
+            style: const TextStyle(
               fontSize: 12,
-              color: Colors.grey.shade500,
+              fontWeight: FontWeight.w600,
             ),
-            textAlign: TextAlign.center,
-          ),
-          const SizedBox(height: 16),
-          ElevatedButton.icon(
-            onPressed: () {
-              if (_overtimeSearchQuery.isNotEmpty || _selectedOvertimeStatus != null) {
-                _clearOvertimeFilters();
-              } else {
-                _fetchOvertimeData();
-              }
-            },
-            icon: Icon(_overtimeSearchQuery.isNotEmpty || _selectedOvertimeStatus != null
-                ? Icons.clear_rounded
-                : Icons.refresh_rounded, size: 16),
-            label: Text(_overtimeSearchQuery.isNotEmpty || _selectedOvertimeStatus != null
-                ? 'Clear Filters'
-                : 'Refresh', style: const TextStyle(fontSize: 12)),
-            style: ElevatedButton.styleFrom(
-              backgroundColor: accentColor,
-              foregroundColor: Colors.white,
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-            ),
+            overflow: TextOverflow.ellipsis,
           ),
         ],
       ),
@@ -1603,7 +1504,7 @@ class _MyAttendanceViewState extends State<MyAttendanceView> with TickerProvider
           ),
           const SizedBox(height: 16),
           Text(
-            'No overtime history',
+            'No overtime records found',
             style: TextStyle(
               fontSize: 18,
               color: Colors.grey.shade600,
@@ -1612,7 +1513,9 @@ class _MyAttendanceViewState extends State<MyAttendanceView> with TickerProvider
           ),
           const SizedBox(height: 8),
           Text(
-            'Your overtime requests will appear here',
+            _overtimeSearchQuery.isNotEmpty || _selectedOvertimeStatus != null
+                ? 'Try adjusting your filters'
+                : 'Your overtime requests will appear here',
             style: TextStyle(
               fontSize: 14,
               color: Colors.grey.shade500,
@@ -1621,8 +1524,122 @@ class _MyAttendanceViewState extends State<MyAttendanceView> with TickerProvider
           ),
           const SizedBox(height: 24),
           ElevatedButton.icon(
-            onPressed: _fetchOvertimeData,
-            icon: const Icon(Icons.refresh_rounded),
+            onPressed: () {
+              if (_overtimeSearchQuery.isNotEmpty || _selectedOvertimeStatus != null) {
+                _clearOvertimeFilters();
+              } else {
+                _fetchOvertimeData();
+              }
+            },
+            icon: Icon(_overtimeSearchQuery.isNotEmpty || _selectedOvertimeStatus != null
+                ? Icons.clear_rounded
+                : Icons.refresh_rounded),
+            label: Text(_overtimeSearchQuery.isNotEmpty || _selectedOvertimeStatus != null
+                ? 'Clear Filters'
+                : 'Refresh'),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: accentColor,
+              foregroundColor: Colors.white,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // ===== HELPER METHODS =====
+  Widget _buildMonthSelector() {
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: const BoxDecoration(
+        color: Colors.white,
+        border: Border(bottom: BorderSide(color: Colors.grey, width: 0.2)),
+      ),
+      child: Row(
+        children: [
+          const Icon(Icons.calendar_month, color: accentColor),
+          const SizedBox(width: 12),
+          const Text(
+            'Month:',
+            style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
+          ),
+          const SizedBox(width: 16),
+          Expanded(
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+              decoration: BoxDecoration(
+                border: Border.all(color: Colors.grey.shade300),
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: DropdownButtonHideUnderline(
+                child: DropdownButton<String>(
+                  value: _selectedMonth,
+                  isExpanded: true,
+                  items: _generateMonthOptions(),
+                  onChanged: (String? newValue) {
+                    if (newValue != null && newValue != _selectedMonth) {
+                      setState(() => _selectedMonth = newValue);
+                      _fetchAttendanceRecords(forceRefresh: true);
+                    }
+                  },
+                ),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  List<DropdownMenuItem<String>> _generateMonthOptions() {
+    List<DropdownMenuItem<String>> items = [];
+    DateTime now = DateTime.now();
+
+    for (int i = 0; i < 12; i++) {
+      DateTime month = DateTime(now.year, now.month - i, 1);
+      String monthKey = DateFormat('yyyy-MM').format(month);
+      String monthDisplay = DateFormat('MMMM yyyy').format(month);
+
+      items.add(DropdownMenuItem<String>(
+        value: monthKey,
+        child: Text(monthDisplay),
+      ));
+    }
+
+    return items;
+  }
+
+  Widget _buildEmptyState() {
+    return Center(
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Icon(
+            Icons.calendar_view_week,
+            size: 80,
+            color: Colors.grey.shade400,
+          ),
+          const SizedBox(height: 16),
+          Text(
+            'No attendance records found',
+            style: TextStyle(
+              fontSize: 18,
+              color: Colors.grey.shade600,
+              fontWeight: FontWeight.w500,
+            ),
+          ),
+          const SizedBox(height: 8),
+          Text(
+            'for ${DateFormat('MMMM yyyy').format(DateFormat('yyyy-MM').parse(_selectedMonth))}',
+            style: TextStyle(
+              fontSize: 14,
+              color: Colors.grey.shade500,
+            ),
+          ),
+          const SizedBox(height: 24),
+          ElevatedButton.icon(
+            onPressed: () => _fetchAttendanceRecords(forceRefresh: true),
+            icon: const Icon(Icons.refresh),
             label: const Text('Refresh'),
             style: ElevatedButton.styleFrom(
               backgroundColor: accentColor,
@@ -1659,177 +1676,7 @@ class _MyAttendanceViewState extends State<MyAttendanceView> with TickerProvider
         return Icons.cancel_outlined;
     }
   }
-
-  Widget _buildMonthSelector() {
-    return Container(
-      padding: const EdgeInsets.all(16),
-      decoration: const BoxDecoration(
-        color: Colors.white,
-      ),
-      child: Row(
-        children: [
-          const Icon(Icons.calendar_month, color: accentColor),
-          const SizedBox(width: 12),
-          const Text(
-            'Select Month:',
-            style: TextStyle(
-              fontSize: 16,
-              fontWeight: FontWeight.w600,
-            ),
-          ),
-          const SizedBox(width: 16),
-          Expanded(
-            child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
-              decoration: BoxDecoration(
-                border: Border.all(color: Colors.grey.shade300),
-                borderRadius: BorderRadius.circular(8),
-              ),
-              child: DropdownButtonHideUnderline(
-                child: DropdownButton<String>(
-                  value: _selectedMonth,
-                  isExpanded: true,
-                  items: _generateMonthOptions(),
-                  onChanged: (String? newValue) {
-                    if (newValue != null && newValue != _selectedMonth) {
-                      setState(() {
-                        _selectedMonth = newValue;
-                      });
-                      // ✅ Force refresh when changing months to get latest data
-                      _fetchAttendanceRecords(forceRefresh: true);
-                    }
-                  },
-                ),
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  List<DropdownMenuItem<String>> _generateMonthOptions() {
-    List<DropdownMenuItem<String>> items = [];
-    DateTime now = DateTime.now();
-
-    for (int i = 0; i < 12; i++) {
-      DateTime month = DateTime(now.year, now.month - i, 1);
-      String monthKey = DateFormat('yyyy-MM').format(month);
-      String monthDisplay = DateFormat('MMMM yyyy').format(month);
-
-      items.add(
-        DropdownMenuItem<String>(
-          value: monthKey,
-          child: Text(monthDisplay),
-        ),
-      );
-    }
-
-    return items;
-  }
-
-  Widget _buildSummaryCard(String title, String value, IconData icon, Color color) {
-    return Container(
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: color.withOpacity(0.1),
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: color.withOpacity(0.3)),
-      ),
-      child: Column(
-        children: [
-          Icon(icon, color: color, size: 24),
-          const SizedBox(height: 8),
-          Text(
-            value,
-            style: TextStyle(
-              fontSize: 20,
-              fontWeight: FontWeight.bold,
-              color: color,
-            ),
-          ),
-          Text(
-            title,
-            style: TextStyle(
-              fontSize: 12,
-              color: Colors.grey.shade600,
-            ),
-            textAlign: TextAlign.center,
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildEmptyState() {
-    return Center(
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Icon(
-            Icons.calendar_view_month,
-            size: 80,
-            color: Colors.grey.shade400,
-          ),
-          const SizedBox(height: 16),
-          Text(
-            'No attendance records found',
-            style: TextStyle(
-              fontSize: 18,
-              color: Colors.grey.shade600,
-              fontWeight: FontWeight.w500,
-            ),
-          ),
-          const SizedBox(height: 8),
-          Text(
-            'for ${DateFormat('MMMM yyyy').format(DateFormat('yyyy-MM').parse(_selectedMonth))}',
-            style: TextStyle(
-              fontSize: 14,
-              color: Colors.grey.shade500,
-            ),
-          ),
-          const SizedBox(height: 24),
-          Row(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              ElevatedButton.icon(
-                onPressed: () => _fetchAttendanceRecords(),
-                icon: const Icon(Icons.refresh),
-                label: const Text('Refresh'),
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: Colors.blue,
-                  foregroundColor: Colors.white,
-                ),
-              ),
-              const SizedBox(width: 12),
-              ElevatedButton.icon(
-                onPressed: () => _forceRefreshAttendance(),
-                icon: const Icon(Icons.cloud_sync_rounded),
-                label: const Text('Force Sync'),
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: accentColor,
-                  foregroundColor: Colors.white,
-                ),
-              ),
-            ],
-          ),
-        ],
-      ),
-    );
-  }
-
-  Color _getStatusColor(String status) {
-    switch (status.toLowerCase()) {
-      case 'completed':
-        return Colors.green;
-      case 'in progress':
-        return Colors.blue;
-      case 'pending':
-        return Colors.orange;
-      case 'absent':
-        return Colors.red;
-      default:
-        return Colors.grey;
-    }
-  }
 }
+
+
+

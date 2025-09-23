@@ -306,3 +306,4 @@ class _MinimalSplashScreenState extends State<MinimalSplashScreen> {
     );
   }
 }
+

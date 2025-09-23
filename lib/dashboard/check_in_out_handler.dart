@@ -1,19 +1,20 @@
-// lib/dashboard/check_in_out_handler.dart - Corrected version
+// lib/dashboard/check_in_out_handler.dart - UPDATED WITH LOCATION EXEMPTIONS
 
 import 'package:flutter/material.dart';
 import 'package:geolocator/geolocator.dart';
-import 'package:face_auth/checkout_request/create_request_view.dart';
-import 'package:face_auth/checkout_request/request_history_view.dart';
-import 'package:face_auth/common/utils/custom_snackbar.dart';
-import 'package:face_auth/repositories/check_out_request_repository.dart';
-import 'package:face_auth/model/check_out_request_model.dart';
-import 'package:face_auth/services/service_locator.dart';
+import 'package:face_auth_compatible/checkout_request/create_request_view.dart';
+import 'package:face_auth_compatible/checkout_request/request_history_view.dart';
+import 'package:face_auth_compatible/common/utils/custom_snackbar.dart';
+import 'package:face_auth_compatible/repositories/check_out_request_repository.dart';
+import 'package:face_auth_compatible/repositories/location_exemption_repository.dart';
+import 'package:face_auth_compatible/model/check_out_request_model.dart';
+import 'package:face_auth_compatible/services/service_locator.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:flutter/foundation.dart' show debugPrint;
 
 class CheckInOutHandler {
-  // Method to handle check-in/check-out process when outside geofence
+  // ✅ ENHANCED: Method to handle check-in/check-out with location exemption support
   static Future<bool> handleOffLocationAction({
     required BuildContext context,
     required String employeeId,
@@ -21,125 +22,237 @@ class CheckInOutHandler {
     required bool isWithinGeofence,
     required Position? currentPosition,
     required VoidCallback onRegularAction,
-    required bool isCheckIn, // This parameter is crucial
+    required bool isCheckIn,
   }) async {
-    debugPrint("CheckInOutHandler: Starting handleOffLocationAction - isCheckIn=${isCheckIn}");
+    debugPrint("CheckInOutHandler: Starting handleOffLocationAction - isCheckIn=$isCheckIn");
+    debugPrint("Employee ID: $employeeId");
 
-    // If within geofence, proceed with normal action
+    // ✅ STEP 1: Check if employee has location exemption FIRST
+    try {
+      final exemptionRepository = getIt<LocationExemptionRepository>();
+      bool hasExemption = await exemptionRepository.hasLocationExemption(employeeId);
+
+      if (hasExemption) {
+        debugPrint("🆓 Employee $employeeId has location exemption - bypassing geofence check");
+
+        // Show exemption notification
+        CustomSnackBar.successSnackBar(
+            "🆓 Location exemption active - proceeding with ${isCheckIn ? 'check-in' : 'check-out'}"
+        );
+
+        // Proceed with regular action regardless of location
+        onRegularAction();
+        return true;
+      } else {
+        debugPrint("❌ Employee $employeeId has NO location exemption - checking geofence");
+      }
+    } catch (e) {
+      debugPrint("❌ Error checking location exemption: $e");
+      // Continue with normal flow if exemption check fails
+    }
+
+    // ✅ STEP 2: If within geofence, proceed with normal action
     if (isWithinGeofence) {
       debugPrint("CheckInOutHandler: Within geofence, proceeding with regular action");
       onRegularAction();
       return true;
     }
 
-    debugPrint("CheckInOutHandler: Outside geofence, handling as ${isCheckIn ? 'check-in' : 'check-out'} request");
+    debugPrint("CheckInOutHandler: Outside geofence AND no exemption - handling as ${isCheckIn ? 'check-in' : 'check-out'} request");
 
-    // If not within geofence, we need to handle it differently
+    // ✅ STEP 3: Show location restriction dialog with exemption option
+    return await _showLocationRestrictionDialog(
+      context: context,
+      employeeId: employeeId,
+      employeeName: employeeName,
+      currentPosition: currentPosition,
+      isCheckIn: isCheckIn,
+      onRegularAction: onRegularAction,
+    );
+  }
+
+  // ✅ NEW: Show location restriction dialog with exemption request option
+  static Future<bool> _showLocationRestrictionDialog({
+    required BuildContext context,
+    required String employeeId,
+    required String employeeName,
+    required Position? currentPosition,
+    required bool isCheckIn,
+    required VoidCallback onRegularAction,
+  }) async {
+
     if (currentPosition == null) {
       CustomSnackBar.errorSnackBar("Unable to get your current location. Please try again.");
       return false;
     }
 
-    // Check if there's an approved request for today - making sure to filter by request type
+    return await showDialog<bool>(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => AlertDialog(
+        backgroundColor: const Color(0xFF1E293B),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: Row(
+          children: [
+            Container(
+              padding: const EdgeInsets.all(8),
+              decoration: BoxDecoration(
+                color: Colors.orange.withOpacity(0.2),
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: const Icon(Icons.location_off, color: Colors.orange, size: 24),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Text(
+                'Location Required',
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontSize: 18,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+            ),
+          ],
+        ),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              'You are currently outside the designated work location and do not have location exemption.',
+              style: const TextStyle(color: Colors.white, fontSize: 14),
+            ),
+            const SizedBox(height: 16),
+            Container(
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: Colors.blue.withOpacity(0.1),
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(color: Colors.blue.withOpacity(0.3)),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      const Icon(Icons.info, color: Colors.blue, size: 16),
+                      const SizedBox(width: 8),
+                      const Text(
+                        'Options:',
+                        style: TextStyle(
+                          color: Colors.blue,
+                          fontWeight: FontWeight.bold,
+                          fontSize: 12,
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    '• Move to designated work location\n'
+                        '• Request manager approval for this location\n'
+                        '• Contact HR for permanent location exemption',
+                    style: TextStyle(
+                      color: Colors.blue.shade200,
+                      fontSize: 11,
+                      height: 1.4,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(false),
+            child: Text(
+              'Cancel',
+              style: TextStyle(color: Colors.grey.shade400),
+            ),
+          ),
+          TextButton(
+            onPressed: () async {
+              Navigator.of(context).pop(false);
+              await _handleLocationRequest(
+                context,
+                employeeId,
+                employeeName,
+                currentPosition,
+                isCheckIn,
+              );
+            },
+            child: const Text(
+              'Request Approval',
+              style: TextStyle(color: Colors.blue),
+            ),
+          ),
+        ],
+      ),
+    ) ?? false;
+  }
+
+  // ✅ ENHANCED: Handle location-based requests (existing functionality)
+  static Future<void> _handleLocationRequest(
+      BuildContext context,
+      String employeeId,
+      String employeeName,
+      Position currentPosition,
+      bool isCheckIn,
+      ) async {
+
+    // Check if there's an approved request for today
     final repository = getIt<CheckOutRequestRepository>();
     final requests = await repository.getRequestsForEmployee(employeeId);
 
     debugPrint("CheckInOutHandler: Found ${requests.length} total requests for employee $employeeId");
-    for (var req in requests) {
-      debugPrint("  Request: ID=${req.id}, Type=${req.requestType}, Status=${req.status}");
-    }
 
-    // Filter for today's approved requests of the specific type (check-in or check-out)
+    // Filter for today's approved requests of the specific type
     final today = DateTime.now();
     final String requestTypeToCheck = isCheckIn ? 'check-in' : 'check-out';
 
-    debugPrint("CheckInOutHandler: Filtering for '$requestTypeToCheck' requests today");
-
-    // FIXED: Improved request filtering logic with better date comparison
     final approvedRequests = requests.where((req) {
       bool isCorrectType = req.requestType == requestTypeToCheck;
       bool isApproved = req.status == CheckOutRequestStatus.approved;
-
-      debugPrint("  Checking request ${req.id}: type=${req.requestType}, needType=$requestTypeToCheck");
-      debugPrint("    isCorrectType=$isCorrectType, status=${req.status}, isApproved=$isApproved");
-
-      // Ensure we're checking the date portion only without time
       bool isSameDay = req.requestTime.year == today.year &&
           req.requestTime.month == today.month &&
           req.requestTime.day == today.day;
 
-      // Check request validity - approve requests are valid for one hour
       bool isStillValid = true;
       if (req.responseTime != null) {
         final approvalTime = req.responseTime!;
         final validUntil = approvalTime.add(const Duration(hours: 1));
         isStillValid = today.isBefore(validUntil);
-
-        if (isApproved && isCorrectType && isSameDay) {
-          debugPrint("    Found approved $requestTypeToCheck request: valid until ${validUntil.toString()}");
-          debugPrint("    Current time: ${today.toString()}, Still valid: $isStillValid");
-        }
       }
 
       return isApproved && isCorrectType && isSameDay && isStillValid;
     }).toList();
 
     if (approvedRequests.isNotEmpty) {
-      // There's already an approved and valid request, proceed with regular action
-      debugPrint("CheckInOutHandler: Found approved $requestTypeToCheck request - proceeding with regular action");
-      onRegularAction();
-      return true;
+      debugPrint("CheckInOutHandler: Found approved $requestTypeToCheck request");
+      CustomSnackBar.successSnackBar("✅ You have approval to ${isCheckIn ? 'check in' : 'check out'} from this location");
+      return;
     }
 
-    // Check for pending requests today for this action type
+    // Check for pending requests
     final pendingRequests = requests.where((req) {
       bool isCorrectType = req.requestType == requestTypeToCheck;
       bool isPending = req.status == CheckOutRequestStatus.pending;
       bool isSameDay = req.requestTime.year == today.year &&
           req.requestTime.month == today.month &&
           req.requestTime.day == today.day;
-
-      debugPrint("  Checking pending: type=${req.requestType}, isCorrectType=$isCorrectType");
-      debugPrint("    isPending=$isPending, isSameDay=$isSameDay");
-
       return isPending && isCorrectType && isSameDay;
     }).toList();
 
-    debugPrint("CheckInOutHandler: Found ${pendingRequests.length} pending $requestTypeToCheck requests for today");
-
     if (pendingRequests.isNotEmpty) {
-      // Already has a pending request, show it
-      debugPrint("CheckInOutHandler: Found pending request - showing options for $requestTypeToCheck");
       final shouldCreateNew = await _showPendingRequestOptions(context, employeeId, isCheckIn);
-
-      if (shouldCreateNew) {
-        debugPrint("CheckInOutHandler: User chose to create a new request despite having a pending one");
-        // Get the manager ID and show the request form
-        String? lineManagerId = await _getLineManagerId(employeeId);
-
-        debugPrint("CheckInOutHandler: Line manager ID for request: $lineManagerId");
-
-        // Show request form
-        return await _showCreateRequestForm(
-          context,
-          employeeId,
-          employeeName,
-          currentPosition,
-          lineManagerId,
-          isCheckIn,
-        );
-      }
-
-      return false;
+      if (!shouldCreateNew) return;
     }
 
-    // No approved or pending requests yet, get the manager ID and show the request form
+    // Create new request
     String? lineManagerId = await _getLineManagerId(employeeId);
-
-    debugPrint("CheckInOutHandler: No existing requests found, line manager ID: $lineManagerId");
-
-    // Show request form (the lineManagerId will be found in the form if null here)
-    return await _showCreateRequestForm(
+    await _showCreateRequestForm(
       context,
       employeeId,
       employeeName,
@@ -149,11 +262,10 @@ class CheckInOutHandler {
     );
   }
 
-  // Find line manager for the employee
+  // Find line manager for the employee (existing method - no changes needed)
   static Future<String?> _getLineManagerId(String employeeId) async {
     try {
       debugPrint("Searching for line manager of employee: $employeeId");
-      // First check cached manager info
       final prefs = await SharedPreferences.getInstance();
       String? cachedManagerId = prefs.getString('line_manager_id_$employeeId');
 
@@ -162,9 +274,6 @@ class CheckInOutHandler {
         return cachedManagerId;
       }
 
-      // If no cached value, try multiple search approaches:
-
-      // 1. First check the employee's own document for lineManagerId field
       final employeeDoc = await FirebaseFirestore.instance
           .collection('employees')
           .doc(employeeId)
@@ -175,63 +284,44 @@ class CheckInOutHandler {
 
         if (data.containsKey('lineManagerId') && data['lineManagerId'] != null) {
           String managerId = data['lineManagerId'];
-          // Cache for next time
           await prefs.setString('line_manager_id_$employeeId', managerId);
           debugPrint("Found manager ID in employee doc: $managerId");
           return managerId;
         }
       }
 
-      // 2. If not found in employee doc, check line_managers collection with multiple ID formats
       debugPrint("Checking line_managers collection for employee: $employeeId");
 
-      // Get employee's PIN for additional search
       String employeePin = '';
       if (employeeDoc.exists) {
         Map<String, dynamic> data = employeeDoc.data() as Map<String, dynamic>;
         employeePin = data['pin'] ?? '';
       }
 
-      // Try different formats that might be used in the database
       final List<String> possibleEmployeeIds = [
         employeeId,
-        employeeId.replaceFirst('EMP', ''), // Remove EMP prefix if present
-        'EMP$employeeId', // Add EMP prefix if not present
+        employeeId.replaceFirst('EMP', ''),
+        'EMP$employeeId',
         employeePin,
       ];
-
-      // Debug info
-      debugPrint("Checking for employee with possible IDs: $possibleEmployeeIds");
 
       final lineManagersSnapshot = await FirebaseFirestore.instance
           .collection('line_managers')
           .get();
 
-      debugPrint("Found ${lineManagersSnapshot.docs.length} line manager documents");
-
-      // Iterate through all line manager documents
       for (var doc in lineManagersSnapshot.docs) {
         Map<String, dynamic> data = doc.data();
         List<dynamic> teamMembers = data['teamMembers'] ?? [];
 
-        debugPrint("Checking line manager doc ${doc.id} with ${teamMembers.length} team members");
-        debugPrint("Team members: $teamMembers");
-
-        // Check if any of the possible IDs are in the team members array
         for (String empId in possibleEmployeeIds) {
           if (teamMembers.contains(empId)) {
             String managerId = data['managerId'];
-            debugPrint("Found! Employee is in team of manager: $managerId");
-
-            // Cache for next time
             await prefs.setString('line_manager_id_$employeeId', managerId);
             return managerId;
           }
         }
       }
 
-      // If still not found, try to find any manager
-      debugPrint("No specific manager found - searching for any manager");
       final managerQuery = await FirebaseFirestore.instance
           .collection('employees')
           .where('isManager', isEqualTo: true)
@@ -240,32 +330,23 @@ class CheckInOutHandler {
 
       if (managerQuery.docs.isNotEmpty) {
         String fallbackManagerId = managerQuery.docs[0].id;
-        debugPrint("Using fallback manager ID: $fallbackManagerId");
-
-        // Cache for next time
         await prefs.setString('line_manager_id_$employeeId', fallbackManagerId);
-
         return fallbackManagerId;
       }
 
-      // Default to a hardcoded ID if necessary (should be set based on your specific database)
-      debugPrint("Using hardcoded default manager: EMP1270");
-      return "EMP1270";
+      return "EMP1270"; // Default manager
     } catch (e) {
       debugPrint("Error looking up manager: $e");
-      // Return a default manager ID if all else fails
       return "EMP1270";
     }
   }
 
-  // Show pending request options
+  // Show pending request options (existing method - no changes needed)
   static Future<bool> _showPendingRequestOptions(
       BuildContext context,
       String employeeId,
       bool isCheckIn
       ) async {
-    debugPrint("HANDLER: Showing pending request options dialog");
-
     bool? result = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
@@ -276,19 +357,13 @@ class CheckInOutHandler {
         ),
         actions: [
           TextButton(
-            onPressed: () {
-              debugPrint("HANDLER: Dialog - Cancel button pressed");
-              Navigator.pop(context, false);
-            },
+            onPressed: () => Navigator.pop(context, false),
             child: const Text("Cancel"),
           ),
           TextButton(
             onPressed: () async {
-              debugPrint("HANDLER: Dialog - View Requests button pressed");
-              Navigator.pop(context, false); // First pop the dialog with 'false' result
-
-              // Show request history
-              final result = await Navigator.push(
+              Navigator.pop(context, false);
+              await Navigator.push(
                 context,
                 MaterialPageRoute(
                   builder: (context) => CheckOutRequestHistoryView(
@@ -296,51 +371,21 @@ class CheckInOutHandler {
                   ),
                 ),
               );
-
-              debugPrint("HANDLER: Returned from request history with result: $result");
-              // Don't return anything here - this is a void function
             },
             child: const Text("View Requests"),
           ),
           TextButton(
-            onPressed: () {
-              debugPrint("HANDLER: Dialog - Create New Request button pressed");
-              Navigator.pop(context, true);
-            },
+            onPressed: () => Navigator.pop(context, true),
             child: const Text("Create New Request"),
           ),
         ],
       ),
     );
 
-    debugPrint("HANDLER: Dialog result: $result");
-
-    // Fixed: Return true to indicate we should proceed with creating a new request
     return result == true;
   }
 
-  // Add this helpers method for debugging the check-in request flow
-  static Future<bool> testCheckInRequest(
-      BuildContext context,
-      String employeeId,
-      String employeeName,
-      Position currentPosition,
-      ) async {
-    debugPrint("TEST: Creating a check-in request for testing");
-
-    String? lineManagerId = await _getLineManagerId(employeeId);
-
-    return await _showCreateRequestForm(
-      context,
-      employeeId,
-      employeeName,
-      currentPosition,
-      lineManagerId,
-      true, // Force isCheckIn to true
-    );
-  }
-
-  // Show create request form
+  // Show create request form (existing method - no changes needed)
   static Future<bool> _showCreateRequestForm(
       BuildContext context,
       String employeeId,
@@ -350,15 +395,6 @@ class CheckInOutHandler {
       bool isCheckIn,
       ) async {
     debugPrint("Creating ${isCheckIn ? 'check-in' : 'check-out'} request form for $employeeId");
-    debugPrint("Line manager ID being passed: $lineManagerId");
-
-    // Log the request details for debugging
-    debugPrint("Create Request Details:");
-    debugPrint("- Employee ID: $employeeId");
-    debugPrint("- Employee Name: $employeeName");
-    debugPrint("- Manager ID: $lineManagerId");
-    debugPrint("- Request Type: ${isCheckIn ? 'check-in' : 'check-out'}");
-    debugPrint("- Position: ${currentPosition.latitude}, ${currentPosition.longitude}");
 
     try {
       final result = await Navigator.push<bool>(
@@ -376,9 +412,6 @@ class CheckInOutHandler {
         ),
       );
 
-      debugPrint("Request form returned with result: $result");
-
-      // Return true if the request was submitted successfully
       return result ?? false;
     } catch (e) {
       debugPrint("Error showing create request form: $e");
@@ -386,7 +419,49 @@ class CheckInOutHandler {
     }
   }
 
-  // Show request history
+  // ✅ NEW: Quick method to add test exemption for employee PIN 3576
+  static Future<void> addTestExemption() async {
+    try {
+      debugPrint("🧪 Adding test location exemption for employee PIN 3576");
+
+      // Add to Firestore manually
+      await FirebaseFirestore.instance.collection('location_exemptions').add({
+        'employeeId': 'EMP1244',
+        'employeeName': 'Test Driver Employee',
+        'employeePin': '1244',
+        'reason': 'Driver - Mobile duty requires location flexibility',
+        'grantedAt': DateTime.now().toIso8601String(),
+        'grantedBy': 'System Admin',
+        'isActive': true,
+        'expiryDate': null, // No expiry
+        'notes': 'Test exemption for development and testing purposes',
+      });
+
+      debugPrint("✅ Test exemption added successfully");
+    } catch (e) {
+      debugPrint("❌ Error adding test exemption: $e");
+    }
+  }
+
+  // Existing methods (unchanged)
+  static Future<bool> testCheckInRequest(
+      BuildContext context,
+      String employeeId,
+      String employeeName,
+      Position currentPosition,
+      ) async {
+    debugPrint("TEST: Creating a check-in request for testing");
+    String? lineManagerId = await _getLineManagerId(employeeId);
+    return await _showCreateRequestForm(
+      context,
+      employeeId,
+      employeeName,
+      currentPosition,
+      lineManagerId,
+      true,
+    );
+  }
+
   static Future<void> showRequestHistory(
       BuildContext context,
       String employeeId,
@@ -401,7 +476,6 @@ class CheckInOutHandler {
     );
   }
 
-  // Debug function to directly create a test check-out request
   static Future<bool> createTestRequest(
       String employeeId,
       String employeeName,
@@ -414,7 +488,6 @@ class CheckInOutHandler {
 
       final repository = getIt<CheckOutRequestRepository>();
 
-      // Create request object
       CheckOutRequest request = CheckOutRequest.createNew(
         employeeId: employeeId,
         employeeName: employeeName,
@@ -426,23 +499,14 @@ class CheckInOutHandler {
         requestType: isCheckIn ? 'check-in' : 'check-out',
       );
 
-      // Save directly to Firestore for debugging
       try {
         DocumentReference docRef = await FirebaseFirestore.instance
             .collection('check_out_requests')
             .add(request.toMap());
-
         debugPrint("Test request created successfully in Firestore: ${docRef.id}");
-
-        // Also try the repository method
-        bool repoSuccess = await repository.createCheckOutRequest(request);
-        debugPrint("Repository save result: $repoSuccess");
-
         return true;
       } catch (e) {
         debugPrint("Error saving test request to Firestore: $e");
-
-        // Try repository as fallback
         return await repository.createCheckOutRequest(request);
       }
     } catch (e) {
@@ -451,3 +515,6 @@ class CheckInOutHandler {
     }
   }
 }
+
+
+

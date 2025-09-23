@@ -1,11 +1,11 @@
 // lib/pin_entry/pin_entry_view.dart - COMPLETE FLEXIBLE PIN LENGTH SUPPORT (1-4 digits)
 
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:face_auth/common/utils/custom_snackbar.dart';
-import 'package:face_auth/constants/theme.dart';
-import 'package:face_auth/dashboard/dashboard_view.dart';
-import 'package:face_auth/pin_entry/user_profile_view.dart';
-import 'package:face_auth/model/user_model.dart';
+import 'package:face_auth_compatible/common/utils/custom_snackbar.dart';
+import 'package:face_auth_compatible/constants/theme.dart';
+import 'package:face_auth_compatible/dashboard/dashboard_view.dart';
+import 'package:face_auth_compatible/pin_entry/user_profile_view.dart';
+import 'package:face_auth_compatible/model/user_model.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -679,3 +679,6 @@ class _PinEntryViewState extends State<PinEntryView>
     );
   }
 }
+
+
+

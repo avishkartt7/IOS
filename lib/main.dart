@@ -1,112 +1,290 @@
-// lib/main.dart - UPDATED WITH CLEAN WHITE SPLASH SCREEN
+// lib/main.dart - COMPLETE IMPLEMENTATION WITH GEOFENCE MONITORING AND ORIENTATION SUPPORT
 
+import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:face_auth/onboarding/onboarding_screen.dart';
-import 'package:face_auth/pin_entry/pin_entry_view.dart';
-import 'package:face_auth/dashboard/dashboard_view.dart';
-import 'package:face_auth/constants/theme.dart';
+import 'package:face_auth_compatible/onboarding/onboarding_screen.dart';
+import 'package:face_auth_compatible/pin_entry/pin_entry_view.dart';
+import 'package:face_auth_compatible/dashboard/dashboard_view.dart';
+import 'package:face_auth_compatible/constants/theme.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:face_auth/services/service_locator.dart';
-import 'package:face_auth/services/simple_firebase_auth_service.dart';
-import 'package:face_auth/model/enhanced_face_features.dart';
+import 'package:face_auth_compatible/services/service_locator.dart';
+import 'package:face_auth_compatible/services/simple_firebase_auth_service.dart';
+import 'package:face_auth_compatible/model/enhanced_face_features.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 
 // Import the services for offline functionality
-import 'package:face_auth/services/sync_service.dart';
-import 'package:face_auth/services/connectivity_service.dart';
-import 'package:face_auth/services/secure_face_storage_service.dart';
-import 'package:face_auth/services/face_data_migration_service.dart';
+import 'package:face_auth_compatible/services/sync_service.dart';
+import 'package:face_auth_compatible/services/connectivity_service.dart';
+import 'package:face_auth_compatible/services/secure_face_storage_service.dart';
+import 'package:face_auth_compatible/services/face_data_migration_service.dart';
+import 'package:face_auth_compatible/services/geofence_exit_monitoring_service.dart'; // NEW
 import 'package:connectivity_plus/connectivity_plus.dart';
 
 // Add these imports for permissions
 import 'package:device_info_plus/device_info_plus.dart';
 import 'package:permission_handler/permission_handler.dart';
 
-import 'package:face_auth/repositories/polygon_location_repository.dart';
-import 'package:face_auth/admin/polygon_map_view.dart';
-import 'package:face_auth/admin/geojson_importer_view.dart';
+import 'package:face_auth_compatible/repositories/polygon_location_repository.dart';
+import 'package:face_auth_compatible/repositories/location_exemption_repository.dart';
+
 import 'package:flutter/services.dart';
 
 Future<void> _firebaseMessagingBackgroundHandler(RemoteMessage message) async {
-  await Firebase.initializeApp();
-  print("Handling a background message: ${message.messageId}");
+  try {
+    await Firebase.initializeApp();
+    print("Handling a background message: ${message.messageId}");
+  } catch (e) {
+    print("Background message handler error: $e");
+  }
 }
 
 void main() async {
-  WidgetsFlutterBinding.ensureInitialized();
+  // Enhanced error handling wrapper - COMPATIBLE VERSION
+  runZonedGuarded(() async {
+    WidgetsFlutterBinding.ensureInitialized();
 
-  print("🚀 Starting Android App with iOS-style PIN Authentication...");
+    print("🚀 Starting Android App with Geofence Exit Monitoring...");
 
-  // Set clean white status bar from the start
-  SystemChrome.setSystemUIOverlayStyle(
-    const SystemUiOverlayStyle(
-      statusBarColor: Colors.transparent,
-      statusBarIconBrightness: Brightness.dark,
-      systemNavigationBarColor: Colors.white,
-      systemNavigationBarIconBrightness: Brightness.dark,
-    ),
-  );
+    // ✅ NEW: Allow all orientations for tablet support
+    SystemChrome.setPreferredOrientations([
+      DeviceOrientation.portraitUp,
+      DeviceOrientation.portraitDown,
+      DeviceOrientation.landscapeLeft,
+      DeviceOrientation.landscapeRight,
+    ]);
 
-  // ✅ Initialize Firebase with proper error handling
-  try {
-    await Firebase.initializeApp();
-    print("✅ Firebase initialized successfully");
-  } catch (e) {
-    print("❌ Firebase initialization failed: $e");
-    // Continue without Firebase for offline functionality
-  }
+    // Set clean white status bar from the start
+    await _setSafeSystemUI();
 
-  // Set the background messaging handler
-  FirebaseMessaging.onBackgroundMessage(_firebaseMessagingBackgroundHandler);
+    // Global Flutter error handler
+    FlutterError.onError = (FlutterErrorDetails details) {
+      FlutterError.presentError(details);
+      print("Flutter Error: ${details.exception}");
+      print("Stack trace: ${details.stack}");
+    };
 
-  // Initialize local notifications
-  final FlutterLocalNotificationsPlugin flutterLocalNotificationsPlugin =
-  FlutterLocalNotificationsPlugin();
+    // Initialize Firebase with proper error handling
+    await _initializeFirebaseSafely();
 
-  const AndroidInitializationSettings initializationSettingsAndroid =
-  AndroidInitializationSettings('@mipmap/ic_launcher');
+    // Set the background messaging handler
+    await _setupFirebaseMessagingSafely();
 
-  const DarwinInitializationSettings initializationSettingsIOS =
-  DarwinInitializationSettings(
-    requestAlertPermission: true,
-    requestBadgePermission: true,
-    requestSoundPermission: true,
-  );
+    // Initialize local notifications
+    await _initializeLocalNotificationsSafely();
 
-  const InitializationSettings initializationSettings = InitializationSettings(
-    android: initializationSettingsAndroid,
-    iOS: initializationSettingsIOS,
-  );
+    // Initialize Firestore for offline persistence
+    await _initializeFirestoreOfflineMode();
 
-  await flutterLocalNotificationsPlugin.initialize(initializationSettings);
+    // Request permissions early
+    await requestAppPermissions();
 
-  // Initialize Firestore for offline persistence
-  await _initializeFirestoreOfflineMode();
-  await requestAppPermissions();
+    // Setup service locator FIRST
+    await setupServiceLocator();
+    listRegisteredServices();
 
-  // Setup service locator
-  setupServiceLocator();
-  listRegisteredServices();
+    // ✅ NEW: Initialize geofence monitoring service after service locator
+    await _initializeGeofenceMonitoringService();
 
-  // Check and migrate existing face data
-  final storageService = getIt<SecureFaceStorageService>();
-  final migrationService = FaceDataMigrationService(storageService);
-  await migrationService.migrateExistingData();
+    // Initialize location exemptions after service locator
+    await _initializeLocationExemptions();
 
-  // Initialize sync service after service locator is setup
-  final syncService = getIt<SyncService>();
-  print("Main: Sync service initialized");
+    // Check and migrate existing face data
+    await _migrateFaceDataSafely();
 
-  runApp(const MyApp());
+    // Initialize sync service after service locator is setup
+    await _initializeSyncServiceSafely();
+
+    runApp(const MyApp());
+
+  }, (error, stack) {
+    // Catch uncaught errors
+    print("Uncaught Error: $error");
+    print("Stack trace: $stack");
+  });
 }
 
-// ✅ Request app permissions with better error handling
+// ✅ NEW: Initialize geofence monitoring service
+Future<void> _initializeGeofenceMonitoringService() async {
+  try {
+    print("🛡️ Initializing geofence exit monitoring service...");
+
+    // Check if service is registered
+    if (!getIt.isRegistered<GeofenceExitMonitoringService>()) {
+      print("❌ GeofenceExitMonitoringService not registered in service locator");
+      return;
+    }
+
+    // Get the service and initialize database
+    final geofenceService = getIt<GeofenceExitMonitoringService>();
+    await geofenceService.initializeDatabase();
+
+    print("✅ Geofence exit monitoring service initialized successfully");
+
+    // Test the service
+    bool isActive = await geofenceService.isMonitoringActive();
+    String? currentEmployee = await geofenceService.getCurrentMonitoredEmployee();
+
+    print("📊 Geofence Monitoring Status:");
+    print("  - Active: $isActive");
+    print("  - Current Employee: ${currentEmployee ?? 'None'}");
+
+  } catch (e) {
+    print("❌ Error initializing geofence monitoring service: $e");
+    print("Stack trace: ${StackTrace.current}");
+    // Don't rethrow - allow app to continue without geofence monitoring
+  }
+}
+
+// Enhanced - Safer system UI setup
+Future<void> _setSafeSystemUI() async {
+  try {
+    SystemChrome.setSystemUIOverlayStyle(
+      const SystemUiOverlayStyle(
+        statusBarColor: Colors.transparent,
+        statusBarIconBrightness: Brightness.dark,
+        systemNavigationBarColor: Colors.white,
+        systemNavigationBarIconBrightness: Brightness.dark,
+      ),
+    );
+  } catch (e) {
+    print("Status bar setup failed: $e");
+  }
+}
+
+// Enhanced - Firebase initialization with retry logic
+Future<void> _initializeFirebaseSafely() async {
+  int retryCount = 0;
+  const maxRetries = 3;
+
+  while (retryCount < maxRetries) {
+    try {
+      await Firebase.initializeApp().timeout(
+        Duration(seconds: 15),
+        onTimeout: () {
+          throw TimeoutException('Firebase initialization timed out');
+        },
+      );
+      print("✅ Firebase initialized successfully");
+      return;
+    } catch (e) {
+      retryCount++;
+      print("❌ Firebase initialization attempt $retryCount failed: $e");
+
+      if (retryCount >= maxRetries) {
+        print("❌ Firebase initialization failed after $maxRetries attempts");
+        // Continue without Firebase for offline functionality
+        break;
+      }
+
+      // Wait before retry
+      await Future.delayed(Duration(seconds: 2));
+    }
+  }
+}
+
+// Enhanced - Safer Firebase messaging setup
+Future<void> _setupFirebaseMessagingSafely() async {
+  try {
+    FirebaseMessaging.onBackgroundMessage(_firebaseMessagingBackgroundHandler);
+    print("✅ Firebase messaging setup completed");
+  } catch (e) {
+    print("⚠️ Firebase messaging setup failed: $e");
+  }
+}
+
+// Enhanced - Safer notification initialization
+Future<void> _initializeLocalNotificationsSafely() async {
+  try {
+    final FlutterLocalNotificationsPlugin flutterLocalNotificationsPlugin =
+    FlutterLocalNotificationsPlugin();
+
+    const AndroidInitializationSettings initializationSettingsAndroid =
+    AndroidInitializationSettings('@mipmap/ic_launcher');
+
+    const DarwinInitializationSettings initializationSettingsIOS =
+    DarwinInitializationSettings(
+      requestAlertPermission: true,
+      requestBadgePermission: true,
+      requestSoundPermission: true,
+    );
+
+    const InitializationSettings initializationSettings = InitializationSettings(
+      android: initializationSettingsAndroid,
+      iOS: initializationSettingsIOS,
+    );
+
+    await flutterLocalNotificationsPlugin.initialize(initializationSettings);
+    print("✅ Local notifications initialized");
+  } catch (e) {
+    print("⚠️ Local notifications setup failed: $e");
+  }
+}
+
+// Initialize location exemptions with enhanced error handling
+Future<void> _initializeLocationExemptions() async {
+  try {
+    print("🔧 Setting up location exemptions...");
+
+    // Check if we have connectivity with timeout
+    var connectivityResult = await Connectivity()
+        .checkConnectivity()
+        .timeout(Duration(seconds: 5), onTimeout: () => ConnectivityResult.none);
+
+    bool isOnline = connectivityResult != ConnectivityResult.none;
+
+    if (!isOnline) {
+      print("📱 Offline mode - skipping exemption setup");
+      return;
+    }
+
+    try {
+      final exemptionRepository = getIt<LocationExemptionRepository>();
+      bool success = await exemptionRepository
+          .createTestExemptionForPIN1244()
+          .timeout(Duration(seconds: 10));
+
+      if (success) {
+        print("✅ Location exemption setup completed for PIN 3576");
+      } else {
+        print("⚠️ Location exemption setup failed or already exists");
+      }
+    } catch (e) {
+      print("⚠️ Location exemption service not available: $e");
+    }
+  } catch (e) {
+    print("❌ Error setting up location exemptions: $e");
+  }
+}
+
+// Enhanced - Safer face data migration
+Future<void> _migrateFaceDataSafely() async {
+  try {
+    final storageService = getIt<SecureFaceStorageService>();
+    final migrationService = FaceDataMigrationService(storageService);
+    await migrationService.migrateExistingData();
+    print("✅ Face data migration completed");
+  } catch (e) {
+    print("⚠️ Face data migration failed: $e");
+  }
+}
+
+// Enhanced - Safer sync service initialization
+Future<void> _initializeSyncServiceSafely() async {
+  try {
+    final syncService = getIt<SyncService>();
+    print("✅ Sync service initialized");
+  } catch (e) {
+    print("⚠️ Sync service initialization failed: $e");
+  }
+}
+
+// Request app permissions with better error handling
 Future<void> requestAppPermissions() async {
   if (Platform.isAndroid) {
     try {
@@ -115,27 +293,96 @@ Future<void> requestAppPermissions() async {
 
       print("Requesting app permissions for Android SDK: ${androidInfo.version.sdkInt}");
 
-      // Request different permissions based on Android version
-      if (androidInfo.version.sdkInt >= 33) {
-        // Android 13+
-        await Permission.photos.request();
-        await Permission.mediaLibrary.request();
-      } else if (androidInfo.version.sdkInt >= 30) {
-        // Android 11-12
-        await Permission.storage.request();
-      } else {
-        // Android 10 and below
-        await Permission.storage.request();
-      }
+      // Enhanced - Individual permission requests with error handling
+      await _requestStoragePermissionsSafely(androidInfo.version.sdkInt);
+      await _requestCameraPermissionSafely();
+      await _requestLocationPermissionsSafely(); // Important for geofence monitoring
+      await _requestNotificationPermissionSafely();
 
-      // ✅ Request notification permissions for real-time updates
-      await Permission.notification.request();
+      // ✅ NEW: Request background location permission for geofence monitoring
+      await _requestBackgroundLocationPermissionSafely(androidInfo.version.sdkInt);
 
       print("✅ Permissions requested successfully");
 
     } catch (e) {
       print("Error requesting app permissions: $e");
     }
+  }
+}
+
+// Enhanced - Safer storage permission requests
+Future<void> _requestStoragePermissionsSafely(int sdkVersion) async {
+  try {
+    if (sdkVersion >= 33) {
+      // Android 13+
+      await Permission.photos.request();
+      await Permission.mediaLibrary.request();
+    } else if (sdkVersion >= 30) {
+      // Android 11-12
+      await Permission.storage.request();
+    } else {
+      // Android 10 and below
+      await Permission.storage.request();
+    }
+    print("✅ Storage permissions requested");
+  } catch (e) {
+    print("Storage permission error: $e");
+  }
+}
+
+// Enhanced - Safer camera permission request
+Future<void> _requestCameraPermissionSafely() async {
+  try {
+    await Permission.camera.request();
+    print("✅ Camera permission requested");
+  } catch (e) {
+    print("Camera permission error: $e");
+  }
+}
+
+// Enhanced - Safer location permission requests
+Future<void> _requestLocationPermissionsSafely() async {
+  try {
+    await Permission.location.request();
+    await Permission.locationWhenInUse.request();
+    print("✅ Location permissions requested");
+  } catch (e) {
+    print("Location permission error: $e");
+  }
+}
+
+// ✅ NEW: Request background location permission for geofence monitoring
+Future<void> _requestBackgroundLocationPermissionSafely(int sdkVersion) async {
+  try {
+    if (sdkVersion >= 29) { // Android 10+
+      // First request foreground location
+      final foregroundStatus = await Permission.location.request();
+
+      if (foregroundStatus.isGranted) {
+        // Then request background location
+        final backgroundStatus = await Permission.locationAlways.request();
+
+        if (backgroundStatus.isGranted) {
+          print("✅ Background location permission granted");
+        } else {
+          print("⚠️ Background location permission denied - geofence monitoring may be limited");
+        }
+      }
+    } else {
+      print("✅ Background location not required for this Android version");
+    }
+  } catch (e) {
+    print("Background location permission error: $e");
+  }
+}
+
+// Enhanced - Safer notification permission request
+Future<void> _requestNotificationPermissionSafely() async {
+  try {
+    await Permission.notification.request();
+    print("✅ Notification permission requested");
+  } catch (e) {
+    print("Notification permission error: $e");
   }
 }
 
@@ -165,68 +412,6 @@ class _MyAppState extends State<MyApp> {
   bool _isLoading = true;
   bool _isOfflineMode = false;
 
-  // GeoJSON data for default locations
-  final String santoriniGeoJson = '''
-{
-    "type": "FeatureCollection", 
-    "features": [
-        {
-            "type": "Feature", 
-            "geometry": {
-                "type": "Polygon", 
-                "coordinates": [
-                    [
-                        [55.2318760, 25.0134952, 0], 
-                        [55.2353092, 25.0080894, 0], 
-                        [55.2368435, 25.0083714, 0], 
-                        [55.2370969, 25.0090520, 0], 
-                        [55.2378332, 25.0101409, 0], 
-                        [55.2383441, 25.0110403, 0], 
-                        [55.2389409, 25.0118910, 0], 
-                        [55.2391769, 25.0128535, 0], 
-                        [55.2392647, 25.0134477, 0], 
-                        [55.2392921, 25.0136687, 0], 
-                        [55.2393135, 25.0137949, 0], 
-                        [55.2393294, 25.0140339, 0], 
-                        [55.2393613, 25.0143344, 0], 
-                        [55.2394062, 25.0150764, 0], 
-                        [55.2395175, 25.0152234, 0], 
-                        [55.2396060, 25.0153182, 0], 
-                        [55.2396731, 25.0154373, 0], 
-                        [55.2396700, 25.0155436, 0], 
-                        [55.2396240, 25.0156620, 0], 
-                        [55.2395212, 25.0158844, 0], 
-                        [55.2395800, 25.0159326, 0], 
-                        [55.2396005, 25.0159852, 0], 
-                        [55.2395947, 25.0160282, 0], 
-                        [55.2395860, 25.0160808, 0], 
-                        [55.2395525, 25.0161160, 0], 
-                        [55.2394955, 25.0161552, 0], 
-                        [55.2394438, 25.0161670, 0], 
-                        [55.2393580, 25.0161564, 0], 
-                        [55.2393419, 25.0161482, 0], 
-                        [55.2389771, 25.0166726, 0], 
-                        [55.2387022, 25.0172347, 0], 
-                        [55.2364036, 25.0159842, 0], 
-                        [55.2318760, 25.0134952, 0]  
-                    ]
-                ]
-            }, 
-            "properties": {
-                "name": "SANTORINI", 
-                "description": "DAMAC LAGOONS SANTORINI (PHOENICIAN TECHNICAL SERVICES)DUBAI,UAE", 
-                "styleUrl": "#poly-C2185B-1200-77", 
-                "fill-opacity": 0.30196078431372547, 
-                "fill": "#c2185b", 
-                "stroke-opacity": 1, 
-                "stroke": "#c2185b", 
-                "stroke-width": 1.2
-            }
-        }
-    ]
-}
-''';
-
   @override
   void initState() {
     super.initState();
@@ -244,7 +429,6 @@ class _MyAppState extends State<MyApp> {
       // Initialize location data and admin account
       await _initializeLocationData();
       await _initializeAdminAccount();
-      await _loadDefaultGeoJsonData();
 
       // Setup auth state listener
       _setupAuthStateListener();
@@ -274,7 +458,7 @@ class _MyAppState extends State<MyApp> {
     }
   }
 
-  // ✅ NEW: PIN-based authentication (like iOS)
+  // PIN-based authentication (like iOS)
   Future<void> _checkPinBasedAuthentication() async {
     SharedPreferences prefs = await SharedPreferences.getInstance();
     bool onboardingComplete = prefs.getBool('onboardingComplete') ?? false;
@@ -287,7 +471,7 @@ class _MyAppState extends State<MyApp> {
       return;
     }
 
-    // ✅ Check for PIN-based authentication (like iOS)
+    // Check for PIN-based authentication (like iOS)
     String? authenticatedUserId = prefs.getString('authenticated_user_id');
     bool isAuthenticated = prefs.getBool('is_authenticated') ?? false;
     int? authTimestamp = prefs.getInt('authentication_timestamp');
@@ -298,7 +482,7 @@ class _MyAppState extends State<MyApp> {
     debugPrint("   - Auth Timestamp: $authTimestamp");
 
     if (isAuthenticated && authenticatedUserId != null) {
-      // ✅ Check if authentication is recent (within 30 days)
+      // Check if authentication is recent (within 30 days)
       if (authTimestamp != null) {
         DateTime authDate = DateTime.fromMillisecondsSinceEpoch(authTimestamp);
         DateTime now = DateTime.now();
@@ -318,7 +502,7 @@ class _MyAppState extends State<MyApp> {
         }
       }
 
-      // ✅ Check if user has COMPLETE registration (including face)
+      // Check if user has COMPLETE registration (including face)
       bool hasCompleteRegistration = await _checkCompleteRegistration(authenticatedUserId);
 
       if (hasCompleteRegistration) {
@@ -449,7 +633,7 @@ class _MyAppState extends State<MyApp> {
     }
   }
 
-  // ✅ Setup authentication state listener
+  // Setup authentication state listener
   void _setupAuthStateListener() {
     try {
       FirebaseAuth.instance.authStateChanges().listen((User? user) {
@@ -461,32 +645,6 @@ class _MyAppState extends State<MyApp> {
       });
     } catch (e) {
       print("⚠️ Auth state listener setup failed: $e");
-    }
-  }
-
-  Future<void> _loadDefaultGeoJsonData() async {
-    try {
-      final polygonRepository = getIt<PolygonLocationRepository>();
-      final existingLocations = await polygonRepository.getActivePolygonLocations();
-
-      if (existingLocations.isEmpty) {
-        print("No polygon locations found. Importing default SANTORINI project boundaries...");
-
-        final locations = await polygonRepository.loadFromGeoJson(santoriniGeoJson);
-
-        if (locations.isNotEmpty) {
-          await polygonRepository.savePolygonLocations(locations);
-          print("Successfully imported ${locations.length} polygon locations");
-
-          for (var location in locations) {
-            print("Imported: ${location.name} with ${location.coordinates.length} boundary points");
-          }
-        }
-      } else {
-        print("Found ${existingLocations.length} existing polygon locations, skipping import");
-      }
-    } catch (e) {
-      print("Error importing default GeoJSON data: $e");
     }
   }
 
@@ -508,16 +666,6 @@ class _MyAppState extends State<MyApp> {
     }
   }
 
-  ConnectivityService get _connectivityService {
-    try {
-      return getIt<ConnectivityService>();
-    } catch (e) {
-      debugPrint("⚠️ ConnectivityService not available, assuming offline");
-      // Create a temporary service instance
-      return ConnectivityService();
-    }
-  }
-
   Future<void> _initializeLocationData() async {
     if (_isOfflineMode) {
       return;
@@ -531,12 +679,7 @@ class _MyAppState extends State<MyApp> {
 
       if (locationsSnapshot.docs.isEmpty) {
         await FirebaseFirestore.instance.collection('locations').add({
-          'name': 'Central Plaza',
-          'address': 'DIP 1, Street 72, Dubai',
-          'latitude': 24.985454,
-          'longitude': 55.175509,
-          'radius': 200.0,
-          'isActive': true,
+
         });
 
         print('Default location created');
@@ -606,10 +749,7 @@ class _MyAppState extends State<MyApp> {
         ),
       ),
       home: _getInitialScreen(),
-      routes: {
-        '/polygon_map_view': (context) => const PolygonMapView(),
-        '/geojson_importer_view': (context) => const GeoJsonImporterView(),
-      },
+      routes: {},
     );
   }
 
@@ -626,12 +766,12 @@ class _MyAppState extends State<MyApp> {
       return DashboardView(employeeId: _loggedInEmployeeId!);
     }
 
-    // ✅ Go to PIN entry (like iOS) instead of app password entry
+    // Go to PIN entry (like iOS) instead of app password entry
     return const PinEntryView();
   }
 }
 
-// ✅ NEW CLEAN WHITE SPLASH SCREEN (No more purple/blue gradients or rockets)
+// CLEAN WHITE SPLASH SCREEN WITH GEOFENCE STATUS
 class CleanSplashScreen extends StatefulWidget {
   final bool isOfflineMode;
 
@@ -786,11 +926,11 @@ class _CleanSplashScreenState extends State<CleanSplashScreen>
 
                       SizedBox(height: isTablet ? 24 : 16),
 
-                      // Status text
+                      // Status text with geofence monitoring info
                       Text(
                         widget.isOfflineMode
                             ? "Initializing Offline Mode..."
-                            : "Initializing PIN Authentication...",
+                            : "Setting up Geofence Monitoring...",
                         style: TextStyle(
                           color: Colors.grey[600],
                           fontSize: isTablet ? 14 : 12,
@@ -800,24 +940,72 @@ class _CleanSplashScreenState extends State<CleanSplashScreen>
 
                       SizedBox(height: isTablet ? 12 : 8),
 
-                      // Feature indicator
-                      Container(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 16,
-                          vertical: 6,
-                        ),
-                        decoration: BoxDecoration(
-                          color: const Color(0xFF2E7D4B).withOpacity(0.1),
-                          borderRadius: BorderRadius.circular(20),
-                        ),
-                        child: Text(
-                          "PIN-Only Authentication",
-                          style: TextStyle(
-                            color: const Color(0xFF2E7D4B),
-                            fontSize: isTablet ? 12 : 10,
-                            fontWeight: FontWeight.w600,
+                      // Feature indicators
+                      Column(
+                        children: [
+                          Container(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 16,
+                              vertical: 6,
+                            ),
+                            decoration: BoxDecoration(
+                              color: const Color(0xFF2E7D4B).withOpacity(0.1),
+                              borderRadius: BorderRadius.circular(20),
+                            ),
+                            child: Text(
+                              "PIN-Only Authentication",
+                              style: TextStyle(
+                                color: const Color(0xFF2E7D4B),
+                                fontSize: isTablet ? 12 : 10,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
                           ),
-                        ),
+
+                          SizedBox(height: 8),
+
+                          // NEW: Geofence monitoring indicator
+                          Container(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 16,
+                              vertical: 6,
+                            ),
+                            decoration: BoxDecoration(
+                              color: Colors.blue.withOpacity(0.1),
+                              borderRadius: BorderRadius.circular(20),
+                            ),
+                            child: Text(
+                              "Work Area Monitoring System",
+                              style: TextStyle(
+                                color: Colors.blue[700],
+                                fontSize: isTablet ? 12 : 10,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                          ),
+
+                          SizedBox(height: 8),
+
+                          // Location exemption indicator
+                          Container(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 16,
+                              vertical: 6,
+                            ),
+                            decoration: BoxDecoration(
+                              color: Colors.orange.withOpacity(0.1),
+                              borderRadius: BorderRadius.circular(20),
+                            ),
+                            child: Text(
+                              "Location Exemption System Active",
+                              style: TextStyle(
+                                color: Colors.orange[700],
+                                fontSize: isTablet ? 12 : 10,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                          ),
+                        ],
                       ),
 
                       if (widget.isOfflineMode) ...[

@@ -45,7 +45,7 @@ class _RegisterFaceViewState extends State<RegisterFaceView> {
       enableContours: false,
     ),
   );
-  
+
   // ================ STATE VARIABLES ================
   String? _image;
   FaceFeatures? _faceFeatures;
@@ -180,18 +180,18 @@ class _RegisterFaceViewState extends State<RegisterFaceView> {
                 children: [
                   // Debug panel (if enabled)
                   if (_showDebugInfo) _buildDebugPanel(),
-                  
+
                   // Advanced options panel (if enabled)
                   if (_showAdvancedOptions) _buildAdvancedOptionsPanel(),
 
                   // Camera section
                   _buildCameraSection(),
-                  
+
                   const Spacer(),
-                  
+
                   // Status display
                   _buildStatusSection(),
-                  
+
                   // Action buttons
                   _buildActionButtons(),
                 ],
@@ -338,19 +338,19 @@ class _RegisterFaceViewState extends State<RegisterFaceView> {
           children: [
             _imageFile != null
                 ? CircleAvatar(
-                    radius: 0.15.sh,
-                    backgroundColor: const Color(0xffD9D9D9),
-                    backgroundImage: FileImage(_imageFile!),
-                  )
+              radius: 0.15.sh,
+              backgroundColor: const Color(0xffD9D9D9),
+              backgroundImage: FileImage(_imageFile!),
+            )
                 : CircleAvatar(
-                    radius: 0.15.sh,
-                    backgroundColor: const Color(0xffD9D9D9),
-                    child: Icon(
-                      Icons.camera_alt,
-                      size: 0.09.sh,
-                      color: const Color(0xff2E2E2E),
-                    ),
-                  ),
+              radius: 0.15.sh,
+              backgroundColor: const Color(0xffD9D9D9),
+              child: Icon(
+                Icons.camera_alt,
+                size: 0.09.sh,
+                color: const Color(0xff2E2E2E),
+              ),
+            ),
             // Quality indicator overlay
             if (_imageFile != null && _faceFeatures != null)
               Positioned(
@@ -407,11 +407,11 @@ class _RegisterFaceViewState extends State<RegisterFaceView> {
     if (_image != null && _faceFeatures != null) {
       double qualityScore = getFaceFeatureQuality(_faceFeatures!);
       int featuresDetected = _countDetectedLandmarks(_faceFeatures!);
-      
+
       Color statusColor = Colors.green;
       IconData statusIcon = Icons.check_circle;
       String statusText = "✅ Face detection successful!";
-      
+
       if (qualityScore < 0.4) {
         statusColor = Colors.red;
         statusIcon = Icons.error;
@@ -425,7 +425,7 @@ class _RegisterFaceViewState extends State<RegisterFaceView> {
         statusIcon = Icons.info;
         statusText = "ℹ️ Good face detection quality";
       }
-      
+
       return Container(
         margin: EdgeInsets.only(bottom: 0.02.sh),
         padding: EdgeInsets.all(0.015.sh),
@@ -588,8 +588,8 @@ class _RegisterFaceViewState extends State<RegisterFaceView> {
             const CircularProgressIndicator(color: accentColor),
             SizedBox(height: 0.015.sh),
             Text(
-              _isOfflineMode 
-                  ? "🔐 Offline registration..." 
+              _isOfflineMode
+                  ? "🔐 Offline registration..."
                   : "🔐 Face registration...",
               style: const TextStyle(
                 color: Colors.white,
@@ -649,12 +649,12 @@ class _RegisterFaceViewState extends State<RegisterFaceView> {
         // Main Register Button
         if (_image != null && _faceFeatures != null)
           CustomButton(
-            text: _isOfflineMode 
-                ? "🔐 Register Face (Offline)" 
+            text: _isOfflineMode
+                ? "🔐 Register Face (Offline)"
                 : "🔐 Register Face",
             onTap: _registerFace,
           ),
-        
+
         // Retake Button
         if (_image != null && _faceFeatures == null)
           CustomButton(
@@ -694,26 +694,26 @@ class _RegisterFaceViewState extends State<RegisterFaceView> {
   String _getFeaturesBreakdown(FaceFeatures features) {
     List<String> detected = [];
     List<String> missing = [];
-    
+
     if (features.leftEye != null) detected.add('LE'); else missing.add('LE');
     if (features.rightEye != null) detected.add('RE'); else missing.add('RE');
     if (features.noseBase != null) detected.add('N'); else missing.add('N');
     if (features.leftMouth != null) detected.add('LM'); else missing.add('LM');
     if (features.rightMouth != null) detected.add('RM'); else missing.add('RM');
-    
+
     return "Detected: [${detected.join(',')}] Missing: [${missing.join(',')}]";
   }
 
   // ================ IMAGE CAPTURE ================
   Future<void> _getImage() async {
     _addDebugLog("📸 Starting image capture...");
-    
+
     setState(() {
       _imageFile = null;
       _image = null;
       _faceFeatures = null;
     });
-    
+
     try {
       final pickedFile = await _imagePicker.pickImage(
         source: ImageSource.camera,
@@ -722,7 +722,7 @@ class _RegisterFaceViewState extends State<RegisterFaceView> {
         imageQuality: 95,
         preferredCameraDevice: CameraDevice.front,
       );
-      
+
       if (pickedFile != null) {
         await _setPickedFile(pickedFile);
       } else {
@@ -737,7 +737,7 @@ class _RegisterFaceViewState extends State<RegisterFaceView> {
   Future<void> _setPickedFile(XFile pickedFile) async {
     final path = pickedFile.path;
     _addDebugLog("📸 Processing image from: $path");
-    
+
     setState(() {
       _imageFile = File(path);
     });
@@ -745,16 +745,16 @@ class _RegisterFaceViewState extends State<RegisterFaceView> {
     try {
       // Read image bytes
       Uint8List imageBytes = await _imageFile!.readAsBytes();
-      
+
       setState(() {
         _image = base64Encode(imageBytes);
       });
-      
+
       _addDebugLog("📸 Image encoded to base64 (${_image!.length} chars)");
 
       // Create InputImage for face detection
       InputImage inputImage = InputImage.fromFilePath(path);
-      
+
       // Show loading dialog
       showDialog(
         context: context,
@@ -780,13 +780,13 @@ class _RegisterFaceViewState extends State<RegisterFaceView> {
           ),
         ),
       );
-      
+
       // Process face detection
       await _processFaceDetection(inputImage);
-      
+
       // Hide loading dialog
       if (mounted) Navigator.of(context).pop();
-      
+
     } catch (e) {
       _addDebugLog("❌ Error processing image: $e");
       CustomSnackBar.errorSnackBar("Error processing image: $e");
@@ -797,25 +797,25 @@ class _RegisterFaceViewState extends State<RegisterFaceView> {
   // ================ FACE DETECTION ================
   Future<void> _processFaceDetection(InputImage inputImage) async {
     _addDebugLog("🔍 Starting face detection...");
-    
+
     try {
       // Use face detection
       _faceFeatures = await extractFaceFeatures(inputImage, _faceDetector);
-      
+
       if (_faceFeatures != null) {
         _addDebugLog("✅ Face detected and features extracted successfully!");
-        
+
         // Validate features quality
         if (validateFaceFeatures(_faceFeatures!)) {
           _addDebugLog("✅ Face features are sufficient for registration");
         } else {
           _addDebugLog("⚠️ Face features detected but may need improvement");
         }
-        
+
         // Get quality score
         double qualityScore = getFaceFeatureQuality(_faceFeatures!);
         _addDebugLog("📊 Face quality score: ${(qualityScore * 100).toStringAsFixed(1)}%");
-        
+
         // Store debug data
         _registrationDebugData['lastFaceDetection'] = {
           'successful': true,
@@ -824,7 +824,7 @@ class _RegisterFaceViewState extends State<RegisterFaceView> {
           'isValid': validateFaceFeatures(_faceFeatures!),
           'timestamp': DateTime.now().toIso8601String(),
         };
-        
+
       } else {
         _addDebugLog("❌ No face detected");
         _registrationDebugData['lastFaceDetection'] = {
@@ -833,9 +833,9 @@ class _RegisterFaceViewState extends State<RegisterFaceView> {
         };
         _showFaceDetectionTips();
       }
-      
+
       setState(() {});
-      
+
     } catch (e) {
       _addDebugLog("❌ Error in face detection: $e");
       setState(() {
@@ -858,7 +858,7 @@ class _RegisterFaceViewState extends State<RegisterFaceView> {
     try {
       _addDebugLog("🔐 Starting face registration process...");
       _addDebugLog("📶 Registration mode: ${_isOfflineMode ? 'Offline' : 'Online'}");
-      
+
       // Validate face quality before registration
       if (!_validateFaceQuality()) {
         setState(() {
@@ -866,7 +866,7 @@ class _RegisterFaceViewState extends State<RegisterFaceView> {
         });
         return;
       }
-      
+
       // Clean the image data
       String cleanedImage = _image!;
       if (cleanedImage.contains('data:image') && cleanedImage.contains(',')) {
@@ -902,12 +902,12 @@ class _RegisterFaceViewState extends State<RegisterFaceView> {
       });
 
       _addDebugLog("✅ Face registration completed successfully!");
-      
+
       // Show success message
       CustomSnackBar.successSnackBar(
-        _isOfflineMode 
-          ? "🔐 Face registered locally! Will sync when online." 
-          : "🔐 Face registered successfully!"
+          _isOfflineMode
+              ? "🔐 Face registered locally! Will sync when online."
+              : "🔐 Face registered successfully!"
       );
 
       // Wait a moment then navigate
@@ -930,7 +930,7 @@ class _RegisterFaceViewState extends State<RegisterFaceView> {
       setState(() {
         _isRegistering = false;
       });
-      
+
       _addDebugLog("❌ Error in registration: $e");
       CustomSnackBar.errorSnackBar("Registration failed. Please try again.");
     }
@@ -973,24 +973,24 @@ class _RegisterFaceViewState extends State<RegisterFaceView> {
   Future<void> _saveLocalData(String cleanedImage) async {
     try {
       final prefs = await SharedPreferences.getInstance();
-      
+
       _addDebugLog("💾 Saving face data with multiple backup methods...");
-      
+
       // Primary storage locations
       await prefs.setString('employee_image_${widget.employeeId}', cleanedImage);
       await prefs.setString('secure_face_image_${widget.employeeId}', cleanedImage);
-      
+
       // Face features storage
       String featuresJson = jsonEncode(_faceFeatures!.toJson());
       await prefs.setString('employee_face_features_${widget.employeeId}', featuresJson);
       await prefs.setString('secure_face_features_${widget.employeeId}', featuresJson);
-      
+
       // Registration flags
       DateTime now = DateTime.now();
       await prefs.setBool('face_registered_${widget.employeeId}', true);
       await prefs.setString('face_registration_date_${widget.employeeId}', now.toIso8601String());
       await prefs.setString('face_registration_platform_${widget.employeeId}', 'Production');
-      
+
       // Employee data
       Map<String, dynamic> employeeData = {
         'id': widget.employeeId,
@@ -1006,11 +1006,11 @@ class _RegisterFaceViewState extends State<RegisterFaceView> {
         'debugLogs': _debugLogs,
         'registrationDebugData': _registrationDebugData,
       };
-      
+
       await prefs.setString('user_data_${widget.employeeId}', jsonEncode(employeeData));
-      
+
       _addDebugLog("💾 Local storage completed successfully");
-      
+
     } catch (e) {
       _addDebugLog("❌ Error in local storage: $e");
       throw e;
@@ -1020,11 +1020,11 @@ class _RegisterFaceViewState extends State<RegisterFaceView> {
   // Save to cloud with retry mechanism
   Future<bool> _saveToCloudWithRetry(String cleanedImage) async {
     _addDebugLog("🌐 Attempting cloud save with retry...");
-    
+
     for (int attempt = 1; attempt <= 3; attempt++) {
       try {
         _addDebugLog("🌐 Cloud save attempt $attempt/3...");
-        
+
         Map<String, dynamic> cloudData = {
           'image': cleanedImage,
           'faceFeatures': _faceFeatures!.toJson(),
@@ -1037,25 +1037,25 @@ class _RegisterFaceViewState extends State<RegisterFaceView> {
           'devicePlatform': Platform.operatingSystem,
           'lastUpdated': FieldValue.serverTimestamp(),
         };
-        
+
         await FirebaseFirestore.instance
             .collection('employees')
             .doc(widget.employeeId)
             .update(cloudData);
-        
+
         _addDebugLog("✅ Cloud save successful on attempt $attempt");
         return true;
-        
+
       } catch (e) {
         _addDebugLog("❌ Cloud save attempt $attempt failed: $e");
-        
+
         if (attempt < 3) {
           _addDebugLog("🔄 Retrying in ${attempt * 2} seconds...");
           await Future.delayed(Duration(seconds: attempt * 2));
         }
       }
     }
-    
+
     _addDebugLog("❌ All cloud save attempts failed");
     return false;
   }
@@ -1066,7 +1066,7 @@ class _RegisterFaceViewState extends State<RegisterFaceView> {
       final prefs = await SharedPreferences.getInstance();
       await prefs.setBool('pending_face_registration_${widget.employeeId}', true);
       await prefs.setString('pending_sync_timestamp_${widget.employeeId}', DateTime.now().toIso8601String());
-      
+
       // Store sync data
       Map<String, dynamic> syncData = {
         'employeeId': widget.employeeId,
@@ -1079,11 +1079,11 @@ class _RegisterFaceViewState extends State<RegisterFaceView> {
         'featuresCount': _countDetectedLandmarks(_faceFeatures!),
         'debugLogs': _debugLogs,
       };
-      
+
       await prefs.setString('pending_sync_data_${widget.employeeId}', jsonEncode(syncData));
-      
+
       _addDebugLog("📱 Data marked for cloud sync when online");
-      
+
     } catch (e) {
       _addDebugLog("❌ Error marking for cloud sync: $e");
     }
@@ -1093,59 +1093,59 @@ class _RegisterFaceViewState extends State<RegisterFaceView> {
   Future<bool> _validateSavedData() async {
     try {
       _addDebugLog("🔍 Validating saved registration data...");
-      
+
       final prefs = await SharedPreferences.getInstance();
-      
+
       // Check image data
       String? primaryImage = prefs.getString('employee_image_${widget.employeeId}');
       String? secureImage = prefs.getString('secure_face_image_${widget.employeeId}');
-      
+
       if (primaryImage == null && secureImage == null) {
         _addDebugLog("❌ Validation failed: No saved images found");
         return false;
       }
-      
+
       // Check face features
       String? primaryFeatures = prefs.getString('employee_face_features_${widget.employeeId}');
       String? secureFeatures = prefs.getString('secure_face_features_${widget.employeeId}');
-      
+
       if (primaryFeatures == null && secureFeatures == null) {
         _addDebugLog("❌ Validation failed: No saved features found");
         return false;
       }
-      
+
       // Try to parse features
       String? featuresJson = secureFeatures ?? primaryFeatures;
       if (featuresJson != null) {
         try {
           Map<String, dynamic> featuresMap = jsonDecode(featuresJson);
           FaceFeatures parsedFeatures = FaceFeatures.fromJson(featuresMap);
-          
+
           // Validate essential features
           if (parsedFeatures.leftEye == null || parsedFeatures.rightEye == null || parsedFeatures.noseBase == null) {
             _addDebugLog("❌ Validation failed: Missing essential features in parsed data");
             return false;
           }
-          
+
           _addDebugLog("✅ Successfully parsed and validated face features");
-          
+
         } catch (e) {
           _addDebugLog("❌ Validation failed: Cannot parse features - $e");
           return false;
         }
       }
-      
+
       // Check registration flags
       bool isRegistered = prefs.getBool('face_registered_${widget.employeeId}') ?? false;
-      
+
       if (!isRegistered) {
         _addDebugLog("❌ Validation failed: No registration flags set");
         return false;
       }
-      
+
       _addDebugLog("✅ Data validation passed");
       return true;
-      
+
     } catch (e) {
       _addDebugLog("❌ Error during validation: $e");
       return false;
@@ -1159,7 +1159,7 @@ class _RegisterFaceViewState extends State<RegisterFaceView> {
       await prefs.setBool('is_authenticated', true);
       await prefs.setString('authenticated_user_id', widget.employeeId);
       await prefs.setInt('authentication_timestamp', DateTime.now().millisecondsSinceEpoch);
-      
+
       _addDebugLog("✅ Registration marked as complete");
     } catch (e) {
       _addDebugLog("❌ Error marking registration complete: $e");
@@ -1172,9 +1172,9 @@ class _RegisterFaceViewState extends State<RegisterFaceView> {
       CustomSnackBar.errorSnackBar("No image to test");
       return;
     }
-    
+
     _addDebugLog("🧪 Testing multiple face detection methods...");
-    
+
     showDialog(
       context: context,
       barrierDismissible: false,
@@ -1201,7 +1201,7 @@ class _RegisterFaceViewState extends State<RegisterFaceView> {
 
     try {
       InputImage inputImage = InputImage.fromFilePath(_imageFile!.path);
-      
+
       // Test 1: Ultra-lenient settings
       final detector1 = FaceDetector(
         options: FaceDetectorOptions(
@@ -1212,12 +1212,12 @@ class _RegisterFaceViewState extends State<RegisterFaceView> {
       );
       List<Face> faces1 = await detector1.processImage(inputImage);
       _addDebugLog("🧪 Test 1 (ultra-lenient): ${faces1.length} faces");
-      
+
       // Test 2: Default settings
       final detector2 = FaceDetector(options: FaceDetectorOptions());
       List<Face> faces2 = await detector2.processImage(inputImage);
       _addDebugLog("🧪 Test 2 (default): ${faces2.length} faces");
-      
+
       // Test 3: Accurate settings
       final detector3 = FaceDetector(
         options: FaceDetectorOptions(
@@ -1228,14 +1228,14 @@ class _RegisterFaceViewState extends State<RegisterFaceView> {
       );
       List<Face> faces3 = await detector3.processImage(inputImage);
       _addDebugLog("🧪 Test 3 (accurate): ${faces3.length} faces");
-      
+
       // Cleanup
       detector1.close();
       detector2.close();
       detector3.close();
-      
+
       Navigator.pop(context);
-      
+
       // Show results
       showDialog(
         context: context,
@@ -1244,9 +1244,9 @@ class _RegisterFaceViewState extends State<RegisterFaceView> {
           title: const Text("🧪 Detection Test Results", style: TextStyle(color: Colors.white)),
           content: Text(
             "Ultra-lenient: ${faces1.length} faces\n"
-            "Default: ${faces2.length} faces\n"
-            "Accurate: ${faces3.length} faces\n\n"
-            "${faces1.isNotEmpty || faces2.isNotEmpty || faces3.isNotEmpty ? '✅ Face detection working!' : '❌ No faces detected with any method'}",
+                "Default: ${faces2.length} faces\n"
+                "Accurate: ${faces3.length} faces\n\n"
+                "${faces1.isNotEmpty || faces2.isNotEmpty || faces3.isNotEmpty ? '✅ Face detection working!' : '❌ No faces detected with any method'}",
             style: const TextStyle(color: Colors.white),
           ),
           actions: [
@@ -1257,7 +1257,7 @@ class _RegisterFaceViewState extends State<RegisterFaceView> {
           ],
         ),
       );
-      
+
     } catch (e) {
       Navigator.pop(context);
       _addDebugLog("❌ Test failed: $e");
@@ -1270,13 +1270,13 @@ class _RegisterFaceViewState extends State<RegisterFaceView> {
       CustomSnackBar.errorSnackBar("No face features to test");
       return;
     }
-    
+
     _addDebugLog("🧪 Testing face quality metrics...");
-    
+
     double qualityScore = getFaceFeatureQuality(_faceFeatures!);
     int featuresCount = _countDetectedLandmarks(_faceFeatures!);
     bool isValid = validateFaceFeatures(_faceFeatures!);
-    
+
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
@@ -1309,13 +1309,13 @@ class _RegisterFaceViewState extends State<RegisterFaceView> {
       CustomSnackBar.errorSnackBar("No image to analyze");
       return;
     }
-    
+
     _addDebugLog("🧪 Analyzing image details...");
-    
+
     try {
       Uint8List imageBytes = await _imageFile!.readAsBytes();
       double imageSizeKB = imageBytes.length / 1024;
-      
+
       showDialog(
         context: context,
         builder: (context) => AlertDialog(
@@ -1364,7 +1364,7 @@ class _RegisterFaceViewState extends State<RegisterFaceView> {
       'qualityScore': _faceFeatures != null ? getFaceFeatureQuality(_faceFeatures!) : null,
       'featuresCount': _faceFeatures != null ? _countDetectedLandmarks(_faceFeatures!) : null,
     };
-    
+
     String exportJson = jsonEncode(exportData);
     Clipboard.setData(ClipboardData(text: exportJson));
     _addDebugLog("📋 Debug data exported to clipboard");

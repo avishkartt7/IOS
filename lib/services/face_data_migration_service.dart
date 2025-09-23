@@ -2,8 +2,8 @@
 
 import 'dart:convert';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:face_auth/services/secure_face_storage_service.dart';
-import 'package:face_auth/model/user_model.dart';
+import 'package:face_auth_compatible/services/secure_face_storage_service.dart';
+import 'package:face_auth_compatible/model/user_model.dart';
 
 class FaceDataMigrationService {
   final SecureFaceStorageService _storageService;
@@ -45,3 +45,6 @@ class FaceDataMigrationService {
     }
   }
 }
+
+
+

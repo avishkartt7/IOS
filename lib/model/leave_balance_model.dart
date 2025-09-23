@@ -1,4 +1,4 @@
-// lib/model/leave_balance_model.dart
+// lib/model/leave_balance_model.dart - STEP 2: FIXED BALANCE RESTORATION LOGIC
 
 import 'package:cloud_firestore/cloud_firestore.dart';
 
@@ -19,7 +19,7 @@ class LeaveBalance {
     this.lastUpdated,
   });
 
-  // Create default leave balance for a new employee with updated allocations
+  // ✅ FIXED: Create default leave balance with only 4 leave types
   factory LeaveBalance.createDefault(String employeeId, {int? year}) {
     final currentYear = year ?? DateTime.now().year;
 
@@ -29,29 +29,20 @@ class LeaveBalance {
       totalDays: {
         'annual': 30,        // 30 days annual leave
         'sick': 15,          // 15 days sick leave
-        'maternity': 60,     // 10 days maternity leave
-        'paternity': 5,     // 10 days paternity leave
-        'emergency': 15,     // 10 days emergency leave
-        'compensate': 5,     // Compensate leave (earned)
-        'unpaid': 0,         // Unpaid leave (unlimited)
+        'local': 10,         // 10 days local leave (NEW)
+        'emergency': 15,     // 15 days emergency leave
       },
       usedDays: {
         'annual': 0,
         'sick': 0,
-        'maternity': 0,
-        'paternity': 0,
+        'local': 0,          // ✅ NEW
         'emergency': 0,
-        'compensate': 0,
-        'unpaid': 0,
       },
       pendingDays: {
         'annual': 0,
         'sick': 0,
-        'maternity': 0,
-        'paternity': 0,
+        'local': 0,          // ✅ NEW
         'emergency': 0,
-        'compensate': 0,
-        'unpaid': 0,
       },
       lastUpdated: DateTime.now(),
     );
@@ -91,33 +82,65 @@ class LeaveBalance {
     final used = usedDays[leaveType] ?? 0;
     final pending = pendingDays[leaveType] ?? 0;
 
-    // For unlimited leave types (unpaid), return a large number
-    if (leaveType == 'unpaid') {
-      return 999;
-    }
-
-    return total - used - pending;
+    final remaining = total - used - pending;
+    return remaining < 0 ? 0 : remaining;
   }
 
   // Check if employee has enough balance for requested days
   bool hasEnoughBalance(String leaveType, int requestedDays) {
-    // Unlimited leave types
-    if (leaveType == 'unpaid') {
-      return true;
-    }
-
-    // Sick and emergency leave have special rules but still check balance
-    if (leaveType == 'sick' || leaveType == 'emergency') {
-      final remaining = getRemainingDays(leaveType);
-      return remaining >= requestedDays;
-    }
-
     final remaining = getRemainingDays(leaveType);
     return remaining >= requestedDays;
   }
 
-  // Add used days (when leave is approved) and remove from pending
+  // ✅ FIXED: Add pending days (when leave is applied)
+  LeaveBalance addPendingDays(String leaveType, int days) {
+    print("🔄 Adding $days pending days to $leaveType");
+    print("📊 Before: Pending ${pendingDays[leaveType] ?? 0} days");
+
+    final newPendingDays = Map<String, int>.from(pendingDays);
+    newPendingDays[leaveType] = (newPendingDays[leaveType] ?? 0) + days;
+
+    print("📊 After: Pending ${newPendingDays[leaveType]} days");
+
+    return LeaveBalance(
+      employeeId: employeeId,
+      year: year,
+      totalDays: totalDays,
+      usedDays: usedDays,
+      pendingDays: newPendingDays,
+      lastUpdated: DateTime.now(),
+    );
+  }
+
+  // ✅ FIXED: Remove pending days (when leave is rejected/cancelled)
+  LeaveBalance removePendingDays(String leaveType, int days) {
+    print("🔄 Removing $days pending days from $leaveType");
+    print("📊 Before: Pending ${pendingDays[leaveType] ?? 0} days");
+
+    final newPendingDays = Map<String, int>.from(pendingDays);
+    final currentPending = newPendingDays[leaveType] ?? 0;
+
+    // Calculate new pending days, ensuring it doesn't go below 0
+    final newPendingValue = currentPending - days;
+    newPendingDays[leaveType] = newPendingValue < 0 ? 0 : newPendingValue;
+
+    print("📊 After: Pending ${newPendingDays[leaveType]} days");
+
+    return LeaveBalance(
+      employeeId: employeeId,
+      year: year,
+      totalDays: totalDays,
+      usedDays: usedDays,
+      pendingDays: newPendingDays,
+      lastUpdated: DateTime.now(),
+    );
+  }
+
+  // ✅ FIXED: Approve leave (move from pending to used)
   LeaveBalance approveLeave(String leaveType, int days) {
+    print("✅ Approving $days days for $leaveType");
+    print("📊 Before: Used ${usedDays[leaveType] ?? 0}, Pending ${pendingDays[leaveType] ?? 0}");
+
     final newUsedDays = Map<String, int>.from(usedDays);
     final newPendingDays = Map<String, int>.from(pendingDays);
 
@@ -125,10 +148,11 @@ class LeaveBalance {
     newUsedDays[leaveType] = (newUsedDays[leaveType] ?? 0) + days;
 
     // Remove from pending days
-    newPendingDays[leaveType] = (newPendingDays[leaveType] ?? 0) - days;
-    if (newPendingDays[leaveType]! < 0) {
-      newPendingDays[leaveType] = 0;
-    }
+    final currentPending = newPendingDays[leaveType] ?? 0;
+    final newPendingValue = currentPending - days;
+    newPendingDays[leaveType] = newPendingValue < 0 ? 0 : newPendingValue;
+
+    print("📊 After: Used ${newUsedDays[leaveType]}, Pending ${newPendingDays[leaveType]}");
 
     return LeaveBalance(
       employeeId: employeeId,
@@ -140,10 +164,19 @@ class LeaveBalance {
     );
   }
 
-  // Add pending days (when leave is applied)
-  LeaveBalance addPendingDays(String leaveType, int days) {
+  // ✅ NEW: Special method for emergency leave - add pending to both emergency and annual
+  LeaveBalance addEmergencyPendingDays(int days) {
+    print("🚨 Adding $days emergency pending days (double deduction)");
+
     final newPendingDays = Map<String, int>.from(pendingDays);
-    newPendingDays[leaveType] = (newPendingDays[leaveType] ?? 0) + days;
+
+    // Add to emergency leave pending
+    newPendingDays['emergency'] = (newPendingDays['emergency'] ?? 0) + days;
+    print("📊 Emergency pending: ${newPendingDays['emergency']} days");
+
+    // Add to annual leave pending
+    newPendingDays['annual'] = (newPendingDays['annual'] ?? 0) + days;
+    print("📊 Annual pending: ${newPendingDays['annual']} days");
 
     return LeaveBalance(
       employeeId: employeeId,
@@ -155,21 +188,60 @@ class LeaveBalance {
     );
   }
 
-  // Remove pending days (when leave is rejected/cancelled)
-  LeaveBalance removePendingDays(String leaveType, int days) {
-    final newPendingDays = Map<String, int>.from(pendingDays);
-    newPendingDays[leaveType] = (newPendingDays[leaveType] ?? 0) - days;
+  // ✅ NEW: Special method for emergency leave - remove pending from both emergency and annual
+  LeaveBalance removeEmergencyPendingDays(int days) {
+    print("🚨 Removing $days emergency pending days (double deduction restoration)");
 
-    // Ensure pending days don't go negative
-    if (newPendingDays[leaveType]! < 0) {
-      newPendingDays[leaveType] = 0;
-    }
+    final newPendingDays = Map<String, int>.from(pendingDays);
+
+    // Remove from emergency leave pending
+    final currentEmergencyPending = newPendingDays['emergency'] ?? 0;
+    final newEmergencyPending = currentEmergencyPending - days;
+    newPendingDays['emergency'] = newEmergencyPending < 0 ? 0 : newEmergencyPending;
+    print("📊 Emergency pending: ${newPendingDays['emergency']} days");
+
+    // Remove from annual leave pending
+    final currentAnnualPending = newPendingDays['annual'] ?? 0;
+    final newAnnualPending = currentAnnualPending - days;
+    newPendingDays['annual'] = newAnnualPending < 0 ? 0 : newAnnualPending;
+    print("📊 Annual pending: ${newPendingDays['annual']} days");
 
     return LeaveBalance(
       employeeId: employeeId,
       year: year,
       totalDays: totalDays,
       usedDays: usedDays,
+      pendingDays: newPendingDays,
+      lastUpdated: DateTime.now(),
+    );
+  }
+
+  // ✅ NEW: Special method for emergency leave approval - move from pending to used for both
+  LeaveBalance approveEmergencyLeave(int days) {
+    print("🚨 Approving $days emergency leave days (double deduction)");
+
+    final newUsedDays = Map<String, int>.from(usedDays);
+    final newPendingDays = Map<String, int>.from(pendingDays);
+
+    // Move emergency leave from pending to used
+    newUsedDays['emergency'] = (newUsedDays['emergency'] ?? 0) + days;
+    final currentEmergencyPending = newPendingDays['emergency'] ?? 0;
+    final newEmergencyPending = currentEmergencyPending - days;
+    newPendingDays['emergency'] = newEmergencyPending < 0 ? 0 : newEmergencyPending;
+    print("📊 Emergency - Used: ${newUsedDays['emergency']}, Pending: ${newPendingDays['emergency']}");
+
+    // Move annual leave from pending to used
+    newUsedDays['annual'] = (newUsedDays['annual'] ?? 0) + days;
+    final currentAnnualPending = newPendingDays['annual'] ?? 0;
+    final newAnnualPending = currentAnnualPending - days;
+    newPendingDays['annual'] = newAnnualPending < 0 ? 0 : newAnnualPending;
+    print("📊 Annual - Used: ${newUsedDays['annual']}, Pending: ${newPendingDays['annual']}");
+
+    return LeaveBalance(
+      employeeId: employeeId,
+      year: year,
+      totalDays: totalDays,
+      usedDays: newUsedDays,
       pendingDays: newPendingDays,
       lastUpdated: DateTime.now(),
     );
@@ -194,7 +266,10 @@ class LeaveBalance {
   Map<String, Map<String, int>> getSummary() {
     final summary = <String, Map<String, int>>{};
 
-    for (String leaveType in totalDays.keys) {
+    // ✅ FIXED: Only include 4 leave types
+    final leaveTypes = ['annual', 'sick', 'local', 'emergency'];
+
+    for (String leaveType in leaveTypes) {
       final total = totalDays[leaveType] ?? 0;
       final used = usedDays[leaveType] ?? 0;
       final pending = pendingDays[leaveType] ?? 0;
@@ -243,6 +318,20 @@ class LeaveBalance {
       pendingDays: pendingDays ?? this.pendingDays,
       lastUpdated: lastUpdated ?? this.lastUpdated,
     );
+  }
+
+  // ✅ DEBUG: Print current balance state
+  void printBalanceState() {
+    print("=== LEAVE BALANCE STATE ===");
+    print("Employee: $employeeId, Year: $year");
+    print("TOTAL DAYS: $totalDays");
+    print("USED DAYS: $usedDays");
+    print("PENDING DAYS: $pendingDays");
+    print("REMAINING DAYS:");
+    for (String type in ['annual', 'sick', 'local', 'emergency']) {
+      print("  $type: ${getRemainingDays(type)} days");
+    }
+    print("===========================");
   }
 
   @override

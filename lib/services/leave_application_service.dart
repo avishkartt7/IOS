@@ -1,16 +1,18 @@
-// lib/services/leave_application_service.dart - COMPLETE FIXED VERSION
+// lib/services/leave_application_service.dart - STEP 4: FIXED BALANCE MANAGEMENT
 
 import 'dart:io';
+import 'dart:convert';
 import 'package:cloud_functions/cloud_functions.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_storage/firebase_storage.dart';
-import 'package:face_auth/model/leave_application_model.dart';
-import 'package:face_auth/model/leave_balance_model.dart';
-import 'package:face_auth/repositories/leave_application_repository.dart';
-import 'package:face_auth/services/connectivity_service.dart';
-import 'package:face_auth/services/simple_firebase_auth_service.dart'; // ✅ FIXED IMPORT
+import 'package:face_auth_compatible/model/leave_application_model.dart';
+import 'package:face_auth_compatible/model/leave_balance_model.dart';
+import 'package:face_auth_compatible/repositories/leave_application_repository.dart';
+import 'package:face_auth_compatible/services/connectivity_service.dart';
+import 'package:face_auth_compatible/services/simple_firebase_auth_service.dart';
 import 'package:flutter/foundation.dart';
 import 'package:path/path.dart' as path;
+import 'package:intl/intl.dart';
 
 class LeaveApplicationService {
   final LeaveApplicationRepository _repository;
@@ -24,7 +26,7 @@ class LeaveApplicationService {
   }) : _repository = repository,
         _connectivityService = connectivityService;
 
-  // ✅ FIXED: Upload certificate with simple anonymous authentication
+  // Certificate upload with proper authentication
   Future<Map<String, String>?> uploadCertificate(
       File certificateFile,
       String employeeId,
@@ -35,22 +37,20 @@ class LeaveApplicationService {
         throw Exception('Cannot upload files while offline. Please connect to internet.');
       }
 
-      debugPrint("🔄 Starting certificate upload for employee: $employeeId");
+      debugPrint("📤 Starting certificate upload for employee: $employeeId");
 
-      // ✅ SIMPLE FIX: Use anonymous authentication instead of complex email/password
+      // Ensure authentication
       final isAuthenticated = await SimpleFirebaseAuthService.ensureAuthenticated();
       if (!isAuthenticated) {
         throw Exception('Authentication failed. Please check your internet connection and try again.');
       }
 
-      // Validate file exists and is readable
+      // Validate file
       if (!await certificateFile.exists()) {
         throw Exception('Selected file does not exist');
       }
 
       final fileSize = await certificateFile.length();
-      debugPrint("📊 File size: $fileSize bytes");
-
       if (fileSize == 0) {
         throw Exception('Selected file is empty');
       }
@@ -68,11 +68,11 @@ class LeaveApplicationService {
         throw Exception('Invalid file type. Allowed: PDF, JPG, PNG, DOC, DOCX');
       }
 
-      // Create unique filename with timestamp
+      // Create unique filename
       final timestamp = DateTime.now().millisecondsSinceEpoch;
       final uniqueFileName = '${timestamp}_${employeeId}_$fileName';
 
-      // ✅ FIXED: Create proper Firebase Storage reference path
+      // Create storage reference
       final storageRef = _storage
           .ref()
           .child('leave_certificates')
@@ -80,9 +80,7 @@ class LeaveApplicationService {
           .child(applicationId)
           .child(uniqueFileName);
 
-      debugPrint("☁️ Storage path: ${storageRef.fullPath}");
-
-      // ✅ ENHANCED: Set comprehensive metadata
+      // Set metadata
       final metadata = SettableMetadata(
         contentType: _getMimeType(fileExtension),
         customMetadata: {
@@ -94,16 +92,8 @@ class LeaveApplicationService {
         },
       );
 
-      // ✅ ENHANCED: Upload with retry mechanism
+      // Upload with timeout
       final uploadTask = storageRef.putFile(certificateFile, metadata);
-
-      // Monitor upload progress
-      uploadTask.snapshotEvents.listen((TaskSnapshot snapshot) {
-        final progress = (snapshot.bytesTransferred / snapshot.totalBytes) * 100;
-        debugPrint("📤 Upload progress: ${progress.toStringAsFixed(1)}%");
-      });
-
-      // Wait for upload completion with timeout
       final snapshot = await uploadTask.timeout(
         const Duration(minutes: 5),
         onTimeout: () {
@@ -111,16 +101,13 @@ class LeaveApplicationService {
         },
       );
 
-      // Verify upload state
+      // Verify upload
       if (snapshot.state != TaskState.success) {
         throw Exception('Upload failed with state: ${snapshot.state}');
       }
 
       // Get download URL
       final downloadUrl = await snapshot.ref.getDownloadURL();
-      debugPrint("🔗 Download URL obtained: $downloadUrl");
-
-      // Verify URL is accessible
       if (downloadUrl.isEmpty) {
         throw Exception('Failed to get download URL');
       }
@@ -134,16 +121,12 @@ class LeaveApplicationService {
         'storagePath': storageRef.fullPath,
       };
 
-      debugPrint("🎉 Certificate uploaded successfully!");
-      debugPrint("📋 Upload result: $result");
-
+      debugPrint("✅ Certificate uploaded successfully!");
       return result;
 
     } catch (e) {
       debugPrint("❌ Certificate upload error: $e");
-      debugPrint("🔍 Error type: ${e.runtimeType}");
 
-      // Provide more specific error messages
       if (e.toString().contains('network') || e.toString().contains('timeout')) {
         throw Exception('Network error during upload. Please check your internet connection and try again.');
       } else if (e.toString().contains('permission') || e.toString().contains('unauthorized')) {
@@ -156,7 +139,7 @@ class LeaveApplicationService {
     }
   }
 
-  // ✅ ADDED: Helper method to get MIME type based on file extension
+  /// Get MIME type based on file extension
   String _getMimeType(String extension) {
     switch (extension.toLowerCase()) {
       case '.pdf':
@@ -175,7 +158,12 @@ class LeaveApplicationService {
     }
   }
 
-  // ✅ ENHANCED: Submit leave application with simple authentication
+  /// Submit leave application with proper balance handling
+  // Addition to lib/services/leave_application_service.dart - Certificate Reminder Methods
+
+// Add this method to the LeaveApplicationService class
+
+  /// Submit leave application with certificate reminder setup
   Future<String?> submitLeaveApplication({
     required String employeeId,
     required String employeeName,
@@ -188,9 +176,10 @@ class LeaveApplicationService {
     File? certificateFile,
   }) async {
     try {
-      debugPrint("🚀 Starting leave application submission for $employeeName");
+      debugPrint("🚀 SERVICE: Starting leave application submission for $employeeName");
+      debugPrint("📋 Leave type: ${leaveType.displayName}");
 
-      // ✅ SIMPLE: Ensure anonymous authentication first
+      // Ensure authentication
       final isAuthenticated = await SimpleFirebaseAuthService.ensureAuthenticated();
       if (!isAuthenticated) {
         throw Exception('Authentication failed. Please check your internet connection and try again.');
@@ -201,15 +190,11 @@ class LeaveApplicationService {
         throw Exception('Start date cannot be after end date');
       }
 
-      if (reason.trim().isEmpty || reason.trim().length < 10) {
-        throw Exception('Please provide a detailed reason (minimum 10 characters)');
-      }
-
-      // Check if certificate is required and provided
+      // Check certificate requirement
       if (isCertificateRequired(leaveType, isAlreadyTaken) && certificateFile == null) {
         String requiredFor = '';
-        if (leaveType == LeaveType.sick) {
-          requiredFor = 'sick leave (medical certificate required)';
+        if (leaveType == LeaveType.sick && isAlreadyTaken) {
+          requiredFor = 'sick leave that was already taken (medical certificate required)';
         } else if (isAlreadyTaken) {
           requiredFor = 'already taken leave';
         }
@@ -218,7 +203,6 @@ class LeaveApplicationService {
 
       // Calculate total days
       final totalDays = calculateTotalDays(startDate, endDate);
-
       if (totalDays <= 0) {
         throw Exception('Invalid date range');
       }
@@ -229,22 +213,35 @@ class LeaveApplicationService {
         throw Exception('Line manager information not found. Please contact HR.');
       }
 
-      // Check leave balance (for applicable leave types)
+      // Validate balance before proceeding
       final leaveBalance = await _repository.getLeaveBalance(employeeId);
-      if (leaveBalance != null && !leaveBalance.hasEnoughBalance(leaveType.name, totalDays)) {
-        final remainingDays = leaveBalance.getRemainingDays(leaveType.name);
-        throw Exception('Insufficient leave balance. Available: $remainingDays days, Requested: $totalDays days');
+      if (leaveBalance != null) {
+        if (leaveType == LeaveType.emergency) {
+          final emergencyRemaining = leaveBalance.getRemainingDays('emergency');
+          final annualRemaining = leaveBalance.getRemainingDays('annual');
+
+          if (emergencyRemaining < totalDays && annualRemaining < totalDays) {
+            throw Exception(
+                'Insufficient balance for emergency leave. Emergency: $emergencyRemaining days, Annual: $annualRemaining days, Requested: $totalDays days'
+            );
+          }
+        } else {
+          if (!leaveBalance.hasEnoughBalance(leaveType.name, totalDays)) {
+            final remainingDays = leaveBalance.getRemainingDays(leaveType.name);
+            throw Exception('Insufficient leave balance. Available: $remainingDays days, Requested: $totalDays days');
+          }
+        }
       }
 
-      // Generate application ID first
+      // Generate application ID
       final applicationId = 'LA_${DateTime.now().millisecondsSinceEpoch}';
 
-      // ✅ ENHANCED: Upload certificate with proper error handling
+      // Upload certificate if provided
       String? certificateUrl;
       String? certificateFileName;
 
-      if (certificateFile != null) {
-        debugPrint("📎 Uploading certificate before creating application...");
+      if (certificateFile != null && leaveType != LeaveType.emergency) {
+        debugPrint("📎 Uploading certificate...");
 
         try {
           final uploadResult = await uploadCertificate(
@@ -257,17 +254,30 @@ class LeaveApplicationService {
             certificateUrl = uploadResult['url'];
             certificateFileName = uploadResult['originalFileName'];
             debugPrint("✅ Certificate uploaded successfully");
-            debugPrint("🔗 URL: $certificateUrl");
           } else {
             throw Exception('Certificate upload returned null result');
           }
         } catch (uploadError) {
-          debugPrint("❌ Certificate upload failed: $uploadError");
           throw Exception('Failed to upload certificate: $uploadError');
         }
+      } else if (leaveType == LeaveType.emergency) {
+        debugPrint("ℹ️ Emergency leave - skipping certificate upload");
       }
 
-      // ✅ ENHANCED: Create leave application with all certificate details
+      // 🆕 NEW: Check if certificate reminder is needed
+      bool requiresCertificateReminder = false;
+      DateTime? certificateReminderDate;
+
+      if (leaveType == LeaveType.sick && !isAlreadyTaken && certificateFile == null) {
+        // For future sick leave without certificate, set up reminder
+        requiresCertificateReminder = true;
+        // Set reminder for the day after leave ends
+        certificateReminderDate = endDate.add(const Duration(days: 1));
+
+        debugPrint("📅 Certificate reminder set for: ${DateFormat('dd/MM/yyyy').format(certificateReminderDate)}");
+      }
+
+      // Create leave application with reminder fields
       final application = LeaveApplicationModel(
         id: applicationId,
         employeeId: employeeId,
@@ -277,27 +287,30 @@ class LeaveApplicationService {
         startDate: startDate,
         endDate: endDate,
         totalDays: totalDays,
-        reason: reason,
+        reason: reason.isEmpty ? 'No specific reason provided' : reason,
         isAlreadyTaken: isAlreadyTaken,
-        certificateUrl: certificateUrl, // ✅ Now properly set
-        certificateFileName: certificateFileName, // ✅ Now properly set
+        certificateUrl: certificateUrl,
+        certificateFileName: certificateFileName,
         applicationDate: DateTime.now(),
         lineManagerId: lineManagerInfo['lineManagerId']!,
         lineManagerName: lineManagerInfo['lineManagerName']!,
         status: LeaveStatus.pending,
         isActive: true,
         createdAt: DateTime.now(),
+        // 🆕 NEW: Certificate reminder fields
+        requiresCertificateReminder: requiresCertificateReminder,
+        certificateReminderDate: certificateReminderDate,
+        certificateReminderSent: false,
+        certificateReminderCount: 0,
       );
 
       debugPrint("💾 Saving application to database...");
-      debugPrint("📋 Certificate URL: ${application.certificateUrl}");
-      debugPrint("📋 Certificate File: ${application.certificateFileName}");
 
       // Submit the application
       final savedApplicationId = await _repository.submitLeaveApplication(application);
 
       if (savedApplicationId == null) {
-        // If database save failed but file was uploaded, clean up
+        // Clean up uploaded file if database save failed
         if (certificateUrl != null) {
           try {
             await _storage.refFromURL(certificateUrl).delete();
@@ -309,17 +322,23 @@ class LeaveApplicationService {
         throw Exception('Failed to save leave application to database');
       }
 
-      // Update leave balance (add to pending)
-      await _repository.updateLeaveBalance(
+      // Update balance after successful application save
+      debugPrint("🔄 Updating leave balance...");
+      await _repository.updateLeaveBalanceForApplication(
         employeeId,
-        leaveType.name,
+        leaveType,
         totalDays,
-        isApproval: false, // Adding to pending
+        action: 'apply',
       );
 
-      // ✅ Send notification to line manager
+      // Send notification to line manager
       if (_connectivityService.currentStatus == ConnectionStatus.online) {
-        await _sendEnhancedLeaveApplicationNotification(application);
+        await _sendLeaveApplicationNotification(application);
+      }
+
+      // 🆕 NEW: Schedule certificate reminder if needed
+      if (requiresCertificateReminder && certificateReminderDate != null) {
+        await _scheduleCertificateReminder(application);
       }
 
       debugPrint("🎉 Leave application submitted successfully: $savedApplicationId");
@@ -331,14 +350,276 @@ class LeaveApplicationService {
     }
   }
 
-  // ✅ ENHANCED: Send comprehensive notification with certificate info
-  Future<void> _sendEnhancedLeaveApplicationNotification(LeaveApplicationModel application) async {
+// 🆕 NEW: Schedule certificate reminder in Firebase
+  Future<void> _scheduleCertificateReminder(LeaveApplicationModel application) async {
+    try {
+      debugPrint("🔔 Scheduling certificate reminder for ${application.employeeName}");
+
+      await _firestore.collection('certificate_reminders').add({
+        'applicationId': application.id,
+        'employeeId': application.employeeId,
+        'employeeName': application.employeeName,
+        'employeePin': application.employeePin,
+        'leaveType': application.leaveType.name,
+        'startDate': Timestamp.fromDate(application.startDate),
+        'endDate': Timestamp.fromDate(application.endDate),
+        'reminderDate': Timestamp.fromDate(application.certificateReminderDate!),
+        'reminderSent': false,
+        'reminderCount': 0,
+        'isActive': true,
+        'createdAt': FieldValue.serverTimestamp(),
+        'status': 'scheduled',
+      });
+
+      debugPrint("✅ Certificate reminder scheduled successfully");
+    } catch (e) {
+      debugPrint("❌ Error scheduling certificate reminder: $e");
+    }
+  }
+
+// 🆕 NEW: Upload certificate after leave completion
+  Future<bool> uploadCertificateAfterLeave({
+    required String applicationId,
+    required File certificateFile,
+    required String employeeId,
+  }) async {
+    try {
+      debugPrint("📎 Uploading post-leave certificate for application: $applicationId");
+
+      // Upload certificate
+      final uploadResult = await uploadCertificate(
+        certificateFile,
+        employeeId,
+        applicationId,
+      );
+
+      if (uploadResult == null) {
+        throw Exception('Certificate upload failed');
+      }
+
+      final certificateUrl = uploadResult['url'];
+      final certificateFileName = uploadResult['originalFileName'];
+
+      // Update application in local database
+      await _repository.updateCertificateInfo(
+        applicationId,
+        certificateUrl!,
+        certificateFileName!,
+      );
+
+      // Update in Firestore
+      if (_connectivityService.currentStatus == ConnectionStatus.online) {
+        await _firestore.collection('leave_applications').doc(applicationId).update({
+          'certificateUrl': certificateUrl,
+          'certificateFileName': certificateFileName,
+          'certificateUploadedDate': FieldValue.serverTimestamp(),
+          'updatedAt': FieldValue.serverTimestamp(),
+        });
+
+        // Mark reminder as completed
+        await _markReminderAsCompleted(applicationId);
+      }
+
+      // Send confirmation notification
+      await _sendCertificateUploadConfirmation(applicationId, employeeId);
+
+      debugPrint("✅ Post-leave certificate uploaded successfully");
+      return true;
+
+    } catch (e) {
+      debugPrint("❌ Error uploading post-leave certificate: $e");
+      return false;
+    }
+  }
+
+// 🆕 NEW: Mark certificate reminder as completed
+  Future<void> _markReminderAsCompleted(String applicationId) async {
+    try {
+      final reminderQuery = await _firestore
+          .collection('certificate_reminders')
+          .where('applicationId', isEqualTo: applicationId)
+          .where('isActive', isEqualTo: true)
+          .get();
+
+      for (final doc in reminderQuery.docs) {
+        await doc.reference.update({
+          'status': 'completed',
+          'completedAt': FieldValue.serverTimestamp(),
+          'isActive': false,
+        });
+      }
+
+      debugPrint("✅ Certificate reminder marked as completed");
+    } catch (e) {
+      debugPrint("❌ Error marking reminder as completed: $e");
+    }
+  }
+
+// 🆕 NEW: Send certificate upload confirmation
+  Future<void> _sendCertificateUploadConfirmation(String applicationId, String employeeId) async {
+    try {
+      await _firestore.collection('employee_notifications').add({
+        'type': 'certificate_uploaded',
+        'employeeId': employeeId,
+        'applicationId': applicationId,
+        'title': 'Certificate Uploaded Successfully',
+        'message': 'Your medical certificate has been uploaded and submitted to HR.',
+        'isRead': false,
+        'priority': 'normal',
+        'timestamp': FieldValue.serverTimestamp(),
+      });
+
+      debugPrint("✅ Certificate upload confirmation sent");
+    } catch (e) {
+      debugPrint("❌ Error sending upload confirmation: $e");
+    }
+  }
+
+// 🆕 NEW: Get applications needing certificate upload
+  Future<List<LeaveApplicationModel>> getApplicationsNeedingCertificate(String employeeId) async {
+    try {
+      final applications = await _repository.getLeaveApplicationsForEmployee(employeeId);
+
+      return applications.where((app) =>
+      app.leaveType == LeaveType.sick &&
+          app.status == LeaveStatus.approved &&
+          !app.isAlreadyTaken &&
+          app.certificateUrl == null &&
+          DateTime.now().isAfter(app.endDate)
+      ).toList();
+
+    } catch (e) {
+      debugPrint("❌ Error getting applications needing certificate: $e");
+      return [];
+    }
+  }
+
+// 🆕 NEW: Check and send certificate reminders (call this daily)
+  Future<void> checkAndSendCertificateReminders() async {
+    try {
+      debugPrint("🔔 Checking for certificate reminders...");
+
+      if (_connectivityService.currentStatus == ConnectionStatus.offline) {
+        debugPrint("📴 Offline - skipping reminder check");
+        return;
+      }
+
+      final today = DateTime.now();
+      final todayStart = DateTime(today.year, today.month, today.day);
+
+      // Query reminders for today
+      final reminderQuery = await _firestore
+          .collection('certificate_reminders')
+          .where('isActive', isEqualTo: true)
+          .where('reminderSent', isEqualTo: false)
+          .where('reminderDate', isLessThanOrEqualTo: Timestamp.fromDate(todayStart.add(const Duration(days: 1))))
+          .get();
+
+      debugPrint("📊 Found ${reminderQuery.docs.length} reminders to process");
+
+      for (final reminderDoc in reminderQuery.docs) {
+        final reminderData = reminderDoc.data();
+        final applicationId = reminderData['applicationId'];
+        final employeeId = reminderData['employeeId'];
+        final employeeName = reminderData['employeeName'];
+
+        try {
+          // Send reminder notification
+          await _sendCertificateReminderNotification(
+            employeeId: employeeId,
+            employeeName: employeeName,
+            applicationId: applicationId,
+            reminderCount: reminderData['reminderCount'] ?? 0,
+          );
+
+          // Update reminder document
+          await reminderDoc.reference.update({
+            'reminderSent': true,
+            'reminderCount': FieldValue.increment(1),
+            'lastReminderSent': FieldValue.serverTimestamp(),
+          });
+
+          debugPrint("✅ Reminder sent to $employeeName for application $applicationId");
+
+        } catch (e) {
+          debugPrint("❌ Error sending reminder for $applicationId: $e");
+        }
+      }
+
+      debugPrint("🎉 Certificate reminder check completed");
+
+    } catch (e) {
+      debugPrint("❌ Error checking certificate reminders: $e");
+    }
+  }
+
+// 🆕 NEW: Send certificate reminder notification
+  Future<void> _sendCertificateReminderNotification({
+    required String employeeId,
+    required String employeeName,
+    required String applicationId,
+    required int reminderCount,
+  }) async {
+    try {
+      final title = reminderCount == 0
+          ? 'Medical Certificate Required'
+          : 'Reminder: Medical Certificate Required';
+
+      final body = reminderCount == 0
+          ? 'Please upload your medical certificate for your completed sick leave.'
+          : 'This is reminder #${reminderCount + 1}: Please upload your medical certificate for your completed sick leave.';
+
+      // Send to employee notifications collection
+      await _firestore.collection('employee_notifications').add({
+        'type': 'certificate_reminder',
+        'employeeId': employeeId,
+        'employeeName': employeeName,
+        'applicationId': applicationId,
+        'title': title,
+        'message': body,
+        'reminderCount': reminderCount + 1,
+        'isRead': false,
+        'priority': reminderCount >= 2 ? 'high' : 'normal',
+        'timestamp': FieldValue.serverTimestamp(),
+        'actionRequired': true,
+        'actionType': 'upload_certificate',
+      });
+
+      // Also create FCM notification trigger
+      await _firestore.collection('notification_triggers').add({
+        'type': 'certificate_reminder',
+        'targetUserId': employeeId,
+        'title': title,
+        'body': body,
+        'data': {
+          'type': 'certificate_reminder',
+          'applicationId': applicationId,
+          'reminderCount': (reminderCount + 1).toString(),
+          'actionRequired': 'true',
+          'click_action': 'FLUTTER_NOTIFICATION_CLICK',
+        },
+        'processed': false,
+        'createdAt': FieldValue.serverTimestamp(),
+      });
+
+      debugPrint("📨 Certificate reminder notification sent to $employeeName");
+
+    } catch (e) {
+      debugPrint("❌ Error sending certificate reminder notification: $e");
+    }
+  }
+
+  /// Send notification to line manager with properly formatted data
+  Future<void> _sendLeaveApplicationNotification(LeaveApplicationModel application) async {
     try {
       if (_connectivityService.currentStatus == ConnectionStatus.offline) {
         return;
       }
 
-      debugPrint("📧 Sending enhanced notification to line manager: ${application.lineManagerId}");
+      debugPrint("📧 Sending notification to line manager: ${application.lineManagerId}");
+
+      // Format dates properly for Firebase
+      final DateFormat dateFormatter = DateFormat('dd/MM/yyyy');
 
       final notificationData = {
         'type': 'new_leave_application',
@@ -348,8 +629,12 @@ class LeaveApplicationService {
         'employeePin': application.employeePin,
         'leaveType': application.leaveType.name,
         'leaveTypeDisplay': application.leaveType.displayName,
-        'startDate': Timestamp.fromDate(application.startDate),
-        'endDate': Timestamp.fromDate(application.endDate),
+
+        // Send formatted date strings
+        'startDate': dateFormatter.format(application.startDate),
+        'endDate': dateFormatter.format(application.endDate),
+        'dateRange': '${dateFormatter.format(application.startDate)} - ${dateFormatter.format(application.endDate)}',
+
         'totalDays': application.totalDays,
         'reason': application.reason,
         'managerId': application.lineManagerId,
@@ -357,13 +642,27 @@ class LeaveApplicationService {
         'isAlreadyTaken': application.isAlreadyTaken,
         'applicationDate': Timestamp.fromDate(application.applicationDate),
         'status': application.status.name,
+
+        // Certificate information
         'hasAttachment': application.certificateUrl != null,
+        'hasCertificate': application.certificateUrl != null,
         'certificateUrl': application.certificateUrl,
         'certificateFileName': application.certificateFileName,
+        'attachmentStatus': application.certificateUrl != null ? 'attached' : 'none',
+        'attachmentInfo': application.certificateUrl != null
+            ? 'Certificate attached: ${application.certificateFileName ?? "Unknown"}'
+            : 'No certificate attached',
+
+        'isEmergencyLeave': application.leaveType == LeaveType.emergency,
+        'requiresDoubleDeduction': application.leaveType == LeaveType.emergency,
         'timestamp': FieldValue.serverTimestamp(),
         'isRead': false,
-        'priority': 'normal',
-        'dateRange': application.dateRange,
+        'priority': application.leaveType == LeaveType.emergency ? 'high' : 'normal',
+
+        // Enhanced display information
+        'displaySummary': '${application.employeeName} - ${application.leaveType.displayName} - ${application.totalDays} days',
+        'certificateRequired': isCertificateRequired(application.leaveType, application.isAlreadyTaken),
+        'certificateUploaded': application.certificateUrl != null,
       };
 
       // Send to manager's notification queue
@@ -377,15 +676,236 @@ class LeaveApplicationService {
       await _firestore.collection('hr_notifications').add({
         ...notificationData,
         'type': 'new_leave_application_hr',
-        'message': '${application.employeeName} submitted a leave application',
+        'message': application.leaveType == LeaveType.emergency
+            ? '🚨 EMERGENCY: ${application.employeeName} submitted an emergency leave application'
+            : '${application.employeeName} submitted a leave application',
         'category': 'leave_management',
         'requiresAction': true,
+        'isUrgent': application.leaveType == LeaveType.emergency,
       });
 
-      debugPrint("✅ Enhanced notifications sent successfully");
+      debugPrint("✅ Notifications sent successfully");
 
     } catch (e) {
-      debugPrint("❌ Error sending enhanced notifications: $e");
+      debugPrint("❌ Error sending notifications: $e");
+    }
+  }
+
+  /// Approve leave application with proper balance handling
+  Future<bool> approveLeaveApplication(
+      String applicationId,
+      String managerId, {
+        String? comments,
+      }) async {
+    try {
+      debugPrint("✅ SERVICE: Approving leave application: $applicationId");
+
+      // Get the application details first
+      final applications = await _repository.getLeaveApplicationsForEmployee('');
+      final application = applications.firstWhere((app) => app.id == applicationId);
+
+      debugPrint("📋 Application found: ${application.employeeName} - ${application.leaveType.displayName}");
+
+      // Call cloud function for employee notification (if online)
+      if (_connectivityService.currentStatus == ConnectionStatus.online) {
+        try {
+          final callable = FirebaseFunctions.instance.httpsCallable('updateLeaveApplicationStatus');
+          final result = await callable.call({
+            'applicationId': applicationId,
+            'status': 'approved',
+            'comments': comments,
+            'reviewedBy': managerId,
+          });
+
+          debugPrint("☁️ Cloud function result: ${result.data}");
+        } catch (cloudError) {
+          debugPrint("❌ Cloud function failed: $cloudError");
+        }
+      }
+
+      // Update application status (this will handle balance changes)
+      final localSuccess = await _repository.updateApplicationStatus(
+        applicationId,
+        LeaveStatus.approved,
+        comments: comments,
+        reviewedBy: managerId,
+      );
+
+      if (localSuccess) {
+        debugPrint("✅ Leave application approved successfully");
+
+        // Send HR notification
+        await _sendApprovalNotificationToHR(application, true, comments);
+
+        // Force refresh employee data if possible
+        await _forceRefreshEmployeeApplication(application.employeeId, applicationId);
+
+        return true;
+      } else {
+        debugPrint("❌ Local update failed");
+        return false;
+      }
+
+    } catch (e) {
+      debugPrint("❌ Error approving leave application: $e");
+      return false;
+    }
+  }
+
+  /// Reject leave application with proper balance handling
+  Future<bool> rejectLeaveApplication(
+      String applicationId,
+      String managerId, {
+        String? comments,
+      }) async {
+    try {
+      debugPrint("❌ SERVICE: Rejecting leave application: $applicationId");
+
+      // Get the application details first
+      final applications = await _repository.getLeaveApplicationsForEmployee('');
+      final application = applications.firstWhere((app) => app.id == applicationId);
+
+      debugPrint("📋 Application found: ${application.employeeName} - ${application.leaveType.displayName}");
+
+      // Call cloud function for employee notification (if online)
+      if (_connectivityService.currentStatus == ConnectionStatus.online) {
+        try {
+          final callable = FirebaseFunctions.instance.httpsCallable('updateLeaveApplicationStatus');
+          final result = await callable.call({
+            'applicationId': applicationId,
+            'status': 'rejected',
+            'comments': comments,
+            'reviewedBy': managerId,
+          });
+
+          debugPrint("☁️ Cloud function result: ${result.data}");
+        } catch (cloudError) {
+          debugPrint("❌ Cloud function failed: $cloudError");
+        }
+      }
+
+      // Update application status (this will handle balance restoration)
+      final localSuccess = await _repository.updateApplicationStatus(
+        applicationId,
+        LeaveStatus.rejected,
+        comments: comments,
+        reviewedBy: managerId,
+      );
+
+      if (localSuccess) {
+        debugPrint("✅ Leave application rejected successfully");
+
+        // Send HR notification
+        await _sendApprovalNotificationToHR(application, false, comments);
+
+        // Force refresh employee data if possible
+        await _forceRefreshEmployeeApplication(application.employeeId, applicationId);
+
+        return true;
+      } else {
+        debugPrint("❌ Local update failed");
+        return false;
+      }
+
+    } catch (e) {
+      debugPrint("❌ Error rejecting leave application: $e");
+      return false;
+    }
+  }
+
+  /// Force refresh employee application data
+  Future<void> _forceRefreshEmployeeApplication(String employeeId, String applicationId) async {
+    try {
+      debugPrint("🔄 Force refreshing employee application data...");
+
+      if (_connectivityService.currentStatus == ConnectionStatus.online) {
+        final doc = await _firestore
+            .collection('leave_applications')
+            .doc(applicationId)
+            .get();
+
+        if (doc.exists) {
+          final application = LeaveApplicationModel.fromFirestore(doc);
+          await _repository.saveApplicationLocallyPublic(application.copyWith(isSynced: true));
+          debugPrint("✅ Employee application data refreshed");
+        }
+      }
+    } catch (e) {
+      debugPrint("⚠️ Error refreshing employee data: $e");
+    }
+  }
+
+  /// Send HR notification
+  Future<void> _sendApprovalNotificationToHR(
+      LeaveApplicationModel application,
+      bool isApproved,
+      String? comments,
+      ) async {
+    try {
+      if (_connectivityService.currentStatus == ConnectionStatus.offline) {
+        debugPrint("📴 Offline - HR notification will be sent when online");
+        return;
+      }
+
+      final action = isApproved ? 'approved' : 'rejected';
+      final priority = isApproved ? 'normal' : 'high';
+      final isEmergency = application.leaveType == LeaveType.emergency;
+
+      debugPrint("📨 Sending HR notification: $action");
+
+      await _firestore.collection('hr_live_notifications').add({
+        'type': 'leave_$action',
+        'action': action,
+        'message': isEmergency
+            ? '🚨 EMERGENCY LEAVE ${action.toUpperCase()}: ${application.lineManagerName} $action emergency leave application from ${application.employeeName}'
+            : '${application.lineManagerName} $action leave application from ${application.employeeName}',
+
+        // Application Details
+        'applicationId': application.id,
+        'employeeId': application.employeeId,
+        'employeeName': application.employeeName,
+        'employeePin': application.employeePin,
+
+        // Leave Details
+        'leaveType': application.leaveType.name,
+        'leaveTypeDisplay': application.leaveType.displayName,
+        'startDate': Timestamp.fromDate(application.startDate),
+        'endDate': Timestamp.fromDate(application.endDate),
+        'totalDays': application.totalDays,
+        'reason': application.reason,
+        'isAlreadyTaken': application.isAlreadyTaken,
+        'dateRange': application.dateRange,
+
+        // Manager Details
+        'managerId': application.lineManagerId,
+        'managerName': application.lineManagerName,
+
+        // Decision Details
+        'isApproved': isApproved,
+        'comments': comments ?? '',
+        'decisionTimestamp': FieldValue.serverTimestamp(),
+
+        // Emergency Leave Flags
+        'isEmergencyLeave': isEmergency,
+        'hasDoubleDeduction': isEmergency,
+
+        // Metadata
+        'timestamp': FieldValue.serverTimestamp(),
+        'isRead': false,
+        'priority': isEmergency ? 'urgent' : priority,
+        'category': 'leave_management',
+        'source': 'manager_app_decision',
+        'month': DateTime.now().month,
+        'year': DateTime.now().year,
+
+        'notificationId': 'hr_${application.id}_${action}_${DateTime.now().millisecondsSinceEpoch}',
+        'processed': false,
+      });
+
+      debugPrint("📊 HR live notification sent successfully");
+
+    } catch (e) {
+      debugPrint("❌ Error sending HR notification: $e");
     }
   }
 
@@ -399,7 +919,6 @@ class LeaveApplicationService {
     DateTime current = startDate;
 
     while (current.isBefore(endDate) || current.isAtSameMomentAs(endDate)) {
-      // Check if current day is a weekday (Monday = 1, Sunday = 7)
       if (current.weekday >= 1 && current.weekday <= 5) {
         businessDays++;
       }
@@ -417,152 +936,24 @@ class LeaveApplicationService {
     return endDate.difference(startDate).inDays + 1;
   }
 
-  // Check if certificate is required for this leave type
+  // Check if certificate is required for leave type
   bool isCertificateRequired(LeaveType leaveType, bool isAlreadyTaken) {
-    // Always require certificate for sick leave
-    if (leaveType == LeaveType.sick) {
+    // Emergency leave NEVER requires certificate
+    if (leaveType == LeaveType.emergency) {
+      return false;
+    }
+
+    // Sick leave: only required if already taken
+    if (leaveType == LeaveType.sick && isAlreadyTaken) {
       return true;
     }
 
-    // Always require certificate for already taken leave
-    if (isAlreadyTaken) {
+    // Other leave types: only required if already taken
+    if (isAlreadyTaken && (leaveType == LeaveType.annual || leaveType == LeaveType.local)) {
       return true;
     }
 
     return false;
-  }
-
-  // ✅ ENHANCED: Approve leave application with HR notification
-  Future<bool> approveLeaveApplication(
-      String applicationId,
-      String managerId, {
-        String? comments,
-      }) async {
-    try {
-      debugPrint("✅ Approving leave application: $applicationId by manager: $managerId");
-
-      // Get the application details first
-      final applications = await _repository.getLeaveApplicationsForEmployee('');
-      final application = applications.firstWhere((app) => app.id == applicationId);
-
-      // Update application status
-      final success = await _repository.updateApplicationStatus(
-        applicationId,
-        LeaveStatus.approved,
-        comments: comments,
-        reviewedBy: managerId,
-      );
-
-      if (success) {
-        // Move from pending to used days in balance
-        await _repository.updateLeaveBalance(
-          application.employeeId,
-          application.leaveType.name,
-          application.totalDays,
-          isApproval: true,
-        );
-
-        // ✅ Send live notification to HR dashboard
-        await _sendApprovalNotificationToHR(application, true, comments);
-
-        debugPrint("✅ Leave application approved and HR notified");
-      }
-
-      return success;
-    } catch (e) {
-      debugPrint("❌ Error approving leave application: $e");
-      return false;
-    }
-  }
-
-  // ✅ ENHANCED: Reject leave application with HR notification
-  Future<bool> rejectLeaveApplication(
-      String applicationId,
-      String managerId, {
-        String? comments,
-      }) async {
-    try {
-      debugPrint("❌ Rejecting leave application: $applicationId by manager: $managerId");
-
-      // Get the application details first
-      final applications = await _repository.getLeaveApplicationsForEmployee('');
-      final application = applications.firstWhere((app) => app.id == applicationId);
-
-      // Update application status
-      final success = await _repository.updateApplicationStatus(
-        applicationId,
-        LeaveStatus.rejected,
-        comments: comments,
-        reviewedBy: managerId,
-      );
-
-      if (success) {
-        // Remove from pending days
-        await _repository.removePendingDaysFromBalance(
-          application.employeeId,
-          application.leaveType.name,
-          application.totalDays,
-        );
-
-        // ✅ Send live notification to HR dashboard
-        await _sendApprovalNotificationToHR(application, false, comments);
-
-        debugPrint("❌ Leave application rejected and HR notified");
-      }
-
-      return success;
-    } catch (e) {
-      debugPrint("❌ Error rejecting leave application: $e");
-      return false;
-    }
-  }
-
-  // ✅ NEW: Send live notification to HR dashboard
-  Future<void> _sendApprovalNotificationToHR(
-      LeaveApplicationModel application,
-      bool isApproved,
-      String? comments,
-      ) async {
-    try {
-      final action = isApproved ? 'approved' : 'rejected';
-      final priority = isApproved ? 'normal' : 'high';
-
-      // ✅ Send to HR dashboard with live notification capability
-      await _firestore.collection('hr_live_notifications').add({
-        'type': 'leave_${action}',
-        'action': action,
-        'message': '${application.lineManagerName} $action leave application from ${application.employeeName}',
-        'applicationId': application.id,
-        'employeeId': application.employeeId,
-        'employeeName': application.employeeName,
-        'employeePin': application.employeePin,
-        'leaveType': application.leaveType.name,
-        'leaveTypeDisplay': application.leaveType.displayName,
-        'startDate': Timestamp.fromDate(application.startDate),
-        'endDate': Timestamp.fromDate(application.endDate),
-        'totalDays': application.totalDays,
-        'managerId': application.lineManagerId,
-        'managerName': application.lineManagerName,
-        'isApproved': isApproved,
-        'comments': comments,
-        'certificateUrl': application.certificateUrl,
-        'certificateFileName': application.certificateFileName,
-        'hasAttachment': application.certificateUrl != null,
-        'reason': application.reason,
-        'isAlreadyTaken': application.isAlreadyTaken,
-        'dateRange': application.dateRange,
-        'timestamp': FieldValue.serverTimestamp(),
-        'isRead': false,
-        'priority': priority,
-        'category': 'leave_management',
-        'month': DateTime.now().month,
-        'year': DateTime.now().year,
-      });
-
-      debugPrint("📨 Live notification sent to HR dashboard");
-    } catch (e) {
-      debugPrint("❌ Error sending HR notification: $e");
-    }
   }
 
   // Get leave applications for employee
@@ -617,9 +1008,13 @@ class LeaveApplicationService {
         'approvedApplications': applications.where((app) => app.status == LeaveStatus.approved).length,
         'pendingApplications': applications.where((app) => app.status == LeaveStatus.pending).length,
         'rejectedApplications': applications.where((app) => app.status == LeaveStatus.rejected).length,
+        'emergencyApplications': applications.where((app) => app.leaveType == LeaveType.emergency).length,
         'totalDaysRequested': applications.fold<int>(0, (sum, app) => sum + app.totalDays),
         'totalDaysApproved': applications
             .where((app) => app.status == LeaveStatus.approved)
+            .fold<int>(0, (sum, app) => sum + app.totalDays),
+        'emergencyDaysUsed': applications
+            .where((app) => app.leaveType == LeaveType.emergency && app.status == LeaveStatus.approved)
             .fold<int>(0, (sum, app) => sum + app.totalDays),
         'leaveBalance': balance?.getSummary(),
       };
@@ -631,9 +1026,12 @@ class LeaveApplicationService {
     }
   }
 
-  // Cancel leave application
+  // Cancel leave application with proper balance restoration
   Future<bool> cancelLeaveApplication(String applicationId) async {
     try {
+      debugPrint("🔄 SERVICE: Cancelling leave application: $applicationId");
+
+      // The repository will handle the balance restoration
       return await _repository.cancelLeaveApplication(applicationId);
     } catch (e) {
       debugPrint("❌ Error cancelling leave application: $e");
@@ -652,4 +1050,34 @@ class LeaveApplicationService {
       debugPrint("❌ Error syncing leave applications: $e");
     }
   }
+
+  // Force refresh application status
+  Future<void> forceRefreshApplicationStatus(String applicationId, String employeeId) async {
+    try {
+      debugPrint("🔄 Force refreshing application status...");
+
+      if (_connectivityService.currentStatus == ConnectionStatus.online) {
+        final doc = await _firestore
+            .collection('leave_applications')
+            .doc(applicationId)
+            .get();
+
+        if (doc.exists) {
+          final application = LeaveApplicationModel.fromFirestore(doc);
+          await _repository.saveApplicationLocallyPublic(application.copyWith(isSynced: true));
+
+          debugPrint("✅ Application status force refreshed");
+          debugPrint("📊 New Status: ${application.status.displayName}");
+          return;
+        }
+      }
+
+      debugPrint("❌ Could not refresh - offline or not found");
+    } catch (e) {
+      debugPrint("❌ Error force refreshing: $e");
+    }
+  }
 }
+
+
+

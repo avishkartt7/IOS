@@ -106,7 +106,7 @@ class _AuthenticateFaceViewState extends State<AuthenticateFaceView> {
       if (widget.employeeId == null) return;
 
       final prefs = await SharedPreferences.getInstance();
-      
+
       String? storedImage = prefs.getString('employee_image_${widget.employeeId}');
       String? secureImage = prefs.getString('secure_face_image_${widget.employeeId}');
       String? storedFeatures = prefs.getString('employee_face_features_${widget.employeeId}');
@@ -114,11 +114,11 @@ class _AuthenticateFaceViewState extends State<AuthenticateFaceView> {
       bool faceRegistered = prefs.getBool('face_registered_${widget.employeeId}') ?? false;
 
       setState(() {
-        _hasStoredFace = (storedImage != null && storedImage.isNotEmpty) || 
-                        (secureImage != null && secureImage.isNotEmpty) ||
-                        (storedFeatures != null && storedFeatures.isNotEmpty) ||
-                        (secureFeatures != null && secureFeatures.isNotEmpty) ||
-                        faceRegistered;
+        _hasStoredFace = (storedImage != null && storedImage.isNotEmpty) ||
+            (secureImage != null && secureImage.isNotEmpty) ||
+            (storedFeatures != null && storedFeatures.isNotEmpty) ||
+            (secureFeatures != null && secureFeatures.isNotEmpty) ||
+            faceRegistered;
       });
     } catch (e) {
       setState(() {
@@ -148,44 +148,44 @@ class _AuthenticateFaceViewState extends State<AuthenticateFaceView> {
 
     return Scaffold(
       backgroundColor: const Color(0xFF0A0E1A),
-    appBar: AppBar(
-  backgroundColor: Colors.transparent,
-  elevation: 0,
-  leading: IconButton(
-    icon: const Icon(Icons.arrow_back, color: Colors.white),
-    onPressed: () {
-      if (widget.onAuthenticationComplete != null) {
-        widget.onAuthenticationComplete!(false);
-      }
-      Navigator.of(context).pop(false); // Return false when manually closed
-    },
-  ),
-  title: Text(
-    widget.isRegistrationValidation 
-        ? "Verify Your Face" 
-        : "Face Authentication",
-    style: const TextStyle(
-      color: Colors.white,
-      fontSize: 20,
-      fontWeight: FontWeight.bold,
-    ),
-  ),
-  centerTitle: true,
-  actions: [
-    Container(
-      margin: const EdgeInsets.only(right: 16),
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-      decoration: BoxDecoration(
-        color: _isOfflineMode ? Colors.orange : Colors.green,
-        borderRadius: BorderRadius.circular(12),
+      appBar: AppBar(
+        backgroundColor: Colors.transparent,
+        elevation: 0,
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back, color: Colors.white),
+          onPressed: () {
+            if (widget.onAuthenticationComplete != null) {
+              widget.onAuthenticationComplete!(false);
+            }
+            Navigator.of(context).pop(false); // Return false when manually closed
+          },
+        ),
+        title: Text(
+          widget.isRegistrationValidation
+              ? "Verify Your Face"
+              : "Face Authentication",
+          style: const TextStyle(
+            color: Colors.white,
+            fontSize: 20,
+            fontWeight: FontWeight.bold,
+          ),
+        ),
+        centerTitle: true,
+        actions: [
+          Container(
+            margin: const EdgeInsets.only(right: 16),
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+            decoration: BoxDecoration(
+              color: _isOfflineMode ? Colors.orange : Colors.green,
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: Text(
+              _isOfflineMode ? "Offline" : "Online",
+              style: const TextStyle(color: Colors.white, fontSize: 12),
+            ),
+          ),
+        ],
       ),
-      child: Text(
-        _isOfflineMode ? "Offline" : "Online",
-        style: const TextStyle(color: Colors.white, fontSize: 12),
-      ),
-    ),
-  ],
-),
       body: Container(
         width: double.infinity,
         height: double.infinity,
@@ -204,9 +204,9 @@ class _AuthenticateFaceViewState extends State<AuthenticateFaceView> {
             children: [
               // Status Indicator
               _buildStatusIndicator(),
-              
+
               const SizedBox(height: 20),
-              
+
               // Camera View
               Expanded(
                 child: Container(
@@ -214,8 +214,8 @@ class _AuthenticateFaceViewState extends State<AuthenticateFaceView> {
                   decoration: BoxDecoration(
                     borderRadius: BorderRadius.circular(20),
                     border: Border.all(
-                      color: _canAuthenticate 
-                          ? Colors.green 
+                      color: _canAuthenticate
+                          ? Colors.green
                           : Colors.white.withOpacity(0.3),
                       width: 3,
                     ),
@@ -261,75 +261,75 @@ class _AuthenticateFaceViewState extends State<AuthenticateFaceView> {
                   ),
                 ),
               ),
-              
+
               const SizedBox(height: 30),
-              
+
               // Action Button or Status Message
               Container(
                 margin: const EdgeInsets.symmetric(horizontal: 20),
                 child: _canAuthenticate && !isMatching
                     ? SizedBox(
-                        width: double.infinity,
-                        height: 56,
-                        child: ElevatedButton(
-                          onPressed: _authenticate,
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: const Color(0xFF4CAF50),
-                            foregroundColor: Colors.white,
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(16),
-                            ),
-                            elevation: 8,
-                          ),
-                          child: Row(
-                            mainAxisAlignment: MainAxisAlignment.center,
-                            children: [
-                              const Icon(Icons.face, size: 24),
-                              const SizedBox(width: 12),
-                              Text(
-                                widget.isRegistrationValidation 
-                                    ? "Verify Face" 
-                                    : "Authenticate",
-                                style: const TextStyle(
-                                  fontSize: 18,
-                                  fontWeight: FontWeight.bold,
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                      )
-                    : Container(
-                        padding: const EdgeInsets.all(24),
-                        decoration: BoxDecoration(
-                          color: Colors.white.withOpacity(0.1),
-                          borderRadius: BorderRadius.circular(16),
-                          border: Border.all(
-                            color: Colors.white.withOpacity(0.2),
-                          ),
-                        ),
-                        child: Column(
-                          children: [
-                            Icon(
-                              _getStatusIcon(),
-                              color: _getStatusColor(),
-                              size: 32,
-                            ),
-                            const SizedBox(height: 12),
-                            Text(
-                              _getStatusText(),
-                              style: TextStyle(
-                                color: _getStatusColor(),
-                                fontSize: 16,
-                                fontWeight: FontWeight.w600,
-                              ),
-                              textAlign: TextAlign.center,
-                            ),
-                          ],
-                        ),
+                  width: double.infinity,
+                  height: 56,
+                  child: ElevatedButton(
+                    onPressed: _authenticate,
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: const Color(0xFF4CAF50),
+                      foregroundColor: Colors.white,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(16),
                       ),
+                      elevation: 8,
+                    ),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        const Icon(Icons.face, size: 24),
+                        const SizedBox(width: 12),
+                        Text(
+                          widget.isRegistrationValidation
+                              ? "Verify Face"
+                              : "Authenticate",
+                          style: const TextStyle(
+                            fontSize: 18,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                )
+                    : Container(
+                  padding: const EdgeInsets.all(24),
+                  decoration: BoxDecoration(
+                    color: Colors.white.withOpacity(0.1),
+                    borderRadius: BorderRadius.circular(16),
+                    border: Border.all(
+                      color: Colors.white.withOpacity(0.2),
+                    ),
+                  ),
+                  child: Column(
+                    children: [
+                      Icon(
+                        _getStatusIcon(),
+                        color: _getStatusColor(),
+                        size: 32,
+                      ),
+                      const SizedBox(height: 12),
+                      Text(
+                        _getStatusText(),
+                        style: TextStyle(
+                          color: _getStatusColor(),
+                          fontSize: 16,
+                          fontWeight: FontWeight.w600,
+                        ),
+                        textAlign: TextAlign.center,
+                      ),
+                    ],
+                  ),
+                ),
               ),
-              
+
               const SizedBox(height: 30),
             ],
           ),
@@ -464,16 +464,16 @@ class _AuthenticateFaceViewState extends State<AuthenticateFaceView> {
   Future<void> _processInputImage(InputImage inputImage) async {
     try {
       setState(() => isMatching = true);
-      
+
       _faceFeatures = await extractFaceFeatures(inputImage, _faceDetector);
-      
+
       if (_faceFeatures != null) {
         bool isValid = validateFaceFeatures(_faceFeatures!);
         double qualityScore = getFaceFeatureQuality(_faceFeatures!);
-        
+
         print("Face detected with quality score: ${(qualityScore * 100).toStringAsFixed(1)}%");
       }
-      
+
       setState(() => isMatching = false);
     } catch (e) {
       setState(() => isMatching = false);
@@ -488,7 +488,7 @@ class _AuthenticateFaceViewState extends State<AuthenticateFaceView> {
     try {
       SharedPreferences prefs = await SharedPreferences.getInstance();
       String? localData = prefs.getString('user_data_${widget.employeeId}');
-      
+
       if (localData != null) {
         Map<String, dynamic> data = jsonDecode(localData);
         setState(() {
@@ -507,7 +507,7 @@ class _AuthenticateFaceViewState extends State<AuthenticateFaceView> {
           if (doc.exists) {
             Map<String, dynamic> data = doc.data() as Map<String, dynamic>;
             await prefs.setString('user_data_${widget.employeeId}', jsonEncode(data));
-            
+
             setState(() {
               employeeData = data;
             });
@@ -557,7 +557,7 @@ class _AuthenticateFaceViewState extends State<AuthenticateFaceView> {
       } else {
         SharedPreferences prefs = await SharedPreferences.getInstance();
         storedImage = prefs.getString('secure_face_image_${widget.employeeId}') ??
-                     prefs.getString('employee_image_${widget.employeeId}');
+            prefs.getString('employee_image_${widget.employeeId}');
       }
 
       if (storedImage == null) {
@@ -598,14 +598,14 @@ class _AuthenticateFaceViewState extends State<AuthenticateFaceView> {
 
       dynamic value = await regula.FaceSDK.matchFaces(jsonEncode(request))
           .timeout(const Duration(seconds: 10));
-      
+
       var response = regula.MatchFacesResponse.fromJson(json.decode(value));
 
       dynamic str = await regula.FaceSDK.matchFacesSimilarityThresholdSplit(
           jsonEncode(response!.results), 0.8);
 
       var split = regula.MatchFacesSimilarityThresholdSplit.fromJson(json.decode(str));
-      
+
       setState(() {
         _similarity = split!.matchedFaces.isNotEmpty
             ? (split.matchedFaces[0]!.similarity! * 100).toStringAsFixed(2)
@@ -631,14 +631,14 @@ class _AuthenticateFaceViewState extends State<AuthenticateFaceView> {
       }
 
       FaceFeatures? storedFeatures = await _getStoredFaceFeatures();
-      
+
       if (storedFeatures == null) {
         await _attemptCloudRecovery();
         return;
       }
 
       double matchPercentage = await _compareFaceFeatures(storedFeatures, _faceFeatures!);
-      
+
       setState(() {
         _similarity = matchPercentage.toStringAsFixed(2);
       });
@@ -659,15 +659,15 @@ class _AuthenticateFaceViewState extends State<AuthenticateFaceView> {
   Future<double> _compareFaceFeatures(FaceFeatures stored, FaceFeatures current) async {
     double landmarkScore = _compareLandmarks(stored, current);
     double distanceScore = _compareDistances(stored, current);
-    
+
     double finalScore = max(landmarkScore, distanceScore);
-    
+
     if (finalScore > 30.0 && finalScore < 60.0) {
       finalScore = finalScore * 1.15;
     }
-    
+
     finalScore = min(finalScore, 100.0);
-    
+
     return finalScore;
   }
 
@@ -744,19 +744,19 @@ class _AuthenticateFaceViewState extends State<AuthenticateFaceView> {
   double _compareDistances(FaceFeatures stored, FaceFeatures current) {
     Map<String, double> storedDistances = _calculateFeatureDistances(stored);
     Map<String, double> currentDistances = _calculateFeatureDistances(current);
-    
+
     int matchCount = 0;
     int totalDistances = 0;
     double tolerance = 30.0;
-    
+
     for (String distanceKey in storedDistances.keys) {
       if (currentDistances.containsKey(distanceKey)) {
         double storedDist = storedDistances[distanceKey]!;
         double currentDist = currentDistances[distanceKey]!;
-        
+
         if (storedDist > 0 && currentDist > 0) {
           double percentDiff = ((storedDist - currentDist).abs() / storedDist) * 100;
-          
+
           if (percentDiff <= tolerance) {
             matchCount++;
           }
@@ -764,7 +764,7 @@ class _AuthenticateFaceViewState extends State<AuthenticateFaceView> {
         }
       }
     }
-    
+
     double percentage = totalDistances > 0 ? (matchCount / totalDistances) * 100 : 0.0;
     return percentage;
   }
@@ -772,20 +772,20 @@ class _AuthenticateFaceViewState extends State<AuthenticateFaceView> {
   Future<FaceFeatures?> _getStoredFaceFeatures() async {
     try {
       SharedPreferences prefs = await SharedPreferences.getInstance();
-      
+
       List<String> storageKeys = [
         'secure_face_features_${widget.employeeId}',
         'employee_face_features_${widget.employeeId}',
       ];
-      
+
       for (String key in storageKeys) {
         String? storedFeaturesJson = prefs.getString(key);
-        
+
         if (storedFeaturesJson != null && storedFeaturesJson.isNotEmpty) {
           try {
             Map<String, dynamic> storedFeaturesMap = json.decode(storedFeaturesJson);
             FaceFeatures features = FaceFeatures.fromJson(storedFeaturesMap);
-            
+
             if (features.leftEye != null || features.rightEye != null || features.noseBase != null) {
               return features;
             }
@@ -794,12 +794,12 @@ class _AuthenticateFaceViewState extends State<AuthenticateFaceView> {
           }
         }
       }
-      
+
       if (employeeData != null && employeeData!.containsKey('faceFeatures')) {
         try {
           Map<String, dynamic> featuresMap = employeeData!['faceFeatures'];
           FaceFeatures features = FaceFeatures.fromJson(featuresMap);
-          
+
           if (features.leftEye != null || features.rightEye != null || features.noseBase != null) {
             return features;
           }
@@ -807,9 +807,9 @@ class _AuthenticateFaceViewState extends State<AuthenticateFaceView> {
           print("Error parsing features from employee data: $e");
         }
       }
-      
+
       return null;
-      
+
     } catch (e) {
       return null;
     }
@@ -831,33 +831,33 @@ class _AuthenticateFaceViewState extends State<AuthenticateFaceView> {
 
       if (doc.exists) {
         Map<String, dynamic> data = doc.data() as Map<String, dynamic>;
-        
+
         if (data.containsKey('image') && data['image'] != null) {
           SharedPreferences prefs = await SharedPreferences.getInstance();
           await prefs.setString('employee_image_${widget.employeeId}', data['image']);
           await prefs.setString('secure_face_image_${widget.employeeId}', data['image']);
-          
+
           if (data.containsKey('faceFeatures') && data['faceFeatures'] != null) {
-            await prefs.setString('employee_face_features_${widget.employeeId}', 
+            await prefs.setString('employee_face_features_${widget.employeeId}',
                 jsonEncode(data['faceFeatures']));
-            await prefs.setString('secure_face_features_${widget.employeeId}', 
+            await prefs.setString('secure_face_features_${widget.employeeId}',
                 jsonEncode(data['faceFeatures']));
           }
-          
+
           await prefs.setBool('face_registered_${widget.employeeId}', true);
-          
+
           setState(() {
             employeeData = data;
             _hasStoredFace = true;
           });
-          
+
           await _matchFaceWithStored();
           return;
         }
       }
-      
+
       _handleFailedAuthentication("No registered face found. Please register first.");
-      
+
     } catch (e) {
       _handleFailedAuthentication("No stored face data available.");
     }
@@ -865,196 +865,196 @@ class _AuthenticateFaceViewState extends State<AuthenticateFaceView> {
 
   // Success/Failure Handlers
   void _handleSuccessfulAuthentication() {
-  _playSuccessAudio;
+    _playSuccessAudio;
 
-  setState(() {
-    isMatching = false;
-    _hasAuthenticated = true;
-  });
+    setState(() {
+      isMatching = false;
+      _hasAuthenticated = true;
+    });
 
-  if (widget.isRegistrationValidation) {
-    Future.delayed(const Duration(seconds: 1), () {
-      if (mounted) {
-        Navigator.of(context).pushReplacement(
-          MaterialPageRoute(
-            builder: (context) => DashboardView(
-              employeeId: widget.employeeId!,
+    if (widget.isRegistrationValidation) {
+      Future.delayed(const Duration(seconds: 1), () {
+        if (mounted) {
+          Navigator.of(context).pushReplacement(
+            MaterialPageRoute(
+              builder: (context) => DashboardView(
+                employeeId: widget.employeeId!,
+              ),
             ),
-          ),
-        );
+          );
+        }
+      });
+    } else {
+      // Call the callback first
+      if (widget.onAuthenticationComplete != null) {
+        widget.onAuthenticationComplete!(true);
       }
-    });
-  } else {
-    // Call the callback first
-    if (widget.onAuthenticationComplete != null) {
-      widget.onAuthenticationComplete!(true);
+
+      // Then close the screen and return success result
+      Future.delayed(const Duration(milliseconds: 500), () {
+        if (mounted) {
+          Navigator.of(context).pop(true); // Return true for success
+        }
+      });
     }
-    
-    // Then close the screen and return success result
-    Future.delayed(const Duration(milliseconds: 500), () {
-      if (mounted) {
-        Navigator.of(context).pop(true); // Return true for success
-      }
-    });
   }
-}
 
   void _handleFailedAuthentication(String message) {
-  setState(() {
-    isMatching = false;
-  });
-  _playFailedAudio;
-  
-  // Call the callback first
-  if (widget.onAuthenticationComplete != null) {
-    widget.onAuthenticationComplete!(false);
+    setState(() {
+      isMatching = false;
+    });
+    _playFailedAudio;
+
+    // Call the callback first
+    if (widget.onAuthenticationComplete != null) {
+      widget.onAuthenticationComplete!(false);
+    }
+
+    _showFailureDialog(
+      title: "Authentication Failed",
+      description: message,
+    );
   }
-  
-  _showFailureDialog(
-    title: "Authentication Failed",
-    description: message,
-  );
-}
 
   // Dialogs
   void _showSuccessDialog() {
-  showDialog(
-    context: context,
-    barrierDismissible: false,
-    builder: (context) => AlertDialog(
-      backgroundColor: const Color(0xFF1E293B),
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(16),
-      ),
-      title: const Row(
-        children: [
-          Icon(Icons.check_circle, color: Colors.green, size: 28),
-          SizedBox(width: 8),
-          Text(
-            "Authentication Success!",
-            style: TextStyle(color: Colors.white, fontSize: 16),
-          ),
-        ],
-      ),
-      content: Column(
-        mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            "Welcome ${employeeData?['name'] ?? 'User'}!",
-            style: const TextStyle(
-              color: Colors.white,
-              fontSize: 16,
-              fontWeight: FontWeight.w500,
-            ),
-          ),
-          const SizedBox(height: 8),
-          Text(
-            "Match: $_similarity%",
-            style: const TextStyle(color: Colors.white70, fontSize: 14),
-          ),
-          Text(
-            "Mode: ${_isOfflineMode ? 'Offline' : 'Online'}",
-            style: const TextStyle(color: Colors.white70, fontSize: 14),
-          ),
-        ],
-      ),
-      actions: [
-        ElevatedButton(
-          onPressed: () {
-            Navigator.of(context).pop(); // Close dialog
-            Navigator.of(context).pop(true); // Close authentication screen with success
-          },
-          style: ElevatedButton.styleFrom(
-            backgroundColor: Colors.green,
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(8),
-            ),
-          ),
-          child: const Text(
-            "Continue",
-            style: TextStyle(color: Colors.white),
-          ),
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => AlertDialog(
+        backgroundColor: const Color(0xFF1E293B),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(16),
         ),
-      ],
-    ),
-  );
-}
+        title: const Row(
+          children: [
+            Icon(Icons.check_circle, color: Colors.green, size: 28),
+            SizedBox(width: 8),
+            Text(
+              "Authentication Success!",
+              style: TextStyle(color: Colors.white, fontSize: 16),
+            ),
+          ],
+        ),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              "Welcome ${employeeData?['name'] ?? 'User'}!",
+              style: const TextStyle(
+                color: Colors.white,
+                fontSize: 16,
+                fontWeight: FontWeight.w500,
+              ),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              "Match: $_similarity%",
+              style: const TextStyle(color: Colors.white70, fontSize: 14),
+            ),
+            Text(
+              "Mode: ${_isOfflineMode ? 'Offline' : 'Online'}",
+              style: const TextStyle(color: Colors.white70, fontSize: 14),
+            ),
+          ],
+        ),
+        actions: [
+          ElevatedButton(
+            onPressed: () {
+              Navigator.of(context).pop(); // Close dialog
+              Navigator.of(context).pop(true); // Close authentication screen with success
+            },
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.green,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(8),
+              ),
+            ),
+            child: const Text(
+              "Continue",
+              style: TextStyle(color: Colors.white),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
 
   void _showFailureDialog({
-  required String title,
-  required String description,
-}) {
-  showDialog(
-    context: context,
-    builder: (context) => AlertDialog(
-      backgroundColor: const Color(0xFF1E293B),
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(16),
-      ),
-      title: Text(
-        title,
-        style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
-      ),
-      content: Text(
-        description,
-        style: const TextStyle(color: Colors.white),
-      ),
-      actions: [
-        ElevatedButton(
-          onPressed: () {
-            Navigator.of(context).pop(); // Close dialog
-            // Don't close the authentication screen - let user try again
-          },
-          style: ElevatedButton.styleFrom(
-            backgroundColor: Colors.blue,
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(8),
+    required String title,
+    required String description,
+  }) {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        backgroundColor: const Color(0xFF1E293B),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(16),
+        ),
+        title: Text(
+          title,
+          style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+        ),
+        content: Text(
+          description,
+          style: const TextStyle(color: Colors.white),
+        ),
+        actions: [
+          ElevatedButton(
+            onPressed: () {
+              Navigator.of(context).pop(); // Close dialog
+              // Don't close the authentication screen - let user try again
+            },
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.blue,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(8),
+              ),
+            ),
+            child: const Text(
+              "Try Again",
+              style: TextStyle(color: Colors.white),
             ),
           ),
-          child: const Text(
-            "Try Again",
-            style: TextStyle(color: Colors.white),
+          TextButton(
+            onPressed: () {
+              Navigator.of(context).pop(); // Close dialog
+              Navigator.of(context).pop(false); // Close authentication screen with failure
+            },
+            child: const Text(
+              "Cancel",
+              style: TextStyle(color: Colors.grey),
+            ),
           ),
-        ),
-        TextButton(
-          onPressed: () {
-            Navigator.of(context).pop(); // Close dialog
-            Navigator.of(context).pop(false); // Close authentication screen with failure
-          },
-          child: const Text(
-            "Cancel",
-            style: TextStyle(color: Colors.grey),
-          ),
-        ),
-      ],
-    ),
-  );
-}
+        ],
+      ),
+    );
+  }
 
   // Helper Functions
   Map<String, double> _calculateFeatureDistances(FaceFeatures features) {
     Map<String, double> distances = {};
-    
+
     if (features.leftEye != null && features.rightEye != null) {
       distances['eye_to_eye'] = _pointDistance(features.leftEye!, features.rightEye!);
     }
-    
+
     if (features.leftEye != null && features.noseBase != null) {
       distances['left_eye_to_nose'] = _pointDistance(features.leftEye!, features.noseBase!);
     }
     if (features.rightEye != null && features.noseBase != null) {
       distances['right_eye_to_nose'] = _pointDistance(features.rightEye!, features.noseBase!);
     }
-    
+
     if (features.noseBase != null && features.leftMouth != null) {
       distances['nose_to_mouth'] = _pointDistance(features.noseBase!, features.leftMouth!);
     }
-    
+
     if (features.leftMouth != null && features.rightMouth != null) {
       distances['mouth_width'] = _pointDistance(features.leftMouth!, features.rightMouth!);
     }
-    
+
     return distances;
   }
 

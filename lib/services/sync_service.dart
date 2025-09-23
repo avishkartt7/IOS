@@ -1,9 +1,9 @@
 // lib/services/sync_service.dart (updated)
 
 import 'dart:async';
-import 'package:face_auth/repositories/attendance_repository.dart';
-import 'package:face_auth/repositories/check_out_request_repository.dart';
-import 'package:face_auth/services/connectivity_service.dart';
+import 'package:face_auth_compatible/repositories/attendance_repository.dart';
+import 'package:face_auth_compatible/repositories/check_out_request_repository.dart';
+import 'package:face_auth_compatible/services/connectivity_service.dart';
 
 class SyncService {
   final ConnectivityService _connectivityService;
@@ -142,3 +142,6 @@ class SyncService {
     _connectivitySubscription?.cancel();
   }
 }
+
+
+

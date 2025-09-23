@@ -1,14 +1,14 @@
 // lib/authenticate_face/user_password_setup_view.dart
 
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:face_auth/common/utils/custom_snackbar.dart';
-import 'package:face_auth/common/utils/extensions/size_extension.dart';
-import 'package:face_auth/common/views/custom_button.dart';
-import 'package:face_auth/constants/theme.dart';
-import 'package:face_auth/register_face/registration_complete_view.dart';
+import 'package:face_auth_compatible/common/utils/custom_snackbar.dart';
+import 'package:face_auth_compatible/common/utils/extensions/size_extension.dart';
+import 'package:face_auth_compatible/common/views/custom_button.dart';
+import 'package:face_auth_compatible/constants/theme.dart';
+import 'package:face_auth_compatible/register_face/registration_complete_view.dart';
 import 'package:flutter/material.dart';
 
-import 'package:face_auth/pin_entry/app_password_entry_view.dart';
+import 'package:face_auth_compatible/pin_entry/app_password_entry_view.dart';
 
 class UserPasswordSetupView extends StatefulWidget {
   final String employeeId;
@@ -38,9 +38,6 @@ class _UserPasswordSetupViewState extends State<UserPasswordSetupView> {
 
   @override
   Widget build(BuildContext context) {
-    // ✅ SET CONTEXT FOR CustomSnackBar
-    CustomSnackBar.context = context;
-    
     // Use context directly instead of setting it in a global variable
     final double screenWidth = MediaQuery.of(context).size.width;
     final double screenHeight = MediaQuery.of(context).size.height;
@@ -156,14 +153,12 @@ class _UserPasswordSetupViewState extends State<UserPasswordSetupView> {
   void _createPassword(BuildContext context) async {
     // Validate inputs
     if (_passwordController.text.length != 4) {
-      // ✅ FIXED: Remove context parameter
-      CustomSnackBar.errorSnackBar("Password must be exactly 4 digits");
+      CustomSnackBar.errorSnackBar(context, "Password must be exactly 4 digits");
       return;
     }
 
     if (_passwordController.text != _confirmPasswordController.text) {
-      // ✅ FIXED: Remove context parameter
-      CustomSnackBar.errorSnackBar("Passwords do not match");
+      CustomSnackBar.errorSnackBar(context, "Passwords do not match");
       return;
     }
 
@@ -190,8 +185,10 @@ class _UserPasswordSetupViewState extends State<UserPasswordSetupView> {
       }
     } catch (e) {
       setState(() => _isLoading = false);
-      // ✅ FIXED: Remove context parameter
-      CustomSnackBar.errorSnackBar("Error creating password: $e");
+      CustomSnackBar.errorSnackBar(context, "Error creating password: $e");
     }
   }
 }
+
+
+

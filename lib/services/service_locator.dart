@@ -1,29 +1,35 @@
-// lib/services/service_locator.dart - UPDATED WITH FIREBASE AUTH INTEGRATION
+// lib/services/service_locator.dart - UPDATED WITH PDF SERVICE
 
 import 'package:get_it/get_it.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:face_auth/repositories/location_repository.dart';
-import 'package:face_auth/repositories/polygon_location_repository.dart';
-import 'package:face_auth/repositories/attendance_repository.dart';
-import 'package:face_auth/repositories/check_out_request_repository.dart';
-import 'package:face_auth/repositories/overtime_repository.dart';
-import 'package:face_auth/repositories/leave_application_repository.dart';
-import 'package:face_auth/services/database_helper.dart';
-import 'package:face_auth/services/connectivity_service.dart';
-import 'package:face_auth/services/notification_service.dart';
-import 'package:face_auth/services/fcm_token_service.dart';
-import 'package:face_auth/services/sync_service.dart';
-import 'package:face_auth/services/secure_face_storage_service.dart';
-import 'package:face_auth/services/overtime_approver_service.dart';
-import 'package:face_auth/services/employee_overtime_service.dart';
-import 'package:face_auth/services/leave_application_service.dart';
-import 'package:face_auth/services/firebase_auth_service.dart'; // ✅ ADDED
+import 'package:face_auth_compatible/repositories/location_repository.dart';
+import 'package:face_auth_compatible/repositories/polygon_location_repository.dart';
+import 'package:face_auth_compatible/repositories/attendance_repository.dart';
+import 'package:face_auth_compatible/repositories/check_out_request_repository.dart';
+import 'package:face_auth_compatible/repositories/overtime_repository.dart';
+import 'package:face_auth_compatible/repositories/leave_application_repository.dart';
+import 'package:face_auth_compatible/services/database_helper.dart';
+import 'package:face_auth_compatible/services/connectivity_service.dart';
+import 'package:face_auth_compatible/services/notification_service.dart';
+import 'package:face_auth_compatible/services/fcm_token_service.dart';
+import 'package:face_auth_compatible/services/sync_service.dart';
+import 'package:face_auth_compatible/services/secure_face_storage_service.dart';
+import 'package:face_auth_compatible/services/overtime_approver_service.dart';
+import 'package:face_auth_compatible/services/employee_overtime_service.dart';
+import 'package:face_auth_compatible/services/leave_application_service.dart';
+import 'package:face_auth_compatible/services/firebase_auth_service.dart';
+
+import 'package:face_auth_compatible/repositories/location_exemption_repository.dart';
+import 'package:face_auth_compatible/services/geofence_exit_monitoring_service.dart';
+
+// ✅ NEW: Import the PDF service
+import 'package:face_auth_compatible/services/attendance_pdf_service.dart';
 
 final GetIt getIt = GetIt.instance;
 
-/// Initialize all services and repositories - UPDATED WITH FIREBASE AUTH
+/// Initialize all services and repositories - UPDATED WITH PDF SERVICE
 Future<void> setupServiceLocator() async {
-  print("=== INITIALIZING SERVICE LOCATOR (WITH FIREBASE AUTH & COMPLETE LEAVE MANAGEMENT) ===");
+  print("=== INITIALIZING SERVICE LOCATOR (WITH PDF SERVICE) ===");
 
   try {
     // ================================
@@ -48,10 +54,27 @@ Future<void> setupServiceLocator() async {
       print("✅ SecureFaceStorageService registered");
     }
 
-    // ✅ NEW: Register Firebase Auth Service (CRITICAL FOR AUTHENTICATION)
+    // Register Firebase Auth Service
     if (!getIt.isRegistered<FirebaseAuthService>()) {
       getIt.registerLazySingleton<FirebaseAuthService>(() => FirebaseAuthService());
       print("✅ FirebaseAuthService registered");
+    }
+
+    if (!getIt.isRegistered<GeofenceExitMonitoringService>()) {
+      getIt.registerLazySingleton<GeofenceExitMonitoringService>(
+            () => GeofenceExitMonitoringService(
+          dbHelper: getIt<DatabaseHelper>(),
+          connectivityService: getIt<ConnectivityService>(),
+          notificationService: getIt<NotificationService>(),
+        ),
+      );
+      print("✅ GeofenceExitMonitoringService registered");
+    }
+
+    // ✅ NEW: Register PDF Service
+    if (!getIt.isRegistered<AttendancePdfService>()) {
+      getIt.registerLazySingleton<AttendancePdfService>(() => AttendancePdfService());
+      print("✅ AttendancePdfService registered");
     }
 
     // ================================
@@ -86,6 +109,8 @@ Future<void> setupServiceLocator() async {
       print("✅ LocationRepository registered");
     }
 
+
+
     // Register polygon location repository
     if (!getIt.isRegistered<PolygonLocationRepository>()) {
       getIt.registerLazySingleton<PolygonLocationRepository>(
@@ -109,6 +134,13 @@ Future<void> setupServiceLocator() async {
       );
       print("✅ AttendanceRepository registered");
     }
+
+    getIt.registerLazySingleton<LocationExemptionRepository>(
+          () => LocationExemptionRepository(
+        dbHelper: getIt<DatabaseHelper>(),
+        connectivityService: getIt<ConnectivityService>(),
+      ),
+    );
 
     // Register check-out request repository
     if (!getIt.isRegistered<CheckOutRequestRepository>()) {
@@ -185,10 +217,10 @@ Future<void> setupServiceLocator() async {
       print("✅ LeaveApplicationService registered");
     }
 
-    print("✅ Service Locator setup completed successfully (With Firebase Auth & Complete Leave Management)");
+    print("✅ Service Locator setup completed successfully (With PDF Service)");
     print("📊 Total registered services: ${_getRegisteredServicesCount()}");
 
-    // ✅ VALIDATE CRITICAL SERVICES
+    // Validate critical services
     _validateCriticalServices();
 
   } catch (e) {
@@ -198,7 +230,7 @@ Future<void> setupServiceLocator() async {
   }
 }
 
-/// ✅ NEW: Validate that critical services are properly registered
+/// Validate that critical services are properly registered
 void _validateCriticalServices() {
   print("🔍 Validating critical services...");
 
@@ -207,6 +239,7 @@ void _validateCriticalServices() {
     'DatabaseHelper',
     'ConnectivityService',
     'AttendanceRepository',
+    'AttendancePdfService', // ✅ ADDED
     'NotificationService'
   ];
 
@@ -225,8 +258,14 @@ void _validateCriticalServices() {
       case 'ConnectivityService':
         isValid = isServiceRegistered<ConnectivityService>();
         break;
+      case 'GeofenceExitMonitoringService':
+        isValid = isServiceRegistered<GeofenceExitMonitoringService>();
+        break;
       case 'AttendanceRepository':
         isValid = isServiceRegistered<AttendanceRepository>();
+        break;
+      case 'AttendancePdfService': // ✅ ADDED
+        isValid = isServiceRegistered<AttendancePdfService>();
         break;
       case 'NotificationService':
         isValid = isServiceRegistered<NotificationService>();
@@ -256,7 +295,9 @@ int _getRegisteredServicesCount() {
   if (getIt.isRegistered<DatabaseHelper>()) count++;
   if (getIt.isRegistered<ConnectivityService>()) count++;
   if (getIt.isRegistered<SecureFaceStorageService>()) count++;
-  if (getIt.isRegistered<FirebaseAuthService>()) count++; // ✅ ADDED
+  if (getIt.isRegistered<FirebaseAuthService>()) count++;
+  if (getIt.isRegistered<AttendancePdfService>()) count++; // ✅ ADDED
+  if (getIt.isRegistered<GeofenceExitMonitoringService>()) count++;
 
   // Notification services
   if (getIt.isRegistered<NotificationService>()) count++;
@@ -333,7 +374,8 @@ List<String> _getAvailableServices() {
   if (isServiceRegistered<DatabaseHelper>()) services.add('DatabaseHelper');
   if (isServiceRegistered<ConnectivityService>()) services.add('ConnectivityService');
   if (isServiceRegistered<SecureFaceStorageService>()) services.add('SecureFaceStorageService');
-  if (isServiceRegistered<FirebaseAuthService>()) services.add('FirebaseAuthService'); // ✅ ADDED
+  if (isServiceRegistered<FirebaseAuthService>()) services.add('FirebaseAuthService');
+  if (isServiceRegistered<AttendancePdfService>()) services.add('AttendancePdfService'); // ✅ ADDED
   if (isServiceRegistered<NotificationService>()) services.add('NotificationService');
   if (isServiceRegistered<FcmTokenService>()) services.add('FcmTokenService');
   if (isServiceRegistered<LocationRepository>()) services.add('LocationRepository');
@@ -346,7 +388,7 @@ List<String> _getAvailableServices() {
   if (isServiceRegistered<OvertimeApproverService>()) services.add('OvertimeApproverService');
   if (isServiceRegistered<EmployeeOvertimeService>()) services.add('EmployeeOvertimeService');
   if (isServiceRegistered<LeaveApplicationService>()) services.add('LeaveApplicationService');
-
+  if (isServiceRegistered<GeofenceExitMonitoringService>()) services.add('GeofenceExitMonitoringService');
   return services;
 }
 
@@ -364,7 +406,8 @@ void listRegisteredServices({bool showDetails = false}) {
   _printServiceStatus('DatabaseHelper', isServiceRegistered<DatabaseHelper>());
   _printServiceStatus('ConnectivityService', isServiceRegistered<ConnectivityService>());
   _printServiceStatus('SecureFaceStorageService', isServiceRegistered<SecureFaceStorageService>());
-  _printServiceStatus('FirebaseAuthService', isServiceRegistered<FirebaseAuthService>()); // ✅ ADDED
+  _printServiceStatus('FirebaseAuthService', isServiceRegistered<FirebaseAuthService>());
+  _printServiceStatus('AttendancePdfService', isServiceRegistered<AttendancePdfService>()); // ✅ ADDED
   print("");
 
   // Notification Services
@@ -390,6 +433,8 @@ void listRegisteredServices({bool showDetails = false}) {
   _printServiceStatus('EmployeeOvertimeService', isServiceRegistered<EmployeeOvertimeService>());
   _printServiceStatus('LeaveApplicationService', isServiceRegistered<LeaveApplicationService>());
 
+  _printServiceStatus('GeofenceExitMonitoringService', isServiceRegistered<GeofenceExitMonitoringService>());
+
   print("=====================================");
 
   if (showDetails) {
@@ -413,18 +458,19 @@ void _printServiceStatus(String serviceName, bool isRegistered) {
   print("   $status $serviceName: $statusText");
 }
 
-/// Validate that all required services are registered (UPDATED WITH FIREBASE AUTH)
+/// Validate that all required services are registered
 bool validateServiceLocator() {
   print("🔍 Validating Service Locator...");
 
   final requiredServices = [
     'DatabaseHelper',
     'ConnectivityService',
-    'FirebaseAuthService', // ✅ ADDED - CRITICAL FOR AUTHENTICATION
+    'FirebaseAuthService',
+    'AttendanceRepository',
+    'AttendancePdfService', // ✅ ADDED
+    'NotificationService',
     'LeaveApplicationRepository',
     'LeaveApplicationService',
-    'AttendanceRepository',
-    'NotificationService',
   ];
 
   bool allValid = true;
@@ -439,20 +485,23 @@ bool validateServiceLocator() {
       case 'ConnectivityService':
         isValid = isServiceRegistered<ConnectivityService>();
         break;
-      case 'FirebaseAuthService': // ✅ ADDED
+      case 'FirebaseAuthService':
         isValid = isServiceRegistered<FirebaseAuthService>();
+        break;
+      case 'AttendanceRepository':
+        isValid = isServiceRegistered<AttendanceRepository>();
+        break;
+      case 'AttendancePdfService': // ✅ ADDED
+        isValid = isServiceRegistered<AttendancePdfService>();
+        break;
+      case 'NotificationService':
+        isValid = isServiceRegistered<NotificationService>();
         break;
       case 'LeaveApplicationRepository':
         isValid = isServiceRegistered<LeaveApplicationRepository>();
         break;
       case 'LeaveApplicationService':
         isValid = isServiceRegistered<LeaveApplicationService>();
-        break;
-      case 'AttendanceRepository':
-        isValid = isServiceRegistered<AttendanceRepository>();
-        break;
-      case 'NotificationService':
-        isValid = isServiceRegistered<NotificationService>();
         break;
     }
 
@@ -473,7 +522,7 @@ bool validateServiceLocator() {
   return allValid;
 }
 
-/// ✅ NEW: Quick authentication service helper
+/// Quick authentication service helper
 FirebaseAuthService get authService {
   if (!isServiceRegistered<FirebaseAuthService>()) {
     throw Exception('FirebaseAuthService is not registered. Authentication will not work.');
@@ -481,7 +530,7 @@ FirebaseAuthService get authService {
   return getIt<FirebaseAuthService>();
 }
 
-/// ✅ NEW: Quick connectivity service helper
+/// Quick connectivity service helper
 ConnectivityService get connectivityService {
   if (!isServiceRegistered<ConnectivityService>()) {
     throw Exception('ConnectivityService is not registered.');
@@ -489,7 +538,7 @@ ConnectivityService get connectivityService {
   return getIt<ConnectivityService>();
 }
 
-/// ✅ NEW: Quick database helper
+/// Quick database helper
 DatabaseHelper get databaseHelper {
   if (!isServiceRegistered<DatabaseHelper>()) {
     throw Exception('DatabaseHelper is not registered.');
@@ -497,7 +546,15 @@ DatabaseHelper get databaseHelper {
   return getIt<DatabaseHelper>();
 }
 
-/// ✅ NEW: Service health check
+/// ✅ NEW: Quick PDF service helper
+AttendancePdfService get pdfService {
+  if (!isServiceRegistered<AttendancePdfService>()) {
+    throw Exception('AttendancePdfService is not registered.');
+  }
+  return getIt<AttendancePdfService>();
+}
+
+/// Service health check
 Future<Map<String, bool>> checkServiceHealth() async {
   print("🏥 Performing service health check...");
 
@@ -509,12 +566,14 @@ Future<Map<String, bool>> checkServiceHealth() async {
     healthStatus['DatabaseHelper'] = isServiceRegistered<DatabaseHelper>();
     healthStatus['ConnectivityService'] = isServiceRegistered<ConnectivityService>();
     healthStatus['AttendanceRepository'] = isServiceRegistered<AttendanceRepository>();
+    healthStatus['AttendancePdfService'] = isServiceRegistered<AttendancePdfService>(); // ✅ ADDED
     healthStatus['NotificationService'] = isServiceRegistered<NotificationService>();
+    healthStatus['GeofenceExitMonitoringService'] = isServiceRegistered<GeofenceExitMonitoringService>();
+
 
     // Check if services are actually functional
     if (healthStatus['DatabaseHelper'] == true) {
       try {
-        // Test database connection
         final db = getIt<DatabaseHelper>();
         healthStatus['DatabaseHelper_functional'] = db != null;
       } catch (e) {
@@ -525,13 +584,34 @@ Future<Map<String, bool>> checkServiceHealth() async {
 
     if (healthStatus['ConnectivityService'] == true) {
       try {
-        // Test connectivity service
         final connectivity = getIt<ConnectivityService>();
         healthStatus['ConnectivityService_functional'] = connectivity != null;
       } catch (e) {
         healthStatus['ConnectivityService_functional'] = false;
         print("❌ ConnectivityService functional test failed: $e");
       }
+    }
+
+    if (healthStatus['GeofenceExitMonitoringService'] == true) {
+      try {
+        final geofenceService = getIt<GeofenceExitMonitoringService>();
+        healthStatus['GeofenceExitMonitoringService_functional'] = geofenceService != null;
+      } catch (e) {
+        healthStatus['GeofenceExitMonitoringService_functional'] = false;
+        print("❌ GeofenceExitMonitoringService functional test failed: $e");
+      }
+    }
+
+    // ✅ NEW: Check PDF service functionality
+    if (healthStatus['AttendancePdfService'] == true) {
+      try {
+        final pdfService = getIt<AttendancePdfService>();
+        healthStatus['AttendancePdfService_functional'] = pdfService != null;
+      } catch (e) {
+        healthStatus['AttendancePdfService_functional'] = false;
+        print("❌ AttendancePdfService functional test failed: $e");
+      }
+
     }
 
     print("✅ Service health check completed");
@@ -549,3 +629,6 @@ Future<Map<String, bool>> checkServiceHealth() async {
 
   return healthStatus;
 }
+
+
+

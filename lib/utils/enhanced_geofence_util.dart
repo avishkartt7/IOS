@@ -1,16 +1,23 @@
-// lib/utils/enhanced_geofence_util.dart
+// lib/utils/enhanced_geofence_util.dart - CORRECTED VERSION
 
 import 'package:flutter/material.dart';
 import 'package:geolocator/geolocator.dart';
-import 'package:face_auth/model/location_model.dart';
-import 'package:face_auth/model/polygon_location_model.dart';
+import 'package:face_auth_compatible/model/location_model.dart';
+import 'package:face_auth_compatible/model/polygon_location_model.dart';
 import 'package:geodesy/geodesy.dart';
-import 'package:face_auth/repositories/polygon_location_repository.dart';
-import 'package:face_auth/repositories/location_repository.dart';
-import 'package:face_auth/services/service_locator.dart';
+import 'package:face_auth_compatible/repositories/polygon_location_repository.dart';
+import 'package:face_auth_compatible/repositories/location_repository.dart';
+import 'package:face_auth_compatible/repositories/location_exemption_repository.dart';
+import 'package:face_auth_compatible/services/service_locator.dart';
 import 'dart:math' show sqrt, cos, pi;
 
 class EnhancedGeofenceUtil {
+  // Cache for location data to improve performance
+  static List<LocationModel>? _cachedCircularLocations;
+  static List<PolygonLocationModel>? _cachedPolygonLocations;
+  static DateTime? _locationCacheTime;
+  static const Duration _locationCacheTimeout = Duration(minutes: 5);
+
   // Check location permissions
   static Future<bool> checkLocationPermission(BuildContext context) async {
     bool serviceEnabled;
@@ -59,11 +66,12 @@ class EnhancedGeofenceUtil {
     return true;
   }
 
-  // Get current position
+  // Get current position with timeout
   static Future<Position?> getCurrentPosition() async {
     try {
       return await Geolocator.getCurrentPosition(
-        desiredAccuracy: LocationAccuracy.best,
+        desiredAccuracy: LocationAccuracy.high,
+        timeLimit: const Duration(seconds: 8),
       );
     } catch (e) {
       debugPrint('Error getting current position: $e');
@@ -71,7 +79,268 @@ class EnhancedGeofenceUtil {
     }
   }
 
-  /// Check geofence status using both circular and polygon locations
+  // Get and cache location data
+  static Future<void> _loadLocationData() async {
+    // Check if cache is still valid
+    if (_locationCacheTime != null &&
+        DateTime.now().difference(_locationCacheTime!) < _locationCacheTimeout &&
+        _cachedCircularLocations != null &&
+        _cachedPolygonLocations != null) {
+      return; // Use cached data
+    }
+
+    try {
+      // Load fresh data
+      final locationRepository = getIt<LocationRepository>();
+      final polygonRepository = getIt<PolygonLocationRepository>();
+
+      _cachedCircularLocations = await locationRepository.getActiveLocations();
+      _cachedPolygonLocations = await polygonRepository.getActivePolygonLocations();
+      _locationCacheTime = DateTime.now();
+
+      debugPrint('Location data cached: ${_cachedCircularLocations?.length ?? 0} circular, ${_cachedPolygonLocations?.length ?? 0} polygon');
+    } catch (e) {
+      debugPrint('Error loading location data: $e');
+      // Keep existing cache if available
+    }
+  }
+
+  // Helper method to get active locations (for background use)
+  static Future<List<LocationModel>> _getActiveLocations() async {
+    try {
+      await _loadLocationData();
+      return _cachedCircularLocations ?? [];
+    } catch (e) {
+      debugPrint('Error getting active locations: $e');
+      return [];
+    }
+  }
+
+  // Helper method to get active polygon locations (for background use)
+  static Future<List<PolygonLocationModel>> _getActivePolygonLocations() async {
+    try {
+      await _loadLocationData();
+      return _cachedPolygonLocations ?? [];
+    } catch (e) {
+      debugPrint('Error getting active polygon locations: $e');
+      return [];
+    }
+  }
+
+  // Check employee location exemption (internal method)
+  static Future<bool> _checkEmployeeLocationExemption(String employeeId) async {
+    try {
+      final exemptionRepository = getIt<LocationExemptionRepository>();
+      return await exemptionRepository.hasLocationExemption(employeeId);
+    } catch (e) {
+      debugPrint('Error checking location exemption: $e');
+      return false;
+    }
+  }
+
+  // Create exempt location for background checks
+  static LocationModel _createExemptLocation() {
+    return LocationModel(
+      id: 'exempt_location',
+      name: 'Location Exempted Employee',
+      address: 'Employee has location exemption',
+      latitude: 0.0,
+      longitude: 0.0,
+      radius: 0.0,
+      isActive: true,
+    );
+  }
+
+  // FIXED: Point in polygon check helper
+  static bool _isPointInPolygon(double lat, double lng, List<LatLng> polygon) {
+    int i, j = polygon.length - 1;
+    bool oddNodes = false;
+
+    for (i = 0; i < polygon.length; i++) {
+      if ((polygon[i].latitude < lat && polygon[j].latitude >= lat) ||
+          (polygon[j].latitude < lat && polygon[i].latitude >= lat)) {
+        double intersectionX = polygon[i].longitude +
+            (lat - polygon[i].latitude) /
+                (polygon[j].latitude - polygon[i].latitude) *
+                (polygon[j].longitude - polygon[i].longitude);
+
+        if (intersectionX < lng) {
+          oddNodes = !oddNodes;
+        }
+      }
+      j = i;
+    }
+    return oddNodes;
+  }
+
+  // Calculate distance to polygon center
+  static double _calculateDistanceToPolygonCenter(
+      double lat, double lng, PolygonLocationModel polygon) {
+    return Geolocator.distanceBetween(
+      lat,
+      lng,
+      polygon.centerLatitude,
+      polygon.centerLongitude,
+    );
+  }
+
+  // FIXED: Background geofence check method (for monitoring service)
+  static Future<Map<String, dynamic>> checkGeofenceStatusForEmployeeBackground(
+      String employeeId, {
+        Position? currentPosition,
+      }) async {
+    try {
+      debugPrint("Background geofence check for employee: $employeeId");
+
+      // Get current position if not provided
+      Position? position = currentPosition;
+      if (position == null) {
+        try {
+          position = await getCurrentPosition();
+          if (position == null) {
+            debugPrint("Failed to get position for background check");
+            return {
+              'withinGeofence': false,
+              'distance': null,
+              'location': null,
+              'locationType': 'unknown',
+              'isExempted': false,
+              'error': 'location_unavailable',
+            };
+          }
+        } catch (e) {
+          debugPrint("Failed to get position for background check: $e");
+          return {
+            'withinGeofence': false,
+            'distance': null,
+            'location': null,
+            'locationType': 'unknown',
+            'isExempted': false,
+            'error': 'location_unavailable',
+          };
+        }
+      }
+
+      // Check exemption status first
+      bool isExempt = await _checkEmployeeLocationExemption(employeeId);
+      if (isExempt) {
+        debugPrint("Employee $employeeId is location exempt (background check)");
+        return {
+          'withinGeofence': true,
+          'distance': 0.0,
+          'location': _createExemptLocation(),
+          'locationType': 'exemption',
+          'isExempted': true,
+        };
+      }
+
+      // Get location data
+      List<LocationModel> circularLocations = await _getActiveLocations();
+      List<PolygonLocationModel> polygonLocations = await _getActivePolygonLocations();
+
+      // Check polygon locations first
+      for (PolygonLocationModel polygonLocation in polygonLocations) {
+        if (!polygonLocation.isActive) continue;
+
+        bool isInside = _isPointInPolygon(
+          position.latitude,
+          position.longitude,
+          polygonLocation.coordinates,
+        );
+
+        if (isInside) {
+          double distance = _calculateDistanceToPolygonCenter(
+            position.latitude,
+            position.longitude,
+            polygonLocation,
+          );
+
+          debugPrint("Background check: Inside polygon ${polygonLocation.name}");
+          return {
+            'withinGeofence': true,
+            'distance': distance,
+            'location': polygonLocation,
+            'locationType': 'polygon',
+            'isExempted': false,
+            'currentLatitude': position.latitude,
+            'currentLongitude': position.longitude,
+          };
+        }
+      }
+
+      // Check circular locations
+      LocationModel? nearestLocation;
+      double? shortestDistance;
+
+      for (LocationModel location in circularLocations) {
+        if (!location.isActive) continue;
+
+        double distance = Geolocator.distanceBetween(
+          position.latitude,
+          position.longitude,
+          location.latitude,
+          location.longitude,
+        );
+
+        if (shortestDistance == null || distance < shortestDistance) {
+          shortestDistance = distance;
+          nearestLocation = location;
+        }
+      }
+
+      if (nearestLocation != null) {
+        bool isWithinGeofence = shortestDistance! <= nearestLocation.radius;
+
+        debugPrint("Background check: ${isWithinGeofence ? 'Inside' : 'Outside'} ${nearestLocation.name}");
+
+        return {
+          'withinGeofence': isWithinGeofence,
+          'distance': shortestDistance,
+          'location': nearestLocation,
+          'locationType': 'circular',
+          'isExempted': false,
+          'currentLatitude': position.latitude,
+          'currentLongitude': position.longitude,
+        };
+      }
+
+      // No locations found
+      debugPrint("Background check: No locations available");
+      return {
+        'withinGeofence': false,
+        'distance': null,
+        'location': null,
+        'locationType': 'none',
+        'isExempted': false,
+        'currentLatitude': position.latitude,
+        'currentLongitude': position.longitude,
+      };
+
+    } catch (e) {
+      debugPrint("Error in background geofence check: $e");
+      return {
+        'withinGeofence': false,
+        'distance': null,
+        'location': null,
+        'locationType': 'error',
+        'isExempted': false,
+        'error': e.toString(),
+      };
+    }
+  }
+
+  /// Check if employee has location exemption
+  static Future<bool> hasLocationExemption(String employeeId) async {
+    try {
+      final exemptionRepository = getIt<LocationExemptionRepository>();
+      return await exemptionRepository.hasLocationExemption(employeeId);
+    } catch (e) {
+      debugPrint('Error checking location exemption: $e');
+      return false;
+    }
+  }
+
+  /// MAIN METHOD: Check geofence status (with GPS fetch and exemption check)
   static Future<Map<String, dynamic>> checkGeofenceStatus(BuildContext context) async {
     bool hasPermission = await checkLocationPermission(context);
     if (!hasPermission) {
@@ -99,12 +368,70 @@ class EnhancedGeofenceUtil {
       };
     }
 
+    // Use the cached position method
+    return await checkGeofenceStatusWithPosition(context, currentPosition);
+  }
+
+  /// ENHANCED: Check geofence status with employee ID for exemption checking
+  static Future<Map<String, dynamic>> checkGeofenceStatusForEmployee(
+      BuildContext context,
+      String employeeId,
+      {Position? currentPosition}
+      ) async {
+    // First check if employee has location exemption
+    bool hasExemption = await hasLocationExemption(employeeId);
+
+    if (hasExemption) {
+      debugPrint('Employee $employeeId has location exemption - bypassing geofence');
+
+      // Get current position for logging purposes
+      Position? position = currentPosition ?? await getCurrentPosition();
+
+      // Create a virtual location for exempt employees
+      LocationModel exemptLocation = LocationModel(
+        id: 'exempt_location',
+        name: 'Location Exempted Employee',
+        address: position != null
+            ? 'Lat: ${position.latitude.toStringAsFixed(6)}, Lng: ${position.longitude.toStringAsFixed(6)}'
+            : 'Unknown coordinates',
+        latitude: position?.latitude ?? 0.0,
+        longitude: position?.longitude ?? 0.0,
+        radius: 0.0,
+        isActive: true,
+      );
+
+      return {
+        'withinGeofence': true, // Always true for exempt employees
+        'location': exemptLocation,
+        'distance': 0.0,
+        'locationType': 'exemption',
+        'isExempted': true,
+        'exemptionReason': 'Employee has location exemption',
+      };
+    }
+
+    // For non-exempt employees, use normal geofence checking
+    if (currentPosition != null) {
+      return await checkGeofenceStatusWithPosition(context, currentPosition);
+    } else {
+      return await checkGeofenceStatus(context);
+    }
+  }
+
+  /// Check geofence status with provided position (for caching)
+  static Future<Map<String, dynamic>> checkGeofenceStatusWithPosition(
+      BuildContext context,
+      Position currentPosition,
+      ) async {
     debugPrint('LOCATION CHECK:');
     debugPrint('Current position: ${currentPosition.latitude}, ${currentPosition.longitude}');
 
-    // IMPORTANT: Always check polygon locations first and give them priority
+    // Load location data (uses cache if available)
+    await _loadLocationData();
+
+    // Check polygon locations first and give them priority
     debugPrint('Checking polygon locations first...');
-    final polygonResult = await _checkPolygonLocations(context, currentPosition);
+    final polygonResult = await _checkPolygonLocationsWithCache(currentPosition);
 
     // Always log the polygon result for debugging
     if (polygonResult['location'] != null) {
@@ -121,8 +448,8 @@ class EnhancedGeofenceUtil {
     }
 
     // Only check circular locations if we're not inside any polygon
-    debugPrint('Not inside any polygon, checking circular locations...');
-    final circularResult = await _checkCircularLocations(context, currentPosition);
+    debugPrint('Checking circular locations...');
+    final circularResult = await _checkCircularLocationsWithCache(currentPosition);
 
     // Log the circular result too
     if (circularResult['location'] != null) {
@@ -139,7 +466,7 @@ class EnhancedGeofenceUtil {
     }
 
     // If we're not in any geofence, return the closest one
-    // IMPORTANT: Always prefer polygon if distances are similar
+    // Always prefer polygon if distances are similar
     final polygonDistance = polygonResult['distance'] as double?;
     final circularDistance = circularResult['distance'] as double?;
 
@@ -173,15 +500,13 @@ class EnhancedGeofenceUtil {
     };
   }
 
-  // Check polygon locations
-  static Future<Map<String, dynamic>> _checkPolygonLocations(BuildContext context, Position currentPosition) async {
+  // Check polygon locations with cache
+  static Future<Map<String, dynamic>> _checkPolygonLocationsWithCache(Position currentPosition) async {
     try {
-      // Get polygon repository
-      final repository = getIt<PolygonLocationRepository>();
-      final List<PolygonLocationModel> locations = await repository.getActivePolygonLocations();
+      final List<PolygonLocationModel> locations = _cachedPolygonLocations ?? [];
 
       if (locations.isEmpty) {
-        print('No polygon locations found');
+        debugPrint('No polygon locations found in cache');
         return {
           'withinGeofence': false,
           'location': null,
@@ -190,20 +515,18 @@ class EnhancedGeofenceUtil {
         };
       }
 
-      print('Found ${locations.length} polygon locations');
+      debugPrint('Found ${locations.length} cached polygon locations');
 
       // Check if the current position is inside any polygon
-      PolygonLocationModel? containingLocation;
       double? shortestDistance;
       PolygonLocationModel? closestLocation;
 
       for (var location in locations) {
-        print('Checking polygon: ${location.name}, coordinates: ${location.coordinates.length} points');
+        debugPrint('Checking polygon: ${location.name}, coordinates: ${location.coordinates.length} points');
 
         // Check if inside this polygon
         if (location.containsPoint(currentPosition.latitude, currentPosition.longitude)) {
-          print('User is INSIDE polygon: ${location.name}');
-          // We're inside this polygon
+          debugPrint('User is INSIDE polygon: ${location.name}');
           return {
             'withinGeofence': true,
             'location': location,
@@ -212,20 +535,17 @@ class EnhancedGeofenceUtil {
           };
         }
 
-        // For now, just use a simple approximation for distance
-        // Calculate distance to center point
-        double distanceToCenter = Geolocator.distanceBetween(
+        // Calculate distance to polygon boundary
+        double distanceToPolygon = location.distanceToPolygon(
             currentPosition.latitude,
-            currentPosition.longitude,
-            location.centerLatitude,
-            location.centerLongitude
+            currentPosition.longitude
         );
 
-        print('Distance to center of ${location.name}: ${distanceToCenter.toStringAsFixed(2)}m');
+        debugPrint('Distance to boundary of ${location.name}: ${distanceToPolygon.toStringAsFixed(2)}m');
 
         // Update closest location
-        if (shortestDistance == null || distanceToCenter < shortestDistance) {
-          shortestDistance = distanceToCenter;
+        if (shortestDistance == null || distanceToPolygon < shortestDistance) {
+          shortestDistance = distanceToPolygon;
           closestLocation = location;
         }
       }
@@ -238,7 +558,7 @@ class EnhancedGeofenceUtil {
         'locationType': 'polygon',
       };
     } catch (e) {
-      print('Error checking polygon locations: $e');
+      debugPrint('Error checking polygon locations: $e');
       return {
         'withinGeofence': false,
         'location': null,
@@ -248,15 +568,13 @@ class EnhancedGeofenceUtil {
     }
   }
 
-  // Check circular locations
-  static Future<Map<String, dynamic>> _checkCircularLocations(BuildContext context, Position currentPosition) async {
+  // Check circular locations with cache
+  static Future<Map<String, dynamic>> _checkCircularLocationsWithCache(Position currentPosition) async {
     try {
-      // Get traditional circular locations
-      final locationRepository = getIt<LocationRepository>();
-      final List<LocationModel> locations = await locationRepository.getActiveLocations();
+      final List<LocationModel> locations = _cachedCircularLocations ?? [];
 
       if (locations.isEmpty) {
-        debugPrint('No circular locations found');
+        debugPrint('No circular locations found in cache');
         return {
           'withinGeofence': false,
           'location': null,
@@ -265,7 +583,7 @@ class EnhancedGeofenceUtil {
         };
       }
 
-      debugPrint('Found ${locations.length} circular locations');
+      debugPrint('Found ${locations.length} cached circular locations');
 
       // Find closest location and check if within radius
       LocationModel? closestLocation;
@@ -316,6 +634,21 @@ class EnhancedGeofenceUtil {
     }
   }
 
+  // Clear cache (useful for testing or when locations are updated)
+  static void clearLocationCache() {
+    _cachedCircularLocations = null;
+    _cachedPolygonLocations = null;
+    _locationCacheTime = null;
+    debugPrint('Location cache cleared');
+  }
+
+  // Force refresh location data
+  static Future<void> refreshLocationData() async {
+    clearLocationCache();
+    await _loadLocationData();
+    debugPrint('Location data force refreshed');
+  }
+
   // Import GeoJSON data into the system
   static Future<bool> importGeoJsonData(BuildContext context, String geoJsonString) async {
     try {
@@ -338,6 +671,9 @@ class EnhancedGeofenceUtil {
       final bool success = await repository.savePolygonLocations(locations);
 
       if (success) {
+        // Clear cache to force reload
+        clearLocationCache();
+
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text('Successfully imported ${locations.length} polygon locations'),
@@ -378,5 +714,19 @@ class EnhancedGeofenceUtil {
   static Future<double?> getDistanceToOffice(BuildContext context) async {
     Map<String, dynamic> status = await checkGeofenceStatus(context);
     return status['distance'] as double?;
+  }
+
+  // Check if employee can check in/out from current location
+  static Future<bool> canCheckInOut(BuildContext context, String employeeId) async {
+    // Check if employee has location exemption first
+    bool hasExemption = await hasLocationExemption(employeeId);
+
+    if (hasExemption) {
+      debugPrint('Employee $employeeId can check in/out from anywhere (exempted)');
+      return true;
+    }
+
+    // For non-exempt employees, check normal geofence
+    return await isWithinGeofence(context);
   }
 }

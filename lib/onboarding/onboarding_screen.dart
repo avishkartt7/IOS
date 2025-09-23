@@ -1,8 +1,8 @@
 // lib/onboarding/onboarding_screen.dart
 
 import 'package:flutter/material.dart';
-import 'package:face_auth/constants/theme.dart';
-import 'package:face_auth/pin_entry/pin_entry_view.dart';
+import 'package:face_auth_compatible/constants/theme.dart';
+import 'package:face_auth_compatible/pin_entry/pin_entry_view.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -17,6 +17,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> with SingleTickerPr
   final PageController _pageController = PageController();
   int _currentPage = 0;
   final int _numPages = 3;
+  bool _isNavigating = false;
 
   // Animation controller for page transitions and elements
   late AnimationController _animationController;
@@ -47,6 +48,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> with SingleTickerPr
   @override
   void initState() {
     super.initState();
+    debugPrint('OnboardingScreen: initState called');
 
     // Initialize animations
     _animationController = AnimationController(
@@ -75,7 +77,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> with SingleTickerPr
 
     // Listen for page changes to restart animation
     _pageController.addListener(() {
-      if (_pageController.page!.round() != _currentPage) {
+      if (_pageController.page != null && _pageController.page!.round() != _currentPage) {
         setState(() {
           _currentPage = _pageController.page!.round();
         });
@@ -92,222 +94,214 @@ class _OnboardingScreenState extends State<OnboardingScreen> with SingleTickerPr
     super.dispose();
   }
 
-  void _markOnboardingComplete() async {
-    SharedPreferences prefs = await SharedPreferences.getInstance();
-    await prefs.setBool('onboardingComplete', true);
+  Future<void> _markOnboardingComplete() async {
+    try {
+      debugPrint('Marking onboarding as complete...');
+      SharedPreferences prefs = await SharedPreferences.getInstance();
+      await prefs.setBool('onboardingComplete', true);
+      debugPrint('Onboarding marked as complete in SharedPreferences');
+    } catch (e) {
+      debugPrint('Error saving onboarding completion status: $e');
+    }
   }
 
-  void _navigateToPinEntry() {
-    _markOnboardingComplete();
-    Navigator.of(context).pushReplacement(
-      MaterialPageRoute(builder: (context) => const PinEntryView()),
-    );
+  Future<void> _navigateToPinEntry() async {
+    if (_isNavigating) {
+      debugPrint('Already navigating, ignoring duplicate call');
+      return;
+    }
+
+    debugPrint('Navigation initiated - Get Started pressed');
+
+    setState(() {
+      _isNavigating = true;
+    });
+
+    try {
+      // Mark onboarding as complete
+      await _markOnboardingComplete();
+
+      // Small delay to ensure state is saved
+      await Future.delayed(const Duration(milliseconds: 200));
+
+      if (!mounted) {
+        debugPrint('Widget not mounted, canceling navigation');
+        return;
+      }
+
+      debugPrint('Navigating to PIN Entry View...');
+
+      // Use Navigator.pushAndRemoveUntil to completely replace the stack
+      Navigator.of(context).pushAndRemoveUntil(
+        MaterialPageRoute(
+          builder: (context) => const PinEntryView(),
+          settings: const RouteSettings(name: '/pin_entry'),
+        ),
+            (Route<dynamic> route) => false, // Remove all previous routes
+      );
+
+      debugPrint('Navigation to PIN Entry completed');
+
+    } catch (e) {
+      debugPrint('Error during navigation: $e');
+
+      // Reset navigation flag
+      if (mounted) {
+        setState(() {
+          _isNavigating = false;
+        });
+
+        // Try simple navigation as fallback
+        Navigator.of(context).push(
+          MaterialPageRoute(builder: (context) => const PinEntryView()),
+        );
+      }
+    }
   }
 
   @override
   Widget build(BuildContext context) {
+    debugPrint('OnboardingScreen: build called, currentPage: $_currentPage');
+
     // Get screen size for responsive design
     final Size screenSize = MediaQuery.of(context).size;
 
     return Scaffold(
       body: Container(
         width: double.infinity,
+        height: double.infinity,
         decoration: BoxDecoration(
-          // Use a more modern gradient with multiple colors and stops
           gradient: LinearGradient(
             begin: Alignment.topLeft,
             end: Alignment.bottomRight,
             colors: [
-              const Color(0xFF7C4DFF).withOpacity(0.8), // Deep purple
-              const Color(0xFF5E72E4),                  // Indigo
-              const Color(0xFF4FB0FF),                  // Light blue
+              const Color(0xFF7C4DFF).withOpacity(0.8),
+              const Color(0xFF5E72E4),
+              const Color(0xFF4FB0FF),
             ],
             stops: const [0.1, 0.5, 0.9],
           ),
         ),
-        child: SafeArea(
-          child: Stack(
-            children: [
-              // Decorative elements - circles for modern design
-              Positioned(
-                top: -screenSize.height * 0.08,
-                left: -screenSize.width * 0.08,
-                child: Container(
-                  width: screenSize.width * 0.4,
-                  height: screenSize.width * 0.4,
-                  decoration: BoxDecoration(
-                    shape: BoxShape.circle,
-                    color: Colors.white.withOpacity(0.12),
-                  ),
-                ),
-              ),
-              Positioned(
-                bottom: screenSize.height * 0.15,
-                right: -screenSize.width * 0.1,
-                child: Container(
-                  width: screenSize.width * 0.3,
-                  height: screenSize.width * 0.3,
-                  decoration: BoxDecoration(
-                    shape: BoxShape.circle,
-                    color: Colors.white.withOpacity(0.08),
-                  ),
-                ),
-              ),
+        child: Stack(
+          children: [
+            // Decorative background elements
+            _buildBackgroundElements(screenSize),
 
-              // Skip button
-              Positioned(
-                top: 16,
-                right: 16,
-                child: _currentPage < _numPages - 1
-                    ? TextButton(
-                  onPressed: _navigateToPinEntry,
-                  style: TextButton.styleFrom(
-                    foregroundColor: Colors.white,
-                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(20),
-                      side: BorderSide(color: Colors.white.withOpacity(0.3), width: 1),
-                    ),
-                    backgroundColor: Colors.white.withOpacity(0.2),
-                  ),
-                  child: const Text(
-                    'Skip',
-                    style: TextStyle(
-                      color: Colors.white,
-                      fontWeight: FontWeight.w600,
-                      fontSize: 16,
-                    ),
-                  ),
-                )
-                    : const SizedBox(),
-              ),
+            // Main page content
+            _buildPageView(),
 
-              // Main content
-              PageView.builder(
-                controller: _pageController,
-                onPageChanged: (int page) {
-                  setState(() {
-                    _currentPage = page;
-                  });
-                },
-                itemCount: _numPages,
-                itemBuilder: (context, index) {
-                  return _buildPageContent(index, screenSize);
-                },
-              ),
+            // Bottom dots indicator
+            _buildDotsIndicator(),
 
-              // Bottom navigation dots
-              Positioned(
-                bottom: 30.0,
-                left: 0,
-                right: 0,
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: List.generate(
-                    _numPages,
-                        (index) => _buildDotIndicator(index),
-                  ),
-                ),
-              ),
-
-              // Get Started button for last page only
-              if (_currentPage == _numPages - 1)
-                Positioned(
-                  bottom: 80.0,
-                  left: 0,
-                  right: 0,
-                  child: Center(
-                    child: GestureDetector(
-                      onTap: _navigateToPinEntry,
-                      child: Container(
-                        width: 200,
-                        height: 50,
-                        decoration: BoxDecoration(
-                          color: Colors.white,
-                          borderRadius: BorderRadius.circular(25),
-                          boxShadow: [
-                            BoxShadow(
-                              color: Colors.black.withOpacity(0.2),
-                              blurRadius: 10,
-                              offset: const Offset(0, 4),
-                            ),
-                          ],
-                        ),
-                        child: const Center(
-                          child: Text(
-                            "Get Started",
-                            style: TextStyle(
-                              color: Color(0xFF5E72E4),
-                              fontWeight: FontWeight.bold,
-                              fontSize: 18,
-                            ),
-                          ),
-                        ),
-                      ),
-                    ),
-                  ),
-                ),
-            ],
-          ),
+            // Get Started button (only on last page)
+            if (_currentPage == _numPages - 1) _buildGetStartedButton(),
+          ],
         ),
       ),
     );
   }
 
-  Widget _buildPageContent(int index, Size screenSize) {
+  Widget _buildBackgroundElements(Size screenSize) {
+    return Positioned.fill(
+      child: Stack(
+        children: [
+          Positioned(
+            top: -screenSize.height * 0.08,
+            left: -screenSize.width * 0.08,
+            child: Container(
+              width: screenSize.width * 0.4,
+              height: screenSize.width * 0.4,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                color: Colors.white.withOpacity(0.12),
+              ),
+            ),
+          ),
+          Positioned(
+            bottom: screenSize.height * 0.15,
+            right: -screenSize.width * 0.1,
+            child: Container(
+              width: screenSize.width * 0.3,
+              height: screenSize.width * 0.3,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                color: Colors.white.withOpacity(0.08),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildPageView() {
+    return Positioned.fill(
+      child: PageView.builder(
+        controller: _pageController,
+        onPageChanged: (int page) {
+          debugPrint('Page changed to: $page');
+          setState(() {
+            _currentPage = page;
+          });
+        },
+        itemCount: _numPages,
+        itemBuilder: (context, index) {
+          return _buildPageContent(index);
+        },
+      ),
+    );
+  }
+
+  Widget _buildPageContent(int index) {
+    final screenSize = MediaQuery.of(context).size;
+
     return FadeTransition(
       opacity: _fadeAnimation,
       child: SlideTransition(
         position: _slideAnimation,
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            const SizedBox(height: 40),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 20),
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              const SizedBox(height: 40), // Top spacing
 
-            // Image container with stylish border
-            Container(
-              margin: EdgeInsets.symmetric(horizontal: screenSize.width * 0.1),
-              height: screenSize.height * 0.35,
-              decoration: BoxDecoration(
-                color: Colors.white.withOpacity(0.15),
-                borderRadius: BorderRadius.circular(20),
-                border: Border.all(
-                  color: Colors.white.withOpacity(0.3),
-                  width: 1.5,
+              // Image container
+              Container(
+                height: screenSize.height * 0.35,
+                margin: EdgeInsets.symmetric(horizontal: screenSize.width * 0.05),
+                decoration: BoxDecoration(
+                  color: Colors.white.withOpacity(0.15),
+                  borderRadius: BorderRadius.circular(20),
+                  border: Border.all(
+                    color: Colors.white.withOpacity(0.3),
+                    width: 1.5,
+                  ),
                 ),
-              ),
-              child: ClipRRect(
-                borderRadius: BorderRadius.circular(18),
-                child: Padding(
-                  padding: const EdgeInsets.all(12.0),
-                  child: Center(
-                    child: Container(
-                      width: screenSize.width * 0.6,
-                      height: screenSize.height * 0.3,
-                      decoration: BoxDecoration(
-                        color: Colors.black.withOpacity(0.1),
-                        borderRadius: BorderRadius.circular(10),
-                        border: Border.all(
-                          color: Colors.black.withOpacity(0.2),
-                          width: 1,
+                child: ClipRRect(
+                  borderRadius: BorderRadius.circular(18),
+                  child: Padding(
+                    padding: const EdgeInsets.all(12.0),
+                    child: Center(
+                      child: Container(
+                        decoration: BoxDecoration(
+                          color: Colors.black.withOpacity(0.1),
+                          borderRadius: BorderRadius.circular(10),
                         ),
-                      ),
-                      child: SvgPicture.asset(
-                        _pages[index]['image']!,
-                        fit: BoxFit.contain,
+                        child: SvgPicture.asset(
+                          _pages[index]['image']!,
+                          fit: BoxFit.contain,
+                        ),
                       ),
                     ),
                   ),
                 ),
               ),
-            ),
 
-            SizedBox(height: screenSize.height * 0.05),
+              SizedBox(height: screenSize.height * 0.05),
 
-            // Title
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 30),
-              child: Text(
+              // Title
+              Text(
                 _pages[index]['title']!,
                 style: const TextStyle(
                   color: Colors.white,
@@ -316,12 +310,9 @@ class _OnboardingScreenState extends State<OnboardingScreen> with SingleTickerPr
                 ),
                 textAlign: TextAlign.center,
               ),
-            ),
 
-            // Subtitle
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 30),
-              child: Text(
+              // Subtitle
+              Text(
                 _pages[index]['subtitle']!,
                 style: const TextStyle(
                   color: Colors.white,
@@ -330,15 +321,13 @@ class _OnboardingScreenState extends State<OnboardingScreen> with SingleTickerPr
                 ),
                 textAlign: TextAlign.center,
               ),
-            ),
 
-            SizedBox(height: screenSize.height * 0.03),
+              SizedBox(height: screenSize.height * 0.03),
 
-            // Description with a stylish container
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 30),
-              child: Container(
+              // Description
+              Container(
                 padding: const EdgeInsets.all(20),
+                margin: const EdgeInsets.symmetric(horizontal: 10),
                 decoration: BoxDecoration(
                   color: Colors.white.withOpacity(0.15),
                   borderRadius: BorderRadius.circular(15),
@@ -358,8 +347,23 @@ class _OnboardingScreenState extends State<OnboardingScreen> with SingleTickerPr
                   textAlign: TextAlign.center,
                 ),
               ),
-            ),
-          ],
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildDotsIndicator() {
+    return Positioned(
+      bottom: 30.0,
+      left: 0,
+      right: 0,
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: List.generate(
+          _numPages,
+              (index) => _buildDotIndicator(index),
         ),
       ),
     );
@@ -388,4 +392,78 @@ class _OnboardingScreenState extends State<OnboardingScreen> with SingleTickerPr
       ),
     );
   }
+
+  Widget _buildGetStartedButton() {
+    return Positioned(
+      bottom: 80.0,
+      left: 0,
+      right: 0,
+      child: Center(
+        child: Material(
+          color: Colors.transparent,
+          child: InkWell(
+            onTap: _isNavigating ? null : () {
+              debugPrint('Get Started button tapped!');
+              _navigateToPinEntry();
+            },
+            borderRadius: BorderRadius.circular(25),
+            splashColor: const Color(0xFF5E72E4).withOpacity(0.3),
+            child: AnimatedContainer(
+              duration: const Duration(milliseconds: 200),
+              width: 200,
+              height: 50,
+              decoration: BoxDecoration(
+                color: _isNavigating
+                    ? Colors.white.withOpacity(0.7)
+                    : Colors.white,
+                borderRadius: BorderRadius.circular(25),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withOpacity(0.2),
+                    blurRadius: 15,
+                    offset: const Offset(0, 5),
+                  ),
+                ],
+              ),
+              child: Center(
+                child: _isNavigating
+                    ? const SizedBox(
+                  width: 20,
+                  height: 20,
+                  child: CircularProgressIndicator(
+                    strokeWidth: 2,
+                    valueColor: AlwaysStoppedAnimation<Color>(
+                      Color(0xFF5E72E4),
+                    ),
+                  ),
+                )
+                    : const Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Text(
+                      "Get Started",
+                      style: TextStyle(
+                        color: Color(0xFF5E72E4),
+                        fontWeight: FontWeight.bold,
+                        fontSize: 18,
+                      ),
+                    ),
+                    SizedBox(width: 8),
+                    Icon(
+                      Icons.arrow_forward,
+                      color: Color(0xFF5E72E4),
+                      size: 20,
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
 }
+
+
+

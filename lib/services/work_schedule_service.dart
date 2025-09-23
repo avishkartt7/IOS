@@ -1,5 +1,5 @@
 // lib/services/work_schedule_service.dart
-// ✅ CORRECTED VERSION - Break timing from employees collection, work timing from MasterSheet
+// ✅ FIXED VERSION - No Alternative Saturday Service
 
 import 'dart:async';
 import 'package:cloud_firestore/cloud_firestore.dart';
@@ -14,17 +14,72 @@ class WorkScheduleService {
   /// Get work schedule for employee from BOTH employees collection AND MasterSheet
   static Future<WorkSchedule?> getEmployeeWorkSchedule(String employeeId, String? employeePin) async {
     try {
-      debugPrint("=== FETCHING WORK SCHEDULE (CORRECTED - FROM BOTH SOURCES) ===");
+      debugPrint("=== GETTING WORK SCHEDULE (SIMPLIFIED) ===");
       debugPrint("Employee ID: $employeeId");
       debugPrint("Employee PIN: $employeePin");
 
-      // ✅ STEP 1: Get break timing from employees collection (auto-generated ID)
+      DateTime today = DateTime.now();
+      debugPrint("Today: ${DateFormat('EEEE, yyyy-MM-dd').format(today)}");
+
+      // ✅ STEP 1: Check if today is Sunday (always off)
+      if (today.weekday == DateTime.sunday) {
+        debugPrint("📅 Today is Sunday - Off Day");
+        return WorkSchedule.forOffDay(
+          status: 'sunday_off',
+          message: 'Sunday (Holiday) - Off Day',
+        );
+      }
+
+      // ✅ STEP 2: Saturday is now a regular working day (no alternative logic)
+      if (today.weekday == DateTime.saturday) {
+        debugPrint("📅 Today is Saturday - Regular Working Day");
+
+        // Get regular work schedule for Saturday
+        WorkSchedule? schedule = await _getRegularWorkSchedule(employeeId, employeePin);
+
+        if (schedule != null) {
+          return WorkSchedule(
+            startTime: schedule.startTime,
+            endTime: schedule.endTime,
+            breakStartTime: schedule.breakStartTime,
+            breakEndTime: schedule.breakEndTime,
+            workTiming: schedule.workTiming,
+            dataSource: 'saturday_working',
+            isAlternativeSaturday: false, // ✅ No alternative Saturday
+            alternativeSaturdayStatus: 'Saturday Working Day',
+            alternativeSaturdayMessage: 'Regular Saturday Working Day',
+            alternativeSaturdayTiming: schedule.workTiming,
+          );
+        }
+      }
+
+      // ✅ STEP 3: Get regular work schedule for weekdays
+      debugPrint("📅 Getting regular weekday schedule...");
+      WorkSchedule? schedule = await _getRegularWorkSchedule(employeeId, employeePin);
+
+      if (schedule != null) {
+        return schedule;
+      }
+
+      debugPrint("❌ No work schedule found - returning default");
+      return _getDefaultSchedule();
+
+    } catch (e) {
+      debugPrint("❌ Error getting work schedule: $e");
+      return _getDefaultSchedule();
+    }
+  }
+
+  /// Get regular work schedule from database (no alternative Saturday logic)
+  static Future<WorkSchedule?> _getRegularWorkSchedule(String employeeId, String? employeePin) async {
+    try {
+      // ✅ STEP 1: Get break timing from employees collection
       Map<String, dynamic> employeeData = {};
-      
+
       try {
         DocumentSnapshot employeeDoc = await FirebaseFirestore.instance
             .collection('employees')
-            .doc(employeeId)  // ← Use the actual employeeId (like MidMRRsslPHsTokhSk43)
+            .doc(employeeId)
             .get()
             .timeout(const Duration(seconds: 10));
 
@@ -41,9 +96,9 @@ class WorkScheduleService {
         debugPrint("❌ Error fetching employee data: $e");
       }
 
-      // ✅ STEP 2: Get work timing from MasterSheet (using PIN relationship)
+      // ✅ STEP 2: Get work timing from MasterSheet
       Map<String, dynamic> masterSheetData = {};
-      
+
       if (employeePin != null || employeeData['pin'] != null) {
         try {
           String pin = employeePin ?? employeeData['pin']?.toString() ?? '';
@@ -86,7 +141,7 @@ class WorkScheduleService {
       return schedule;
 
     } catch (e) {
-      debugPrint("❌ Error fetching work schedule: $e");
+      debugPrint("❌ Error getting regular work schedule: $e");
       return null;
     }
   }
@@ -94,7 +149,7 @@ class WorkScheduleService {
   /// Convert PIN to MasterSheet employee ID format
   static String _getMasterSheetId(String employeeId, String? employeePin) {
     String masterSheetEmployeeId = employeePin ?? employeeId;
-    
+
     // Remove EMP prefix if present
     if (masterSheetEmployeeId.startsWith('EMP')) {
       masterSheetEmployeeId = masterSheetEmployeeId.substring(3);
@@ -114,26 +169,71 @@ class WorkScheduleService {
     return masterSheetEmployeeId;
   }
 
+  /// Get default work schedule
+  static WorkSchedule _getDefaultSchedule() {
+    return WorkSchedule(
+      startTime: '08:00',
+      endTime: '18:00',
+      workTiming: '08:00 - 18:00',
+      dataSource: 'default',
+      isAlternativeSaturday: false,
+      alternativeSaturdayStatus: 'Default Schedule',
+      alternativeSaturdayMessage: 'Using default work schedule',
+      alternativeSaturdayTiming: '08:00 - 18:00',
+    );
+  }
+
   /// Check if current time is late for check-in
   static ScheduleCheckResult checkCheckInTiming(WorkSchedule schedule, DateTime checkInTime) {
     try {
-      DateTime expectedStartTime = _parseTimeForToday(schedule.startTime);
-      Duration lateDuration = checkInTime.difference(expectedStartTime);
+      debugPrint("⏰ Checking check-in timing...");
+      debugPrint("Schedule: ${schedule.workTiming}");
+      debugPrint("Check-in time: ${DateFormat('HH:mm').format(checkInTime)}");
 
-      bool isLate = lateDuration.inMinutes > 0;
-      
+      // ✅ Handle off days
+      if (schedule.isOffDay) {
+        debugPrint("📅 Off day - allowing check-in (will be overtime)");
+        return ScheduleCheckResult(
+          isLate: false,
+          isEarly: false,
+          lateDuration: Duration.zero,
+          earlyDuration: Duration.zero,
+          message: "${schedule.alternativeSaturdayMessage} - Check-in will be recorded as overtime",
+          expectedTime: checkInTime,
+          actualTime: checkInTime,
+          scheduleType: ScheduleEventType.checkIn,
+        );
+      }
+
+      // ✅ Handle regular working days (including Saturday)
+      DateTime expectedCheckIn = _parseTimeForToday(schedule.startTime);
+      Duration difference = checkInTime.difference(expectedCheckIn);
+
+      bool isLate = difference.inMinutes > 15; // 15 minutes grace period
+      bool isEarly = difference.inMinutes < -30; // 30 minutes early limit
+
+      String message;
+      if (isLate) {
+        message = "You are ${difference.inMinutes} minutes late. Expected check-in: ${DateFormat('h:mm a').format(expectedCheckIn)}";
+      } else if (isEarly) {
+        message = "Early check-in (expected: ${schedule.startTime})";
+      } else {
+        message = "On time! Check-in successful.";
+      }
+
       return ScheduleCheckResult(
         isLate: isLate,
-        lateDuration: isLate ? lateDuration : Duration.zero,
-        expectedTime: expectedStartTime,
+        isEarly: isEarly,
+        lateDuration: isLate ? difference : Duration.zero,
+        earlyDuration: isEarly ? difference.abs() : Duration.zero,
+        message: message,
+        expectedTime: expectedCheckIn,
         actualTime: checkInTime,
-        message: isLate 
-            ? "You are ${lateDuration.inMinutes} minutes late. Expected check-in: ${DateFormat('h:mm a').format(expectedStartTime)}"
-            : "On time! Check-in successful.",
         scheduleType: ScheduleEventType.checkIn,
       );
+
     } catch (e) {
-      debugPrint("Error checking check-in timing: $e");
+      debugPrint("❌ Error checking check-in timing: $e");
       return ScheduleCheckResult.error("Error validating check-in timing");
     }
   }
@@ -141,35 +241,92 @@ class WorkScheduleService {
   /// Check if current time is early for check-out
   static ScheduleCheckResult checkCheckOutTiming(WorkSchedule schedule, DateTime checkOutTime) {
     try {
-      DateTime expectedEndTime = _parseTimeForToday(schedule.endTime);
-      Duration earlyDuration = expectedEndTime.difference(checkOutTime);
+      debugPrint("⏰ Checking check-out timing...");
+      debugPrint("Schedule: ${schedule.workTiming}");
+      debugPrint("Check-out time: ${DateFormat('HH:mm').format(checkOutTime)}");
 
-      bool isEarly = earlyDuration.inMinutes > 0;
-      
+      // ✅ Handle off days - always allow (overtime)
+      if (schedule.isOffDay) {
+        return ScheduleCheckResult(
+          isLate: false,
+          isEarly: false,
+          lateDuration: Duration.zero,
+          earlyDuration: Duration.zero,
+          message: "${schedule.alternativeSaturdayMessage} - Check-out recorded as overtime",
+          expectedTime: checkOutTime,
+          actualTime: checkOutTime,
+          scheduleType: ScheduleEventType.checkOut,
+        );
+      }
+
+      // ✅ Handle regular schedule (including Saturday)
+      DateTime expectedCheckOut = _parseTimeForToday(schedule.endTime);
+      Duration difference = expectedCheckOut.difference(checkOutTime);
+
+      bool isEarly = difference.inMinutes > 30; // 30 minutes early limit
+      bool isLate = checkOutTime.isAfter(expectedCheckOut.add(Duration(minutes: 15))); // 15 minutes late (overtime)
+
+      String message;
+      if (isEarly) {
+        message = "You are checking out ${difference.inMinutes} minutes early. Expected check-out: ${DateFormat('h:mm a').format(expectedCheckOut)}";
+      } else if (isLate) {
+        message = "Late check-out - overtime recorded (expected: ${schedule.endTime})";
+      } else {
+        message = "Work day completed! Check-out successful.";
+      }
+
       return ScheduleCheckResult(
+        isLate: isLate,
         isEarly: isEarly,
-        earlyDuration: isEarly ? earlyDuration : Duration.zero,
-        expectedTime: expectedEndTime,
+        lateDuration: Duration.zero,
+        earlyDuration: isEarly ? difference : Duration.zero,
+        message: message,
+        expectedTime: expectedCheckOut,
         actualTime: checkOutTime,
-        message: isEarly 
-            ? "You are checking out ${earlyDuration.inMinutes} minutes early. Expected check-out: ${DateFormat('h:mm a').format(expectedEndTime)}"
-            : "Work day completed! Check-out successful.",
         scheduleType: ScheduleEventType.checkOut,
       );
+
     } catch (e) {
-      debugPrint("Error checking check-out timing: $e");
+      debugPrint("❌ Error checking check-out timing: $e");
       return ScheduleCheckResult.error("Error validating check-out timing");
     }
   }
 
-  /// Get check-out reminder time (30 minutes before end)
-  static DateTime? getCheckOutReminderTime(WorkSchedule schedule) {
+  /// Get next Saturday info for dashboard (simplified - no alternative Saturday)
+  static Future<Map<String, dynamic>> getNextSaturdayInfo(String employeeId, String? employeePin) async {
     try {
-      DateTime expectedEndTime = _parseTimeForToday(schedule.endTime);
-      return expectedEndTime.subtract(const Duration(minutes: 30));
+      debugPrint("📅 Getting next Saturday info (simplified)...");
+
+      // Calculate next Saturday
+      DateTime now = DateTime.now();
+      DateTime nextSaturday = now.add(Duration(days: (DateTime.saturday - now.weekday + 7) % 7));
+      if (nextSaturday.isBefore(now) || nextSaturday.isAtSameMomentAs(now)) {
+        nextSaturday = nextSaturday.add(Duration(days: 7));
+      }
+
+      // ✅ SIMPLIFIED: Saturday is always a working day now
+      WorkSchedule? schedule = await _getRegularWorkSchedule(employeeId, employeePin);
+
+      return {
+        'hasNextSaturday': true,
+        'nextSaturdayDate': DateFormat('yyyy-MM-dd').format(nextSaturday),
+        'isInAlternativeSystem': false, // ✅ No alternative system
+        'shouldWork': true, // ✅ Always work on Saturday
+        'status': 'saturday_working_day',
+        'message': 'Saturday Working Day',
+        'timing': {
+          'startTime': schedule?.startTime ?? '08:00',
+          'endTime': schedule?.endTime ?? '18:00',
+          'workTiming': schedule?.workTiming ?? '08:00 - 18:00',
+        },
+        'workingHours': schedule?.workTiming ?? '08:00 - 18:00',
+      };
     } catch (e) {
-      debugPrint("Error calculating check-out reminder time: $e");
-      return null;
+      debugPrint("❌ Error getting next Saturday info: $e");
+      return {
+        'hasNextSaturday': false,
+        'error': e.toString(),
+      };
     }
   }
 
@@ -180,7 +337,7 @@ class WorkScheduleService {
     try {
       DateTime breakStart = _parseTimeForToday(schedule.breakStartTime!);
       DateTime breakEnd = _parseTimeForToday(schedule.breakEndTime!);
-      
+
       return currentTime.isAfter(breakStart) && currentTime.isBefore(breakEnd);
     } catch (e) {
       debugPrint("Error checking break time: $e");
@@ -191,7 +348,7 @@ class WorkScheduleService {
   /// Parse time string (like "08:00" or "12:00 PM") for today's date
   static DateTime _parseTimeForToday(String timeString) {
     DateTime today = DateTime.now();
-    
+
     try {
       // Handle formats like "12:00 PM" or "1:00 PM"
       if (timeString.contains('AM') || timeString.contains('PM')) {
@@ -199,7 +356,7 @@ class WorkScheduleService {
         DateTime parsedTime = format.parse(timeString);
         return DateTime(today.year, today.month, today.day, parsedTime.hour, parsedTime.minute);
       }
-      
+
       // Handle 24-hour format like "08:00" or "18:00"
       List<String> timeParts = timeString.split(':');
       if (timeParts.length >= 2) {
@@ -207,12 +364,25 @@ class WorkScheduleService {
         int minute = int.parse(timeParts[1]);
         return DateTime(today.year, today.month, today.day, hour, minute);
       }
-      
+
       throw FormatException('Invalid time format: $timeString');
     } catch (e) {
       debugPrint("Error parsing time '$timeString': $e");
       // Fallback to current time
       return today;
+    }
+  }
+
+  /// Get check-out reminder time (30 minutes before end)
+  static DateTime? getCheckOutReminderTime(WorkSchedule schedule) {
+    if (schedule.isOffDay) return null;
+
+    try {
+      DateTime workEnd = _parseTimeForToday(schedule.endTime);
+      return workEnd.subtract(const Duration(minutes: 30));
+    } catch (e) {
+      debugPrint("Error getting check-out reminder time: $e");
+      return null;
     }
   }
 
@@ -245,7 +415,13 @@ class WorkSchedule {
   final String? breakEndTime;
   final String? workTiming;
   final bool hasBreakTime;
-  final String dataSource; // ✅ NEW: Track where data came from
+  final String dataSource;
+
+  // ✅ Simplified Alternative Saturday fields (for compatibility)
+  final bool isAlternativeSaturday;
+  final String? alternativeSaturdayStatus;
+  final String? alternativeSaturdayMessage;
+  final String? alternativeSaturdayTiming;
 
   WorkSchedule({
     required this.startTime,
@@ -254,9 +430,13 @@ class WorkSchedule {
     this.breakEndTime,
     this.workTiming,
     this.dataSource = 'combined',
+    this.isAlternativeSaturday = false,
+    this.alternativeSaturdayStatus,
+    this.alternativeSaturdayMessage,
+    this.alternativeSaturdayTiming,
   }) : hasBreakTime = breakStartTime != null && breakEndTime != null;
 
-  /// ✅ NEW: Create from combined data (employees + MasterSheet)
+  /// Create from combined employee and MasterSheet data
   factory WorkSchedule.fromCombinedData(Map<String, dynamic> data) {
     String? workTiming = data['workTiming']?.toString();
     String startTime = data['startTime']?.toString() ?? '08:00';
@@ -274,20 +454,48 @@ class WorkSchedule {
     return WorkSchedule(
       startTime: startTime,
       endTime: endTime,
-      breakStartTime: data['breakStartTime']?.toString(), // ← From employees collection
-      breakEndTime: data['breakEndTime']?.toString(),     // ← From employees collection
-      workTiming: workTiming,                             // ← From MasterSheet
+      breakStartTime: data['breakStartTime']?.toString(),
+      breakEndTime: data['breakEndTime']?.toString(),
+      workTiming: workTiming,
       dataSource: 'employees+mastersheet',
+      isAlternativeSaturday: false, // ✅ No alternative Saturday
+      alternativeSaturdayStatus: 'Regular Working Day',
+      alternativeSaturdayMessage: 'Standard work schedule',
+      alternativeSaturdayTiming: workTiming,
     );
   }
 
-  /// ✅ LEGACY: Keep for backward compatibility
+  /// Create off day schedule (Sunday)
+  factory WorkSchedule.forOffDay({
+    required String status,
+    required String message,
+  }) {
+    return WorkSchedule(
+      startTime: '00:00',
+      endTime: '00:00',
+      workTiming: 'Off Day',
+      dataSource: 'off_day',
+      isAlternativeSaturday: true,
+      alternativeSaturdayStatus: status,
+      alternativeSaturdayMessage: message,
+      alternativeSaturdayTiming: 'Off Day',
+    );
+  }
+
+  bool get isOffDay => startTime == '00:00' && endTime == '00:00';
+  bool get isSaturdayWorking => false; // ✅ No special Saturday logic
+  bool get isSaturdayOff => false; // ✅ No special Saturday logic
+
+  /// ✅ Keep for backward compatibility
   factory WorkSchedule.fromMasterSheetData(Map<String, dynamic> data) {
     return WorkSchedule.fromCombinedData(data);
   }
 
   @override
   String toString() {
+    if (isOffDay) {
+      return 'WorkSchedule(Off Day: $alternativeSaturdayMessage, source: $dataSource)';
+    }
     return 'WorkSchedule(start: $startTime, end: $endTime, break: ${hasBreakTime ? "$breakStartTime-$breakEndTime" : "None"}, source: $dataSource)';
   }
 }

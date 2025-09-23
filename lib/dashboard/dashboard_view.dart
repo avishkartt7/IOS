@@ -4,73 +4,81 @@ import 'dart:async';
 import 'package:cloud_functions/cloud_functions.dart';
 import 'package:geodesy/geodesy.dart';
 import 'dart:io' show Platform;
+import 'dart:async' show unawaited;
+
+
+import 'package:face_auth_compatible/model/location_model.dart';
+import 'package:face_auth_compatible/services/geofence_exit_monitoring_service.dart';
+
 import 'package:flutter/material.dart';
-import 'package:face_auth/model/local_attendance_model.dart';
-import 'package:face_auth/services/database_helper.dart';
-import 'package:face_auth/services/overtime_approver_service.dart';
-import 'package:face_auth/authenticate_face/authentication_success_screen.dart';
-import 'package:face_auth/services/work_schedule_service.dart';
+import 'package:face_auth_compatible/model/local_attendance_model.dart';
+import 'package:face_auth_compatible/services/database_helper.dart';
+import 'package:face_auth_compatible/services/overtime_approver_service.dart';
+import 'package:face_auth_compatible/authenticate_face/authentication_success_screen.dart';
+import 'package:face_auth_compatible/services/work_schedule_service.dart';
+// ✅ FIXED: Added missing import
+import 'package:face_auth_compatible/model/local_attendance_model.dart';
 import 'dart:async';
 import 'package:flutter/foundation.dart';
-import 'package:face_auth/services/overtime_approver_service.dart';
+import 'package:face_auth_compatible/services/overtime_approver_service.dart';
 import 'package:flutter/foundation.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:face_auth/constants/theme.dart';
-import 'package:face_auth/pin_entry/pin_entry_view.dart';
-import 'package:face_auth/dashboard/user_profile_page.dart';
-import 'package:face_auth/common/utils/custom_snackbar.dart';
-import 'package:face_auth/utils/geofence_util.dart';
-import 'package:face_auth/authenticate_face/authenticate_face_view.dart';
+import 'package:face_auth_compatible/constants/theme.dart';
+import 'package:face_auth_compatible/pin_entry/pin_entry_view.dart';
+import 'package:face_auth_compatible/dashboard/user_profile_page.dart';
+import 'package:face_auth_compatible/common/utils/custom_snackbar.dart';
+import 'package:face_auth_compatible/utils/geofence_util.dart';
+import 'package:face_auth_compatible/authenticate_face/authenticate_face_view.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:intl/intl.dart';
 import 'package:flutter/foundation.dart' show debugPrint;
-import 'package:face_auth/overtime/create_overtime_view.dart';
-import 'package:face_auth/overtime/pending_overtime_view.dart';
-import 'package:face_auth/utils/overtime_setup_utility.dart';
-import 'package:face_auth/repositories/overtime_repository.dart';
-import 'package:face_auth/dashboard/my_attendance_view.dart';
+import 'package:face_auth_compatible/overtime/create_overtime_view.dart';
+import 'package:face_auth_compatible/overtime/pending_overtime_view.dart';
+import 'package:face_auth_compatible/utils/overtime_setup_utility.dart';
+import 'package:face_auth_compatible/repositories/overtime_repository.dart';
+import 'package:face_auth_compatible/dashboard/my_attendance_view.dart';
 import 'package:geodesy/geodesy.dart' as geo;
 import 'dart:math';
-import 'package:face_auth/debug/debug_data_screen.dart';
+import 'package:face_auth_compatible/debug/debug_data_screen.dart';
 import 'package:flutter/foundation.dart';
-import 'package:face_auth/admin/notification_admin_view.dart';
+
 import 'package:geodesy/geodesy.dart' as geodesy_pkg;
-import 'package:face_auth/services/database_helper.dart';
-import 'package:face_auth/services/database_helper.dart';
+import 'package:face_auth_compatible/services/database_helper.dart';
+import 'package:face_auth_compatible/services/database_helper.dart';
 import 'package:geolocator/geolocator.dart';
-import 'package:face_auth/model/location_model.dart';
-import 'package:face_auth/model/overtime_request_model.dart';
-import 'package:face_auth/dashboard/team_management_view.dart';
-import 'package:face_auth/dashboard/checkout_handler.dart';
-import 'package:face_auth/checkout_request/manager_pending_requests_view.dart';
-import 'package:face_auth/checkout_request/request_history_view.dart';
-import 'package:face_auth/repositories/check_out_request_repository.dart';
-import 'package:face_auth/services/notification_service.dart';
-import 'package:face_auth/services/connectivity_service.dart';
-import 'package:face_auth/common/widgets/connectivity_banner.dart';
-import 'package:face_auth/repositories/attendance_repository.dart';
-import 'package:face_auth/repositories/location_repository.dart';
-import 'package:face_auth/services/sync_service.dart';
-import 'package:face_auth/services/service_locator.dart';
-import 'package:face_auth/test/offline_test_view.dart';
-import 'package:face_auth/dashboard/check_in_out_handler.dart';
-import 'package:face_auth/services/fcm_token_service.dart';
-import 'package:face_auth/utils/enhanced_geofence_util.dart';
-import 'package:face_auth/model/polygon_location_model.dart';
-import 'package:face_auth/repositories/polygon_location_repository.dart';
-import 'package:face_auth/admin/geojson_importer_view.dart';
-import 'package:face_auth/admin/polygon_map_view.dart';
-import 'package:face_auth/admin/map_navigation.dart';
-import 'package:face_auth/overtime/employee_list_management_view.dart';
-import 'package:face_auth/leave/apply_leave_view.dart';
-import 'package:face_auth/leave/leave_history_view.dart';
-import 'package:face_auth/leave/manager_leave_approval_view.dart';
-import 'package:face_auth/services/leave_application_service.dart';
-import 'package:face_auth/repositories/leave_application_repository.dart';
+import 'package:face_auth_compatible/model/location_model.dart';
+import 'package:face_auth_compatible/model/overtime_request_model.dart';
+import 'package:face_auth_compatible/dashboard/team_management_view.dart';
+import 'package:face_auth_compatible/dashboard/checkout_handler.dart';
+import 'package:face_auth_compatible/checkout_request/manager_pending_requests_view.dart';
+import 'package:face_auth_compatible/checkout_request/request_history_view.dart';
+import 'package:face_auth_compatible/repositories/check_out_request_repository.dart';
+import 'package:face_auth_compatible/services/notification_service.dart';
+import 'package:face_auth_compatible/services/connectivity_service.dart';
+import 'package:face_auth_compatible/common/widgets/connectivity_banner.dart';
+import 'package:face_auth_compatible/repositories/attendance_repository.dart';
+import 'package:face_auth_compatible/repositories/location_repository.dart';
+import 'package:face_auth_compatible/services/sync_service.dart';
+import 'package:face_auth_compatible/services/service_locator.dart';
+import 'package:face_auth_compatible/test/offline_test_view.dart';
+import 'package:face_auth_compatible/dashboard/check_in_out_handler.dart';
+import 'package:face_auth_compatible/services/fcm_token_service.dart';
+import 'package:face_auth_compatible/utils/enhanced_geofence_util.dart';
+import 'package:face_auth_compatible/model/polygon_location_model.dart';
+import 'package:face_auth_compatible/repositories/polygon_location_repository.dart';
+
+
+
+import 'package:face_auth_compatible/overtime/employee_list_management_view.dart';
+import 'package:face_auth_compatible/leave/apply_leave_view.dart';
+import 'package:face_auth_compatible/leave/leave_history_view.dart';
+import 'package:face_auth_compatible/leave/manager_leave_approval_view.dart';
+import 'package:face_auth_compatible/services/leave_application_service.dart';
+import 'package:face_auth_compatible/repositories/leave_application_repository.dart';
 import 'package:firebase_auth/firebase_auth.dart';
-import 'package:face_auth/services/firebase_auth_service.dart';
-import 'package:face_auth/services/secure_face_storage_service.dart';
+import 'package:face_auth_compatible/services/firebase_auth_service.dart';
+import 'package:face_auth_compatible/services/secure_face_storage_service.dart';
 
 
 class DashboardView extends StatefulWidget {
@@ -95,6 +103,22 @@ class _DashboardViewState extends State<DashboardView>
   late Animation<double> _pulseAnimation;
   late Animation<Offset> _offsetAnimation;
 
+
+  late GeofenceExitMonitoringService _geofenceExitService;
+  bool _isGeofenceMonitoringActive = false;
+  String _monitoringStatus = "Inactive";
+  List<GeofenceExitEvent> _recentExitEvents = [];
+
+  bool _isShowingExitWarning = false;
+  String? _currentExitEventId;
+  Timer? _exitWarningTimer;
+
+
+  bool _isProcessingCheckInOut = false;
+
+
+
+
   // Core State Variables
   bool _isLoading = true;
   bool _isDarkMode = false;
@@ -107,10 +131,23 @@ class _DashboardViewState extends State<DashboardView>
   String _currentTime = '';
   String _greetingMessage = '';
 
+
+  bool _isOvertimeApprover = false;
+  int _pendingOvertimeRequests = 0;
+  bool _isLoadingOvertimeApprovals = false;
+
+  //////////////////////////////////////
+  Map<String, dynamic>? _nextSaturdayInfo;
+  Map<String, dynamic>? _todaySaturdayStatus;
+  bool _isLoadingSaturdayInfo = false;
+
   // Activity and Location State
-  List<Map<String, dynamic>> _todaysActivity = [];
-  LocationModel? _nearestLocation;
-  List<LocationModel> _availableLocations = [];
+
+  DateTime? _lastLocationCheck;
+  Position? _cachedPosition;
+  bool _isLocationCacheValid = false;
+  static const Duration _locationCacheTimeout = Duration(minutes: 2);
+
 
   List<OvertimeRequest> _activeOvertimeAssignments = [];
   List<OvertimeRequest> _todayOvertimeSchedule = [];
@@ -118,12 +155,18 @@ class _DashboardViewState extends State<DashboardView>
   bool _hasActiveOvertime = false;
 
 
+  List<Map<String, dynamic>> _todaysActivity = [];
+  LocationModel? _nearestLocation;
+  List<LocationModel> _availableLocations = [];
+  bool _isLocationCheckInProgress = false;
+
+
   // Manager and Approval State
   bool _isLineManager = false;
   String? _lineManagerDocumentId;
   Map<String, dynamic>? _lineManagerData;
   int _pendingApprovalRequests = 0;
-  int _pendingOvertimeRequests = 0;
+
   int _pendingLeaveApprovals = 0;
   bool _isLoadingLeaveData = false;
   late LeaveApplicationService _leaveService;
@@ -151,9 +194,15 @@ class _DashboardViewState extends State<DashboardView>
 
   // Authentication State
   bool _isAuthenticating = false;
-  bool _isOvertimeApprover = false;
-  Map<String, dynamic>? _approverInfo;
-  bool _checkingApproverStatus = true;
+
+
+  Timer? _locationUpdateTimer;
+  bool _isLocationRefreshing = false;
+  DateTime? _lastSuccessfulLocationCheck;
+  static const Duration _locationRefreshInterval = Duration(minutes: 2);
+  static const Duration _backgroundLocationInterval = Duration(minutes: 5);
+
+
 
   // Offline Support State
   late ConnectivityService _connectivityService;
@@ -163,17 +212,658 @@ class _DashboardViewState extends State<DashboardView>
   bool _needsSync = false;
   late AppLifecycleObserver _lifecycleObserver;
 
+  final Map<String, DateTime> _lastRefreshTimes = {};
+  final Map<String, dynamic> _dataCache = {};
+  bool _isRefreshing = false;
+  Timer? _smartRefreshTimer;
+
+  static const Map<String, int> _refreshIntervals = {
+    'critical': 1,      // Attendance status, check-in state
+    'important': 5,     // Location, today's activity
+    'normal': 10,       // Overtime, work schedule
+    'background': 30,   // User data, notifications
+  };
+
   // Performance Optimization
   @override
   bool get wantKeepAlive => true;
+
+
 
   @override
   void initState() {
     super.initState();
     _initializeControllers();
     _initializeServices();
-    _initializeData();
+
+    _initializeSmartRefresh();
+    _loadCachedOvertimeApproverStatus();
+
+    // Initialize geofence service but don't check previous state yet
+    _initializeGeofenceExitServiceOnly();
+
+    // Start data initialization with proper attendance state handling
+    _initializeDataWithProperState();
+
     _setupTimers();
+  }
+
+
+
+  void _initializeDataWithProperState() async {
+    try {
+      debugPrint("🚀 Starting data initialization with proper state handling...");
+
+      // 1. First load user data
+      await _fetchUserData();
+
+      // 2. Then initialize attendance state properly (this is the key fix)
+      await _initializeAttendanceState();
+
+      // 3. After attendance status is confirmed, load other data
+      await _fetchTodaysActivity();
+      await _smartLocationInitialization();
+      await _checkGeofenceStatus();
+      await _fetchOvertimeAssignments();
+      _updateDateTime();
+      await _fetchWorkSchedule();
+      _setupTimingChecks();
+
+      // 4. Finally setup geofence monitoring based on confirmed state
+      _setupGeofenceMonitoringAfterData();
+
+      debugPrint("✅ Data initialization with proper state handling completed");
+    } catch (e) {
+      debugPrint("❌ Error in data initialization: $e");
+    }
+  }
+
+
+  // Add this method to handle offline state restoration
+
+
+
+// Also modify your connectivity change handler
+  void _handleConnectivityChange(ConnectionStatus status) {
+    debugPrint("Connectivity status changed: $status");
+
+    if (status == ConnectionStatus.offline) {
+      // Handle going offline
+      _handleOfflineStateRestoration();
+    } else if (status == ConnectionStatus.online) {
+      // Handle coming back online
+      if (_needsSync) {
+        _syncService.syncData().then((_) {
+          _fetchUserData();
+          if (_isLineManager) {
+            _loadPendingApprovalRequests();
+            _loadPendingLeaveApprovals();
+          }
+          // Refresh attendance state after sync
+          _fetchAttendanceStatus();
+          _fetchTodaysActivity();
+          if (mounted) {
+            setState(() {
+              _needsSync = false;
+            });
+          }
+        });
+      } else {
+        // Just refresh attendance state to ensure consistency
+        _fetchAttendanceStatus();
+      }
+    }
+  }
+
+  void _setupSmartTimers() {
+    // ✅ SINGLE SMART TIMER instead of multiple timers
+    _smartRefreshTimer = Timer.periodic(const Duration(minutes: 1), (timer) {
+      if (!mounted) {
+        timer.cancel();
+        return;
+      }
+
+      _performSmartRefresh();
+    });
+
+    debugPrint("✅ Smart timer system activated");
+  }
+
+  void _initializeSmartRefresh() {
+    // Initialize refresh tracking
+    final now = DateTime.now();
+    _lastRefreshTimes.clear();
+    _dataCache.clear();
+
+    debugPrint("🔄 Smart refresh system initialized");
+  }
+
+
+  Future<void> _performSmartRefresh() async {
+    if (_isRefreshing || _isProcessingCheckInOut) {
+      debugPrint("⚡ Skipping refresh - operation in progress");
+      return;
+    }
+
+    final now = DateTime.now();
+    List<String> toRefresh = [];
+
+    // Check what needs refreshing based on intervals
+    _refreshIntervals.forEach((priority, intervalMinutes) {
+      final lastRefresh = _lastRefreshTimes[priority];
+
+      if (lastRefresh == null ||
+          now.difference(lastRefresh).inMinutes >= intervalMinutes) {
+        toRefresh.add(priority);
+      }
+    });
+
+    if (toRefresh.isNotEmpty) {
+      debugPrint("🔄 Smart refresh triggered for: ${toRefresh.join(', ')}");
+      await _executeSmartRefresh(toRefresh);
+    }
+  }
+
+  Future<void> _executeSmartRefresh(List<String> priorities) async {
+    if (_isRefreshing) return;
+
+    _isRefreshing = true;
+    final now = DateTime.now();
+
+    try {
+      // ✅ CRITICAL DATA (Every 1 minute)
+      if (priorities.contains('critical')) {
+        await _refreshCriticalData();
+        _lastRefreshTimes['critical'] = now;
+      }
+
+      // ✅ IMPORTANT DATA (Every 5 minutes)
+      if (priorities.contains('important')) {
+        await _refreshImportantData();
+        _lastRefreshTimes['important'] = now;
+      }
+
+      // ✅ NORMAL DATA (Every 10 minutes)
+      if (priorities.contains('normal')) {
+        await _refreshNormalData();
+        _lastRefreshTimes['normal'] = now;
+      }
+
+      // ✅ BACKGROUND DATA (Every 30 minutes)
+      if (priorities.contains('background')) {
+        await _refreshBackgroundData();
+        _lastRefreshTimes['background'] = now;
+      }
+
+    } catch (e) {
+      debugPrint("❌ Error in smart refresh: $e");
+    } finally {
+      _isRefreshing = false;
+    }
+  }
+
+  // ✅ CRITICAL: Attendance status, check-in state, monitoring
+  Future<void> _refreshCriticalData() async {
+    debugPrint("🔥 Refreshing CRITICAL data...");
+
+    try {
+      // Only refresh attendance if there's potential for change
+      if (_connectivityService.currentStatus == ConnectionStatus.online) {
+
+        // Smart attendance check - only if needed
+        String today = DateFormat('yyyy-MM-dd').format(DateTime.now());
+        String cacheKey = 'attendance_$today';
+
+        if (_shouldRefreshData(cacheKey, const Duration(minutes: 2))) {
+          await _fetchAttendanceStatusForSync();
+          _dataCache[cacheKey] = DateTime.now();
+        }
+      }
+
+      // Update time display
+      _updateDateTime();
+
+      // Check geofence monitoring state
+      if (_isCheckedIn) {
+        await _checkPreviousMonitoringState();
+      }
+
+    } catch (e) {
+      debugPrint("❌ Error refreshing critical data: $e");
+    }
+  }
+
+  // ✅ IMPORTANT: Location, today's activity, timing messages
+  Future<void> _refreshImportantData() async {
+    debugPrint("📍 Refreshing IMPORTANT data...");
+
+    try {
+      // Smart location refresh - only if user moved significantly
+      if (_shouldRefreshLocation()) {
+        await _autoRefreshLocation();
+      }
+
+      // Today's activity - only if state changed
+      String cacheKey = 'activity_${DateFormat('yyyy-MM-dd').format(DateTime.now())}';
+      if (_shouldRefreshData(cacheKey, const Duration(minutes: 5))) {
+        await _fetchTodaysActivity();
+        _dataCache[cacheKey] = DateTime.now();
+      }
+
+      // Update timing messages
+      _updateCurrentTimingMessage();
+
+    } catch (e) {
+      debugPrint("❌ Error refreshing important data: $e");
+    }
+  }
+
+  // ✅ NORMAL: Overtime, work schedule, notifications
+  Future<void> _refreshNormalData() async {
+    debugPrint("⏰ Refreshing NORMAL data...");
+
+    if (_connectivityService.currentStatus != ConnectionStatus.online) {
+      debugPrint("📱 Offline - skipping normal data refresh");
+      return;
+    }
+
+    try {
+      // Overtime assignments - only for users with overtime access
+      if (_userData?['hasOvertimeAccess'] == true) {
+        String cacheKey = 'overtime_${widget.employeeId}';
+        if (_shouldRefreshData(cacheKey, const Duration(minutes: 10))) {
+          await _fetchOvertimeAssignments();
+          _dataCache[cacheKey] = DateTime.now();
+        }
+      }
+
+      // Manager-specific data
+      if (_isLineManager) {
+        String cacheKey = 'manager_requests_${widget.employeeId}';
+        if (_shouldRefreshData(cacheKey, const Duration(minutes: 10))) {
+          await _loadPendingApprovalRequests();
+          await _loadPendingLeaveApprovals();
+          _dataCache[cacheKey] = DateTime.now();
+        }
+      }
+
+      // Overtime approver data
+      if (_isOvertimeApprover) {
+        String cacheKey = 'overtime_approvals_${widget.employeeId}';
+        if (_shouldRefreshData(cacheKey, const Duration(minutes: 10))) {
+          await _loadPendingOvertimeApprovals();
+          _dataCache[cacheKey] = DateTime.now();
+        }
+      }
+
+    } catch (e) {
+      debugPrint("❌ Error refreshing normal data: $e");
+    }
+  }
+
+
+  Future<void> _refreshBackgroundData() async {
+    debugPrint("🔄 Refreshing BACKGROUND data...");
+
+    if (_connectivityService.currentStatus != ConnectionStatus.online) {
+      debugPrint("📱 Offline - skipping background data refresh");
+      return;
+    }
+
+    try {
+      // Work schedule - rarely changes
+      String cacheKey = 'work_schedule_${widget.employeeId}';
+      if (_shouldRefreshData(cacheKey, const Duration(hours: 1))) {
+        await _fetchWorkSchedule();
+        _dataCache[cacheKey] = DateTime.now();
+      }
+
+      // User data - only if older than 1 hour
+      String userCacheKey = 'user_data_${widget.employeeId}';
+      if (_shouldRefreshData(userCacheKey, const Duration(hours: 1))) {
+        // Light user data refresh - don't reload everything
+        await _refreshUserDataLight();
+        _dataCache[userCacheKey] = DateTime.now();
+      }
+
+      // Sync pending data if needed
+      final pendingRecords = await _attendanceRepository.getPendingRecords();
+      if (mounted && pendingRecords.isNotEmpty != _needsSync) {
+        setState(() {
+          _needsSync = pendingRecords.isNotEmpty;
+        });
+      }
+
+    } catch (e) {
+      debugPrint("❌ Error refreshing background data: $e");
+    }
+  }
+
+  // ✅ SMART HELPERS
+  bool _shouldRefreshData(String cacheKey, Duration maxAge) {
+    final lastRefresh = _dataCache[cacheKey];
+    if (lastRefresh == null) return true;
+
+    if (lastRefresh is DateTime) {
+      return DateTime.now().difference(lastRefresh) > maxAge;
+    }
+
+    return true;
+  }
+
+  bool _shouldRefreshLocation() {
+    // Only refresh location if:
+    // 1. No recent successful check (>2 minutes)
+    // 2. User is checking in/out
+    // 3. Manual refresh requested
+
+    if (_lastSuccessfulLocationCheck == null) return true;
+
+    Duration timeSinceLastCheck = DateTime.now().difference(_lastSuccessfulLocationCheck!);
+    return timeSinceLastCheck > const Duration(minutes: 2);
+  }
+
+
+  Future<void> _refreshUserDataLight() async {
+    try {
+      debugPrint("🔄 Light user data refresh...");
+
+      // Only check critical user settings that might change
+      DocumentSnapshot employeeDoc = await FirebaseFirestore.instance
+          .collection('employees')
+          .doc(widget.employeeId)
+          .get()
+          .timeout(const Duration(seconds: 5));
+
+      if (employeeDoc.exists && mounted) {
+        Map<String, dynamic> freshData = employeeDoc.data() as Map<String, dynamic>;
+
+        // Only update specific fields that matter for dashboard
+        Map<String, dynamic> currentData = Map<String, dynamic>.from(_userData ?? {});
+
+        // Update only critical fields
+        List<String> criticalFields = [
+          'hasOvertimeAccess',
+          'hasOvertimeApprovalAccess',
+          'eligibleForRestTiming',
+          'restTimingStartDate',
+          'restTimingEndDate',
+          'restTimingStartTime',
+          'restTimingEndTime'
+        ];
+
+        bool hasChanges = false;
+        for (String field in criticalFields) {
+          if (currentData[field] != freshData[field]) {
+            currentData[field] = freshData[field];
+            hasChanges = true;
+            debugPrint("🔄 Updated field: $field = ${freshData[field]}");
+          }
+        }
+
+        if (hasChanges) {
+          setState(() {
+            _userData = currentData;
+          });
+
+          await _saveUserDataLocally(currentData);
+          debugPrint("✅ Light user data refresh completed with changes");
+        } else {
+          debugPrint("✅ Light user data refresh - no changes");
+        }
+      }
+
+    } catch (e) {
+      debugPrint("❌ Error in light user data refresh: $e");
+    }
+  }
+
+  // ✅ FORCE REFRESH (for manual triggers)
+  Future<void> _forceRefreshAll() async {
+    debugPrint("🔄 FORCE REFRESH ALL triggered");
+
+    if (_isRefreshing) {
+      debugPrint("⚡ Already refreshing - ignoring force refresh");
+      return;
+    }
+
+    // Clear all cache
+    _dataCache.clear();
+    _lastRefreshTimes.clear();
+
+    // Force refresh all priorities
+    await _executeSmartRefresh(['critical', 'important', 'normal', 'background']);
+
+    debugPrint("✅ Force refresh completed");
+  }
+
+  void _setupGeofenceExitListener() {
+    final geofenceService = getIt<GeofenceExitMonitoringService>();
+
+    // Listen for exit events in the service
+    _listenForLocationChanges();
+  }
+
+  void _listenForLocationChanges() {
+    Timer.periodic(const Duration(minutes: 1), (timer) {
+      if (!mounted || !_isGeofenceMonitoringActive) {
+        timer.cancel();
+        return;
+      }
+
+      _checkForExitEvents();
+    });
+  }
+
+  void _initializeGeofenceExitServiceOnly() {
+    try {
+      _geofenceExitService = getIt<GeofenceExitMonitoringService>();
+      _geofenceExitService.initializeDatabase();
+      debugPrint("✅ Geofence service initialized (state check deferred)");
+    } catch (e) {
+      debugPrint("❌ Error initializing geofence service: $e");
+    }
+  }
+  void _setupGeofenceMonitoringAfterData() {
+    // Wait for attendance status to be loaded first
+    Future.delayed(const Duration(milliseconds: 1500), () async {
+      if (mounted) {
+        debugPrint("🔄 Setting up geofence monitoring after data load...");
+        await _checkPreviousMonitoringState();
+        _setupGeofenceExitListener();
+      }
+    });
+  }
+
+
+
+
+  Future<void> _checkForExitEvents() async {
+    try {
+      final geofenceService = getIt<GeofenceExitMonitoringService>();
+
+      final recentEvents = await geofenceService.getExitHistory(widget.employeeId, limit: 1);
+
+      if (recentEvents.isNotEmpty) {
+        final latestEvent = recentEvents.first;
+
+        if (latestEvent.status == 'grace_period' &&
+            latestEvent.returnTime == null &&
+            _currentExitEventId != latestEvent.id) {
+
+          _currentExitEventId = latestEvent.id;
+          _showExitWarningDialog(latestEvent);
+        }
+      }
+    } catch (e) {
+      debugPrint("Error checking exit events: $e");
+    }
+  }
+
+
+  Widget _buildQuickExitReasonChip(String reason, IconData icon, String eventId) {
+    return ActionChip(
+      avatar: Icon(icon, size: 18, color: Colors.white),
+      label: Text(
+        reason,
+        style: TextStyle(color: Colors.white, fontSize: 12),
+      ),
+      backgroundColor: Colors.blue.shade600,
+      onPressed: () async {
+        Navigator.pop(context);
+        _isShowingExitWarning = false;
+
+        final geofenceService = getIt<GeofenceExitMonitoringService>();
+        await geofenceService.recordExitReason(eventId, reason.toLowerCase().replaceAll(' ', '_'));
+
+        CustomSnackBar.successSnackBar("Exit reason recorded: $reason");
+
+        await _loadRecentExitEvents();
+      },
+    );
+  }
+
+  // ✅ NEW: Show real-time exit warning
+  void _showExitWarningDialog(GeofenceExitEvent exitEvent) {
+    if (_isShowingExitWarning) return;
+
+    _isShowingExitWarning = true;
+
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => AlertDialog(
+        backgroundColor: _isDarkMode ? const Color(0xFF1E293B) : Colors.white,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: Container(
+          padding: EdgeInsets.all(16),
+          decoration: BoxDecoration(
+            gradient: LinearGradient(
+              colors: [Colors.orange.shade600, Colors.red.shade500],
+              begin: Alignment.centerLeft,
+              end: Alignment.centerRight,
+            ),
+            borderRadius: BorderRadius.circular(12),
+          ),
+          child: Row(
+            children: [
+              Icon(Icons.location_off, color: Colors.white, size: 32),
+              SizedBox(width: 12),
+              Expanded(
+                child: Text(
+                  "Work Area Exit Detected!",
+                  style: TextStyle(
+                    color: Colors.white,
+                    fontSize: 18,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            SizedBox(height: 16),
+            Container(
+              padding: EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                color: Colors.orange.withOpacity(0.1),
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: Colors.orange.withOpacity(0.3)),
+              ),
+              child: Column(
+                children: [
+                  Row(
+                    children: [
+                      Icon(Icons.access_time, color: Colors.orange, size: 20),
+                      SizedBox(width: 8),
+                      Text(
+                        "Exit Time:",
+                        style: TextStyle(
+                          fontWeight: FontWeight.bold,
+                          color: Colors.orange.shade800,
+                        ),
+                      ),
+                    ],
+                  ),
+                  SizedBox(height: 4),
+                  Text(
+                    DateFormat('h:mm a - MMM dd').format(exitEvent.exitTime),
+                    style: TextStyle(
+                      color: Colors.orange.shade700,
+                      fontSize: 16,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            SizedBox(height: 16),
+            Text(
+              "You have left the designated work area. Please provide a reason for your exit.",
+              style: TextStyle(
+                fontSize: 14,
+                color: _isDarkMode ? Colors.grey.shade300 : Colors.grey.shade700,
+              ),
+              textAlign: TextAlign.center,
+            ),
+            SizedBox(height: 20),
+            Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              children: [
+                _buildQuickExitReasonChip("Lunch Break", Icons.restaurant, exitEvent.id),
+                _buildQuickExitReasonChip("Client Meeting", Icons.business, exitEvent.id),
+                _buildQuickExitReasonChip("Personal Emergency", Icons.emergency, exitEvent.id),
+                _buildQuickExitReasonChip("Other", Icons.more_horiz, exitEvent.id),
+              ],
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () {
+              Navigator.pop(context);
+              _isShowingExitWarning = false;
+              _scheduleExitReminder(exitEvent.id);
+            },
+            child: Text(
+              "Remind Me Later",
+              style: TextStyle(color: Colors.grey.shade600),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // ✅ NEW: Get next check time estimate
+  String _getNextCheckTime() {
+    try {
+      final geofenceService = getIt<GeofenceExitMonitoringService>();
+      final status = geofenceService.getMonitoringStatus();
+
+      if (status['lastCheck'] != null) {
+        final lastCheck = DateTime.parse(status['lastCheck']);
+        final intervalMinutes = status['intervalMinutes'] ?? 120; // Default 2 hours
+        final nextCheck = lastCheck.add(Duration(minutes: intervalMinutes));
+        final timeUntilNext = nextCheck.difference(DateTime.now());
+
+        if (timeUntilNext.isNegative) {
+          return "Now";
+        } else if (timeUntilNext.inHours > 0) {
+          return "${timeUntilNext.inHours}h ${timeUntilNext.inMinutes % 60}m";
+        } else {
+          return "${timeUntilNext.inMinutes}m";
+        }
+      }
+
+      return "Soon";
+    } catch (e) {
+      return "Unknown";
+    }
   }
 
   void _initializeControllers() {
@@ -233,8 +923,7 @@ class _DashboardViewState extends State<DashboardView>
     _loadDarkModePreference();
     _initializeLeaveService();
     _initializeNotifications();
-    _setupOvertimeApproverIfNeeded();
-    _checkOvertimeApproverStatus();
+
 
     final notificationService = getIt<NotificationService>();
     notificationService.notificationStream.listen(_handleNotification);
@@ -244,17 +933,14 @@ class _DashboardViewState extends State<DashboardView>
     _locationRepository = getIt<LocationRepository>();
     _syncService = getIt<SyncService>();
 
-    if (widget.employeeId == 'EMP1289') {
-      _setupOvertimeApproverNotifications();
-      _loadPendingOvertimeRequests();
-    }
+
 
     _connectivityService.connectionStatusStream.listen(_handleConnectivityChange);
 
     _lifecycleObserver = AppLifecycleObserver(
       onResume: () async {
         debugPrint("App resumed - Refreshing dashboard with force sync");
-        await _forceAttendanceSync(); // Use the enhanced sync method
+        await _forceAttendanceSync();
       },
     );
     WidgetsBinding.instance.addObserver(_lifecycleObserver);
@@ -262,90 +948,317 @@ class _DashboardViewState extends State<DashboardView>
 
   void _initializeData() {
     _fetchUserData();
-    _fetchAttendanceStatus();
-    _fetchTodaysActivity();
-    _checkGeofenceStatus();
-    _fetchOvertimeAssignments();
-    _updateDateTime();
-    _fetchWorkSchedule();
-    _setupTimingChecks();
+
+    // CRITICAL: Fetch attendance status BEFORE any geofence setup
+    _fetchAttendanceStatus().then((_) {
+      // Only after attendance status is confirmed, load other data
+      _fetchTodaysActivity();
+      _smartLocationInitialization();
+      _checkGeofenceStatus();
+      _fetchOvertimeAssignments();
+      _updateDateTime();
+      _fetchWorkSchedule();
+      _setupTimingChecks();
+    });
   }
 
   void _setupTimers() {
-    // ✅ ENHANCED: More frequent time updates for real-time sync
+    // Time updates for real-time sync
     _timeUpdateTimer = Timer.periodic(const Duration(minutes: 1), (timer) {
       if (mounted) {
         _updateDateTime();
-
-        // ✅ NEW: Also check attendance status every minute when online
-        if (_connectivityService.currentStatus == ConnectionStatus.online) {
-          _fetchAttendanceStatus();
-        }
       }
     });
 
-    // ✅ ENHANCED: More frequent overtime refresh for approvers
-    Timer.periodic(const Duration(seconds: 30), (timer) {
-      if (mounted && _isOvertimeApprover) {
-        _loadPendingOvertimeRequests();
+    // Dashboard refresh every 10 minutes - but only if not processing check-in/out
+    _periodicRefreshTimer = Timer.periodic(const Duration(minutes: 10), (timer) {
+      if (mounted && !_isProcessingCheckInOut) {
+        debugPrint("⏰ Periodic refresh triggered");
+        unawaited(_refreshDashboard());
       } else if (!mounted) {
         timer.cancel();
       }
     });
 
-    // ✅ ENHANCED: More frequent dashboard refresh for cross-device sync
-    _periodicRefreshTimer = Timer.periodic(const Duration(minutes: 2), (timer) {
-      if (mounted) {
-        debugPrint("⏰ Periodic refresh triggered for cross-device sync");
-        _refreshDashboard();
-      } else {
+    // Attendance sync every 5 minutes - but avoid during operations
+    Timer.periodic(const Duration(minutes: 5), (timer) {
+      if (mounted &&
+          _connectivityService.currentStatus == ConnectionStatus.online &&
+          !_isProcessingCheckInOut) {
+        debugPrint("🔄 Background attendance sync");
+        unawaited(_fetchAttendanceStatusForSync()); // Use sync-only version
+      } else if (!mounted) {
         timer.cancel();
       }
     });
 
-    // ✅ NEW: Specific timer for attendance status sync (every 30 seconds when online)
-    Timer.periodic(const Duration(seconds: 30), (timer) {
-      if (mounted && _connectivityService.currentStatus == ConnectionStatus.online) {
-        debugPrint("🔄 Syncing attendance status for cross-device compatibility");
-        _fetchAttendanceStatus();
+    // Location refresh - respect ongoing operations
+    _locationUpdateTimer = Timer.periodic(_locationRefreshInterval, (timer) {
+      if (mounted && !_isProcessingCheckInOut) {
+        debugPrint("📍 Auto location refresh triggered");
+        unawaited(_autoRefreshLocation());
+      } else if (!mounted) {
+        timer.cancel();
+      }
+    });
+
+    // Background location sync
+    Timer.periodic(_backgroundLocationInterval, (timer) {
+      if (mounted && !_isProcessingCheckInOut) {
+        debugPrint("📍 Background location sync");
+        unawaited(_backgroundLocationSync());
       } else if (!mounted) {
         timer.cancel();
       }
     });
   }
 
-
-
-
-
-  void _handleConnectivityChange(ConnectionStatus status) {
-    debugPrint("Connectivity status changed: $status");
-    if (status == ConnectionStatus.online && _needsSync) {
-      _syncService.syncData().then((_) {
-        _fetchUserData();
-        if (_isLineManager) {
-          _loadPendingApprovalRequests();
-          _loadPendingLeaveApprovals();
-        }
-        _fetchAttendanceStatus();
-        _fetchTodaysActivity();
-        if (mounted) {
-          setState(() {
-            _needsSync = false;
-          });
-        }
-      });
+  Future<void> _loadCachedOvertimeApproverStatus() async {
+    try {
+      bool? cachedStatus = await _getOvertimeApproverStatusLocally();
+      if (cachedStatus != null && mounted) {
+        setState(() {
+          _isOvertimeApprover = cachedStatus;
+        });
+        debugPrint("📱 Loaded cached overtime approver status: $cachedStatus");
+      }
+    } catch (e) {
+      debugPrint("Error loading cached overtime approver status: $e");
     }
   }
 
+  Future<void> _smartLocationInitialization() async {
+    try {
+      debugPrint("🎯 Smart location initialization starting...");
+
+      // First, load location data in background
+      unawaited(EnhancedGeofenceUtil.refreshLocationData());
+
+      // Then check current location
+      await _autoRefreshLocation();
+
+      debugPrint("✅ Smart location initialization completed");
+    } catch (e) {
+      debugPrint("❌ Error in smart location initialization: $e");
+      // Fallback to manual check
+      unawaited(_checkGeofenceStatus());
+    }
+  }
+
+
+  Future<void> _autoRefreshLocation() async {
+    if (_isLocationRefreshing || !mounted) return;
+
+    try {
+      _isLocationRefreshing = true;
+
+      // Check if we need to refresh (avoid too frequent updates)
+      if (_lastSuccessfulLocationCheck != null) {
+        Duration timeSinceLastCheck = DateTime.now().difference(_lastSuccessfulLocationCheck!);
+        if (timeSinceLastCheck < const Duration(minutes: 1)) {
+          debugPrint("⚡ Skipping location refresh - too recent");
+          return;
+        }
+      }
+
+      debugPrint("📍 Auto-refreshing location...");
+
+      // Use enhanced geofence with employee exemption checking
+      Map<String, dynamic> status = await EnhancedGeofenceUtil.checkGeofenceStatusForEmployee(
+        context,
+        widget.employeeId,
+      );
+
+      if (mounted) {
+        bool withinGeofence = status['withinGeofence'] as bool;
+        double? distance = status['distance'] as double?;
+        String locationType = status['locationType'] as String? ?? 'unknown';
+        bool isExempted = status['isExempted'] ?? false;
+
+        // Handle different location types
+        if (locationType == 'polygon') {
+          final polygonLocation = status['location'] as PolygonLocationModel?;
+          if (polygonLocation != null) {
+            setState(() {
+              _isWithinGeofence = withinGeofence;
+              _distanceToOffice = distance;
+              _nearestLocation = LocationModel(
+                id: polygonLocation.id,
+                name: polygonLocation.name,
+                address: polygonLocation.description,
+                latitude: polygonLocation.centerLatitude,
+                longitude: polygonLocation.centerLongitude,
+                radius: 0,
+                isActive: polygonLocation.isActive,
+              );
+            });
+          }
+        } else if (locationType == 'exemption') {
+          final exemptLocation = status['location'] as LocationModel?;
+          setState(() {
+            _isWithinGeofence = true; // Always true for exempt employees
+            _distanceToOffice = 0.0;
+            _nearestLocation = exemptLocation;
+          });
+          debugPrint("🆓 Employee ${widget.employeeId} is location exempt");
+        } else {
+          final circularLocation = status['location'] as LocationModel?;
+          setState(() {
+            _isWithinGeofence = withinGeofence;
+            _nearestLocation = circularLocation;
+            _distanceToOffice = distance;
+          });
+        }
+
+        _lastSuccessfulLocationCheck = DateTime.now();
+
+        // Debug location status
+        String locationStatus = withinGeofence ? 'INSIDE' : 'OUTSIDE';
+        String exemptionStatus = isExempted ? ' (EXEMPT)' : '';
+        debugPrint("📍 Auto location update: $locationStatus${exemptionStatus}");
+
+        if (_nearestLocation != null) {
+          debugPrint("   Location: ${_nearestLocation!.name}");
+          if (distance != null) {
+            debugPrint("   Distance: ${distance.toStringAsFixed(0)}m");
+          }
+        }
+      }
+
+    } catch (e) {
+      debugPrint("❌ Error in auto location refresh: $e");
+      // Don't show error to user for background updates
+    } finally {
+      _isLocationRefreshing = false;
+    }
+  }
+
+
+  Future<void> _backgroundLocationSync() async {
+    if (!mounted) return;
+
+    try {
+      // Clear location cache to ensure fresh data
+      EnhancedGeofenceUtil.clearLocationCache();
+
+      // Refresh location data from server
+      await EnhancedGeofenceUtil.refreshLocationData();
+
+      debugPrint("🔄 Background location data synced");
+    } catch (e) {
+      debugPrint("❌ Background location sync error: $e");
+    }
+  }
+
+
+
+  void _initializeGeofenceExitMonitoring() {
+    try {
+      _geofenceExitService = getIt<GeofenceExitMonitoringService>();
+      debugPrint("✅ Geofence exit monitoring service initialized");
+
+      // Initialize the database table
+      _geofenceExitService.initializeDatabase();
+
+      // 🔥 FIXED: Check previous state but with proper validation
+      _checkPreviousMonitoringState();
+
+    } catch (e) {
+      debugPrint("❌ Error initializing geofence exit monitoring: $e");
+    }
+  }
+
+  // ✅ NEW: Check previous monitoring state
+  Future<void> _checkPreviousMonitoringState() async {
+    try {
+      bool wasActive = await _geofenceExitService.isMonitoringActive();
+      String? currentEmployee = await _geofenceExitService.getCurrentMonitoredEmployee();
+
+      debugPrint("🔍 Previous monitoring state check:");
+      debugPrint("  - Was active: $wasActive");
+      debugPrint("  - Current employee: $currentEmployee");
+      debugPrint("  - Dashboard employee: ${widget.employeeId}");
+      debugPrint("  - Dashboard checked in: $_isCheckedIn");
+
+      // 🔥 CRITICAL FIX: Only restore monitoring if BOTH conditions are true:
+      // 1. Monitoring was previously active for this employee
+      // 2. User is currently checked in (according to dashboard state)
+      bool shouldBeActive = wasActive &&
+          currentEmployee == widget.employeeId &&
+          _isCheckedIn; // ← This is the key fix
+
+      if (mounted) {
+        setState(() {
+          _isGeofenceMonitoringActive = shouldBeActive;
+          _monitoringStatus = shouldBeActive ? "Active" : "Inactive";
+        });
+      }
+
+      if (wasActive && currentEmployee == widget.employeeId && !_isCheckedIn) {
+        // Previous monitoring was active but user is not checked in now
+        // This means they were checked out without properly stopping monitoring
+        debugPrint("🔧 Cleaning up orphaned monitoring session...");
+        await _geofenceExitService.stopMonitoring();
+
+        if (mounted) {
+          setState(() {
+            _isGeofenceMonitoringActive = false;
+            _monitoringStatus = "Inactive";
+          });
+        }
+      }
+
+      // Load recent exit events regardless
+      await _loadRecentExitEvents();
+
+      debugPrint("✅ Monitoring state check completed - Active: $shouldBeActive");
+
+    } catch (e) {
+      debugPrint("❌ Error checking previous monitoring state: $e");
+    }
+  }
+
+  // ✅ NEW: Load recent exit events
+  Future<void> _loadRecentExitEvents() async {
+    try {
+      List<GeofenceExitEvent> events = await _geofenceExitService.getExitHistory(
+        widget.employeeId,
+        limit: 5,
+      );
+
+      if (mounted) {
+        setState(() {
+          _recentExitEvents = events;
+        });
+      }
+
+    } catch (e) {
+      debugPrint("Error loading recent exit events: $e");
+    }
+  }
+
+
+
+
+
+
+
+
+
+
+
   @override
   void dispose() {
+    _smartRefreshTimer?.cancel();
+    _exitWarningTimer?.cancel();
     _animationController.dispose();
     _pulseController.dispose();
     _slideController.dispose();
+    _geofenceExitService.stopMonitoring();
     _timeUpdateTimer?.cancel();
     _periodicRefreshTimer?.cancel();
     _checkOutReminderTimer?.cancel();
+    _locationUpdateTimer?.cancel();
     WidgetsBinding.instance.removeObserver(_lifecycleObserver);
     _syncService.dispose();
     super.dispose();
@@ -490,6 +1403,267 @@ class _DashboardViewState extends State<DashboardView>
 
 
 
+  Future<void> _checkOvertimeApproverStatus() async {
+    try {
+      // ✅ CRITICAL: Ensure user data is available first
+      if (_userData == null) {
+        debugPrint("⚠️ User data not available, skipping overtime approver check");
+        if (mounted) {
+          setState(() => _isOvertimeApprover = false);
+        }
+        return;
+      }
+
+      String? employeePin = _userData?['pin']?.toString() ?? widget.employeeId;
+
+      debugPrint("=== CHECKING OVERTIME APPROVER STATUS ===");
+      debugPrint("Current Employee ID: ${widget.employeeId}");
+      debugPrint("Employee PIN: $employeePin");
+
+      bool isApprover = false;
+
+      if (_connectivityService.currentStatus == ConnectionStatus.online) {
+        // Method 1: Check dedicated overtime_approvers collection
+        try {
+          QuerySnapshot approversSnapshot = await FirebaseFirestore.instance
+              .collection('overtime_approvers')
+              .where('approverId', isEqualTo: widget.employeeId)
+              .where('isActive', isEqualTo: true)
+              .get();
+
+          if (approversSnapshot.docs.isNotEmpty) {
+            isApprover = true;
+            debugPrint("✅ Found in overtime_approvers collection");
+          }
+        } catch (e) {
+          debugPrint("Error checking overtime_approvers: $e");
+        }
+
+        // Method 2: Check if employee has overtime approval access
+        if (!isApprover && _userData != null) {
+          bool hasApprovalAccess = _userData!['hasOvertimeApprovalAccess'] == true;
+
+          if (hasApprovalAccess) {
+            isApprover = true;
+            debugPrint("✅ Found hasOvertimeApprovalAccess = true in user data");
+          }
+        }
+
+        // Method 3: Check MasterSheet
+        if (!isApprover) {
+          try {
+            String empId = employeePin != null && employeePin.isNotEmpty
+                ? (employeePin.startsWith('EMP') ? employeePin : 'EMP$employeePin')
+                : widget.employeeId;
+
+            DocumentSnapshot masterDoc = await FirebaseFirestore.instance
+                .collection('MasterSheet')
+                .doc('Employee-Data')
+                .collection('employees')
+                .doc(empId)
+                .get();
+
+            if (masterDoc.exists) {
+              Map<String, dynamic> data = masterDoc.data() as Map<String, dynamic>;
+              if (data['hasOvertimeApprovalAccess'] == true) {
+                isApprover = true;
+                debugPrint("✅ Found hasOvertimeApprovalAccess in MasterSheet");
+              }
+            }
+          } catch (e) {
+            debugPrint("Error checking MasterSheet: $e");
+          }
+        }
+      } else {
+        // ✅ OFFLINE MODE: Check local user data
+        if (_userData != null) {
+          bool hasApprovalAccess = _userData!['hasOvertimeApprovalAccess'] == true;
+          if (hasApprovalAccess) {
+            isApprover = true;
+            debugPrint("✅ Found offline hasOvertimeApprovalAccess = true");
+          }
+        }
+      }
+
+      // ✅ CRITICAL: Always update state, even if unchanged
+      if (mounted) {
+        setState(() {
+          _isOvertimeApprover = isApprover;
+        });
+        debugPrint("🎯 OVERTIME APPROVER STATUS UPDATED: $isApprover");
+        await _saveOvertimeApproverStatus(isApprover);
+      }
+
+      if (isApprover) {
+        await _loadPendingOvertimeApprovals();
+        // Subscribe to overtime approver notifications
+        try {
+          final notificationService = getIt<NotificationService>();
+          await notificationService.subscribeToManagerTopic('overtime_approver_${widget.employeeId}');
+          debugPrint("Subscribed to overtime approver notifications");
+        } catch (e) {
+          debugPrint("Error subscribing to overtime notifications: $e");
+        }
+      }
+
+    } catch (e) {
+      debugPrint("❌ ERROR checking overtime approver status: $e");
+      if (mounted) {
+        setState(() => _isOvertimeApprover = false);
+      }
+    }
+  }
+
+
+  Future<void> _saveOvertimeApproverStatus(bool isApprover) async {
+    try {
+      final SharedPreferences prefs = await SharedPreferences.getInstance();
+      await prefs.setBool('overtime_approver_${widget.employeeId}', isApprover);
+      debugPrint("💾 Overtime approver status saved: $isApprover");
+    } catch (e) {
+      debugPrint('❌ Error saving overtime approver status: $e');
+    }
+  }
+
+  Future<bool?> _getOvertimeApproverStatusLocally() async {
+    try {
+      final SharedPreferences prefs = await SharedPreferences.getInstance();
+      return prefs.getBool('overtime_approver_${widget.employeeId}');
+    } catch (e) {
+      debugPrint('❌ Error getting local overtime approver status: $e');
+      return null;
+    }
+  }
+
+// ✅ ADD this method after _loadPendingLeaveApprovals() method (around line 1100)
+
+  Future<void> _loadPendingOvertimeApprovals() async {
+    if (!_isOvertimeApprover) return;
+
+    try {
+      setState(() => _isLoadingOvertimeApprovals = true);
+
+      debugPrint("=== LOADING PENDING OVERTIME APPROVALS (ENHANCED) ===");
+      debugPrint("Dashboard Employee ID: ${widget.employeeId}");
+      debugPrint("User Data PIN: ${_userData?['pin']}");
+
+      // ✅ ENHANCED: Build comprehensive list of possible approver IDs
+      Set<String> possibleApproverIds = {};
+
+      // Add main employee ID
+      possibleApproverIds.add(widget.employeeId);
+
+      // Add PIN-based variations
+      String? pin = _userData?['pin']?.toString();
+      if (pin != null && pin.isNotEmpty) {
+        possibleApproverIds.add(pin);
+        possibleApproverIds.add('EMP$pin');
+
+        // Handle padded PIN (like EMP3576 vs EMP03576)
+        if (!pin.startsWith('EMP')) {
+          int pinNumber = int.tryParse(pin) ?? 0;
+          if (pinNumber > 0) {
+            possibleApproverIds.add('EMP${pinNumber.toString().padLeft(4, '0')}');
+            possibleApproverIds.add('EMP$pinNumber');
+          }
+        }
+      }
+
+      // Add variations of existing employee ID
+      if (widget.employeeId.startsWith('EMP')) {
+        String numPart = widget.employeeId.substring(3);
+        possibleApproverIds.add(numPart);
+        int num = int.tryParse(numPart) ?? 0;
+        if (num > 0) {
+          possibleApproverIds.add(num.toString());
+          possibleApproverIds.add('EMP${num.toString().padLeft(4, '0')}');
+        }
+      } else {
+        possibleApproverIds.add('EMP${widget.employeeId}');
+      }
+
+      debugPrint("🔍 Searching for pending requests with approver IDs: $possibleApproverIds");
+
+      int totalPending = 0;
+
+      // ✅ ENHANCED: Search for each possible ID
+      for (String approverId in possibleApproverIds) {
+        try {
+          debugPrint("🔎 Checking approver ID: $approverId");
+
+          QuerySnapshot pendingSnapshot = await FirebaseFirestore.instance
+              .collection('overtime_requests')
+              .where('status', isEqualTo: 'pending')
+              .where('approverEmpId', isEqualTo: approverId)
+              .get();
+
+          int foundCount = pendingSnapshot.docs.length;
+          totalPending += foundCount;
+
+          if (foundCount > 0) {
+            debugPrint("✅ Found $foundCount pending requests for approver ID: $approverId");
+
+            // Log some details for debugging
+            for (var doc in pendingSnapshot.docs.take(2)) {
+              Map<String, dynamic> data = doc.data() as Map<String, dynamic>;
+              debugPrint("  📋 Request: ${data['projectName']} by ${data['requesterName']}");
+            }
+          } else {
+            debugPrint("  ❌ No requests found for approver ID: $approverId");
+          }
+        } catch (e) {
+          debugPrint("❌ Error checking approver ID $approverId: $e");
+        }
+      }
+
+      if (mounted) {
+        setState(() {
+          _pendingOvertimeRequests = totalPending;
+          _isLoadingOvertimeApprovals = false;
+        });
+      }
+
+      debugPrint("🎯 FINAL RESULT: Total pending overtime approvals: $totalPending");
+
+      // ✅ DEBUGGING: If no requests found, let's check what's actually in the collection
+      if (totalPending == 0) {
+        debugPrint("🔍 DEBUG: No requests found. Let's check what approver IDs exist...");
+        try {
+          QuerySnapshot allPending = await FirebaseFirestore.instance
+              .collection('overtime_requests')
+              .where('status', isEqualTo: 'pending')
+              .limit(10)
+              .get();
+
+          debugPrint("📊 Found ${allPending.docs.length} total pending requests in database:");
+          for (var doc in allPending.docs) {
+            Map<String, dynamic> data = doc.data() as Map<String, dynamic>;
+            debugPrint("  - Request ${doc.id}: approverEmpId='${data['approverEmpId']}', project='${data['projectName']}'");
+          }
+        } catch (e) {
+          debugPrint("❌ Error in debug query: $e");
+        }
+      }
+
+    } catch (e) {
+      debugPrint("❌ Error loading pending overtime approvals: $e");
+      if (mounted) {
+        setState(() {
+          _pendingOvertimeRequests = 0;
+          _isLoadingOvertimeApprovals = false;
+        });
+      }
+    }
+  }
+
+
+
+
+
+
+
+
+
 
 
   Future<void> _fetchOvertimeAssignments() async {
@@ -576,6 +1750,356 @@ class _DashboardViewState extends State<DashboardView>
     }
   }
 
+
+
+
+
+  Future<void> _debugGeofenceMonitoring() async {
+    try {
+      debugPrint("🔍 === GEOFENCE MONITORING DEBUG ===");
+
+      // Check service registration
+      final geofenceService = getIt<GeofenceExitMonitoringService>();
+      debugPrint("✅ Service retrieved successfully");
+
+      // Initialize database
+      await geofenceService.initializeDatabase();
+      debugPrint("✅ Database initialized");
+
+      // Check if table exists
+      final dbHelper = getIt<DatabaseHelper>();
+      final db = await dbHelper.database;
+
+      final tables = await db.query(
+          'sqlite_master',
+          where: 'type = ? AND name = ?',
+          whereArgs: ['table', 'geofence_exit_events']
+      );
+
+      debugPrint("📊 Table exists: ${tables.isNotEmpty}");
+
+      // Get current event count before test
+      int initialEventCount = 0;
+      if (tables.isNotEmpty) {
+        final countResult = await db.query('geofence_exit_events');
+        initialEventCount = countResult.length;
+        debugPrint("📊 Initial events count: $initialEventCount");
+      }
+
+      if (tables.isNotEmpty) {
+        // Test insert with all required fields
+        final testEvent = {
+          'id': 'test_${DateTime.now().millisecondsSinceEpoch}',
+          'employee_id': widget.employeeId,
+          'employee_name': _userData?['name'] ?? 'Test User',
+          'exit_time': DateTime.now().toIso8601String(),
+          'return_time': null,
+          'latitude': 24.985454,
+          'longitude': 55.175509,
+          'location_name': 'Test Location',
+          'exit_reason': null,
+          'duration_minutes': 0,
+          'status': 'test',
+          'hr_notified': 0,
+          'reminder_sent': 0,
+          'created_at': DateTime.now().toIso8601String(),
+          'is_synced': 0,
+          'sync_error': null,
+        };
+
+        await db.insert('geofence_exit_events', testEvent);
+        debugPrint("✅ Test event inserted");
+
+        // Query events after insert
+        final events = await db.query('geofence_exit_events');
+        debugPrint("📊 Total events in database: ${events.length}");
+
+        // Show latest events
+        final latestEvents = await db.query(
+          'geofence_exit_events',
+          orderBy: 'created_at DESC',
+          limit: 5,
+        );
+
+        debugPrint("📋 Latest events:");
+        for (var event in latestEvents) {
+          debugPrint("  - ${event['id']}: ${event['employee_name']} at ${event['exit_time']} (Status: ${event['status']})");
+        }
+
+        // Test querying specific employee events
+        final employeeEvents = await db.query(
+          'geofence_exit_events',
+          where: 'employee_id = ?',
+          whereArgs: [widget.employeeId],
+        );
+        debugPrint("📊 Events for current employee (${widget.employeeId}): ${employeeEvents.length}");
+
+        // Test the service method for getting history
+        try {
+          final historyFromService = await geofenceService.getExitHistory(widget.employeeId, limit: 10);
+          debugPrint("📊 History from service: ${historyFromService.length} events");
+        } catch (e) {
+          debugPrint("❌ Error getting history from service: $e");
+        }
+
+        // Clean up test data
+        await db.delete('geofence_exit_events', where: 'status = ?', whereArgs: ['test']);
+        debugPrint("🧹 Test data cleaned up");
+
+        // Verify cleanup
+        final eventsAfterCleanup = await db.query('geofence_exit_events');
+        debugPrint("📊 Events after cleanup: ${eventsAfterCleanup.length}");
+      }
+
+      // Check monitoring status
+      final isActive = await geofenceService.isMonitoringActive();
+      final currentEmployee = await geofenceService.getCurrentMonitoredEmployee();
+
+      debugPrint("📊 Monitoring Status:");
+      debugPrint("  - Active: $isActive");
+      debugPrint("  - Current Employee: $currentEmployee");
+
+      // Test shared preferences
+      try {
+        final prefs = await SharedPreferences.getInstance();
+        final monitoringActive = prefs.getBool('geofence_monitoring_active') ?? false;
+        final monitoredEmployeeId = prefs.getString('monitored_employee_id') ?? 'none';
+        final monitoredEmployeeName = prefs.getString('monitored_employee_name') ?? 'none';
+
+        debugPrint("📊 SharedPreferences Status:");
+        debugPrint("  - Monitoring Active: $monitoringActive");
+        debugPrint("  - Monitored Employee ID: $monitoredEmployeeId");
+        debugPrint("  - Monitored Employee Name: $monitoredEmployeeName");
+      } catch (e) {
+        debugPrint("❌ Error checking SharedPreferences: $e");
+      }
+
+      // Test database schema
+      if (tables.isNotEmpty) {
+        try {
+          final tableInfo = await db.query('PRAGMA table_info(geofence_exit_events)');
+          debugPrint("📊 Table Schema:");
+          for (var column in tableInfo) {
+            debugPrint("  - ${column['name']}: ${column['type']} (${column['notnull'] == 1 ? 'NOT NULL' : 'NULL'})");
+          }
+        } catch (e) {
+          debugPrint("❌ Error getting table schema: $e");
+        }
+      }
+
+      debugPrint("=== GEOFENCE DEBUG COMPLETE ===");
+
+      // Show results to user
+      if (mounted) {
+        String dialogContent = "";
+
+        if (tables.isNotEmpty) {
+          final finalEvents = await db.query('geofence_exit_events');
+          dialogContent = "Database Table: EXISTS\n"
+              "Total Events: ${finalEvents.length}\n"
+              "Monitoring Active: $isActive\n"
+              "Current Employee: ${currentEmployee ?? 'None'}\n"
+              "Service Available: ✅\n"
+              "Database Operations: ✅\n\n"
+              "Check console for detailed logs.";
+        } else {
+          dialogContent = "Database Table: MISSING\n"
+              "Total Events: N/A\n"
+              "Monitoring Active: $isActive\n"
+              "Current Employee: ${currentEmployee ?? 'None'}\n"
+              "Service Available: ✅\n"
+              "Database Operations: ❌\n\n"
+              "❌ Table needs to be created!\n"
+              "Check console for detailed logs.";
+        }
+
+        showDialog(
+          context: context,
+          builder: (context) => AlertDialog(
+            backgroundColor: _isDarkMode ? const Color(0xFF1E293B) : Colors.white,
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+            title: Row(
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(8),
+                  decoration: BoxDecoration(
+                    color: tables.isNotEmpty ? Colors.green.withOpacity(0.1) : Colors.red.withOpacity(0.1),
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: Icon(
+                    tables.isNotEmpty ? Icons.check_circle : Icons.error,
+                    color: tables.isNotEmpty ? Colors.green : Colors.red,
+                    size: 24,
+                  ),
+                ),
+                SizedBox(width: 12),
+                Expanded(
+                  child: Text(
+                    "Geofence Debug Results",
+                    style: TextStyle(
+                      color: _isDarkMode ? Colors.white : Colors.black87,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+            content: Container(
+              width: double.maxFinite,
+              child: SingleChildScrollView(
+                child: Text(
+                  dialogContent,
+                  style: TextStyle(
+                    color: _isDarkMode ? Colors.grey.shade300 : Colors.grey.shade700,
+                    fontSize: 14,
+                    height: 1.4,
+                  ),
+                ),
+              ),
+            ),
+            actions: [
+              if (!tables.isNotEmpty)
+                TextButton(
+                  onPressed: () async {
+                    Navigator.pop(context);
+                    // Try to force create table
+                    try {
+                      await geofenceService.initializeDatabase();
+                      CustomSnackBar.successSnackBar("Table creation attempted. Run debug again.");
+                    } catch (e) {
+                      CustomSnackBar.errorSnackBar("Failed to create table: $e");
+                    }
+                  },
+                  child: Text("Create Table", style: TextStyle(color: Colors.orange)),
+                ),
+              TextButton(
+                onPressed: () => Navigator.pop(context),
+                child: Text("Close", style: TextStyle(color: Colors.grey.shade600)),
+              ),
+              ElevatedButton(
+                onPressed: () {
+                  Navigator.pop(context);
+                  // Run debug again
+                  _debugGeofenceMonitoring();
+                },
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: Theme.of(context).colorScheme.primary,
+                  foregroundColor: Colors.white,
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                ),
+                child: const Text("Run Again"),
+              ),
+            ],
+          ),
+        );
+      }
+
+    } catch (e) {
+      debugPrint("❌ Error in geofence debug: $e");
+      debugPrint("Stack trace: ${StackTrace.current}");
+
+      if (mounted) {
+        showDialog(
+          context: context,
+          builder: (context) => AlertDialog(
+            backgroundColor: _isDarkMode ? const Color(0xFF1E293B) : Colors.white,
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+            title: Row(
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(8),
+                  decoration: BoxDecoration(
+                    color: Colors.red.withOpacity(0.1),
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: const Icon(Icons.error, color: Colors.red, size: 24),
+                ),
+                SizedBox(width: 12),
+                Expanded(
+                  child: Text(
+                    "Geofence Debug Error",
+                    style: TextStyle(
+                      color: Colors.red,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+            content: Container(
+              width: double.maxFinite,
+              child: SingleChildScrollView(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(
+                      "Error Details:",
+                      style: TextStyle(
+                        fontWeight: FontWeight.bold,
+                        color: _isDarkMode ? Colors.white : Colors.black87,
+                      ),
+                    ),
+                    SizedBox(height: 8),
+                    Container(
+                      padding: EdgeInsets.all(12),
+                      decoration: BoxDecoration(
+                        color: Colors.red.withOpacity(0.1),
+                        borderRadius: BorderRadius.circular(8),
+                        border: Border.all(color: Colors.red.withOpacity(0.3)),
+                      ),
+                      child: Text(
+                        e.toString(),
+                        style: TextStyle(
+                          color: Colors.red.shade700,
+                          fontSize: 12,
+                          fontFamily: 'monospace',
+                        ),
+                      ),
+                    ),
+                    SizedBox(height: 12),
+                    Text(
+                      "Check console for detailed logs and stack trace.",
+                      style: TextStyle(
+                        color: _isDarkMode ? Colors.grey.shade300 : Colors.grey.shade700,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(context),
+                child: Text("Close", style: TextStyle(color: Colors.grey.shade600)),
+              ),
+              ElevatedButton(
+                onPressed: () {
+                  Navigator.pop(context);
+                  // Try to reinitialize
+                  _initializeGeofenceExitMonitoring();
+                  CustomSnackBar.infoSnackBar("Attempting to reinitialize geofence service...");
+                },
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: Colors.orange,
+                  foregroundColor: Colors.white,
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                ),
+                child: const Text("Retry"),
+              ),
+            ],
+          ),
+        );
+      }
+    }
+  }
+
+
+
+
+
+
+
   Future<void> _saveDarkModePreference(bool isDarkMode) async {
     SharedPreferences prefs = await SharedPreferences.getInstance();
     await prefs.setBool('isDarkMode', isDarkMode);
@@ -624,11 +2148,7 @@ class _DashboardViewState extends State<DashboardView>
   @override
   @override
   Widget build(BuildContext context) {
-    super.build(context); // Required for AutomaticKeepAliveClientMixin
-
-    if (CustomSnackBar.context == null) {
-      CustomSnackBar.context = context;
-    }
+    super.build(context);
 
     return Theme(
       data: _isDarkMode ? _buildDarkTheme() : _buildLightTheme(),
@@ -636,7 +2156,6 @@ class _DashboardViewState extends State<DashboardView>
         backgroundColor: _isDarkMode ? const Color(0xFF0A0E1A) : const Color(0xFFF8FAFC),
         body: Stack(
           children: [
-            // Main Content - Always visible
             SlideTransition(
               position: _offsetAnimation,
               child: FadeTransition(
@@ -663,6 +2182,14 @@ class _DashboardViewState extends State<DashboardView>
                                       child: _buildModernStatusCard(),
                                     ),
                                   ),
+                                  // ✅ NEW: Add geofence monitoring card
+                                  if (_isCheckedIn || _isGeofenceMonitoringActive)
+                                    SliverPadding(
+                                      padding: EdgeInsets.symmetric(vertical: containerSpacing * 0.5),
+                                      sliver: SliverToBoxAdapter(
+                                        child: _buildGeofenceMonitoringCard(),
+                                      ),
+                                    ),
                                   SliverPadding(
                                     padding: EdgeInsets.symmetric(vertical: containerSpacing * 0.5),
                                     sliver: SliverToBoxAdapter(
@@ -690,8 +2217,7 @@ class _DashboardViewState extends State<DashboardView>
               ),
             ),
 
-            // Loading Overlay - Only shows when loading
-            if (_isLoading)
+            if (_isLoading && _userData == null)
               _buildLoadingOverlay(),
           ],
         ),
@@ -702,72 +2228,83 @@ class _DashboardViewState extends State<DashboardView>
   }
 
   Widget _buildLoadingOverlay() {
-    return Container(
-      color: Colors.black.withOpacity(0.3), // Semi-transparent overlay
-      child: Center(
-        child: Container(
-          padding: EdgeInsets.all(isLargeScreen ? 32 : (isTablet ? 28 : 24)),
-          decoration: BoxDecoration(
-            color: _isDarkMode ? const Color(0xFF1E293B) : Colors.white,
-            borderRadius: BorderRadius.circular(cardBorderRadius + 8),
-            boxShadow: [
-              BoxShadow(
-                color: Colors.black.withOpacity(0.2),
-                blurRadius: 20,
-                offset: const Offset(0, 10),
-              ),
-            ],
-          ),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Container(
-                width: 60,
-                height: 60,
-                padding: const EdgeInsets.all(12),
-                decoration: BoxDecoration(
-                  color: Theme.of(context).colorScheme.primary.withOpacity(0.1),
-                  borderRadius: BorderRadius.circular(30),
-                ),
-                child: CircularProgressIndicator(
-                  valueColor: AlwaysStoppedAnimation<Color>(
-                    Theme.of(context).colorScheme.primary,
-                  ),
-                  strokeWidth: 3,
+    // Only show minimal loading indicator, not full overlay
+    return Positioned(
+      top: MediaQuery.of(context).padding.top + 20,
+      left: 20,
+      right: 20,
+      child: Container(
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: _isDarkMode ? const Color(0xFF1E293B) : Colors.white,
+          borderRadius: BorderRadius.circular(12),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withOpacity(0.1),
+              blurRadius: 10,
+              offset: const Offset(0, 5),
+            ),
+          ],
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            SizedBox(
+              width: 20,
+              height: 20,
+              child: CircularProgressIndicator(
+                strokeWidth: 2,
+                valueColor: AlwaysStoppedAnimation<Color>(
+                  Theme.of(context).colorScheme.primary,
                 ),
               ),
-              SizedBox(height: containerSpacing),
-              Text(
-                'Refreshing Dashboard...',
-                style: TextStyle(
-                  color: _isDarkMode ? Colors.white : Colors.black87,
-                  fontSize: (isLargeScreen ? 20 : (isTablet ? 18 : 16)) * responsiveFontSize,
-                  fontWeight: FontWeight.w600,
-                ),
+            ),
+            const SizedBox(width: 12),
+            Text(
+              'Syncing...',
+              style: TextStyle(
+                color: _isDarkMode ? Colors.white : Colors.black87,
+                fontSize: 14,
+                fontWeight: FontWeight.w500,
               ),
-              const SizedBox(height: 8),
-              Text(
-                'Please wait while we sync your data',
-                style: TextStyle(
-                  color: _isDarkMode ? Colors.grey.shade400 : Colors.grey.shade600,
-                  fontSize: (isLargeScreen ? 16 : (isTablet ? 14 : 12)) * responsiveFontSize,
-                ),
-                textAlign: TextAlign.center,
-              ),
-            ],
-          ),
+            ),
+          ],
         ),
       ),
     );
   }
 
+  Widget _buildDebugGeofenceOption() {
+    return _buildModernSettingsOption(
+      icon: Icons.bug_report,
+      title: 'Debug Geofence Monitoring',
+      subtitle: 'Test geofence monitoring system and database',
+      iconColor: Colors.purple,
+      onTap: () {
+        Navigator.pop(context);
+        _debugGeofenceMonitoring();
+      },
+    );
+  }
+
   Widget _buildCleanFloatingActionButton() {
     return FloatingActionButton(
-      onPressed: _checkGeofenceStatus,
-      tooltip: 'Refresh Location',
-      backgroundColor: Theme.of(context).colorScheme.primary,
+      onPressed: _isLocationRefreshing ? null : _checkGeofenceStatus,
+      tooltip: _isLocationRefreshing ? 'Checking location...' : 'Refresh Location',
+      backgroundColor: _isLocationRefreshing
+          ? Theme.of(context).colorScheme.primary.withOpacity(0.6)
+          : Theme.of(context).colorScheme.primary,
       elevation: 8,
-      child: const Icon(Icons.my_location_rounded, color: Colors.white),
+      child: _isLocationRefreshing
+          ? SizedBox(
+        width: 20,
+        height: 20,
+        child: CircularProgressIndicator(
+          color: Colors.white,
+          strokeWidth: 2,
+        ),
+      )
+          : const Icon(Icons.my_location_rounded, color: Colors.white),
     );
   }
 
@@ -811,11 +2348,62 @@ class _DashboardViewState extends State<DashboardView>
     );
   }
 
+  Future<void> _openUserProfile() async {
+    try {
+      // Show loading indicator
+      showDialog(
+        context: context,
+        barrierDismissible: false,
+        builder: (context) => const Center(
+          child: CircularProgressIndicator(),
+        ),
+      );
+
+      // Fetch fresh data from Firestore
+      DocumentSnapshot doc = await FirebaseFirestore.instance
+          .collection('employees')
+          .doc(widget.employeeId)
+          .get();
+
+      // Hide loading
+      if (mounted) {
+        Navigator.pop(context);
+      }
+
+      if (doc.exists) {
+        Map<String, dynamic> freshUserData = doc.data() as Map<String, dynamic>;
+
+        // Navigate with fresh data
+        if (mounted) {
+          Navigator.of(context).push(
+            MaterialPageRoute(
+              builder: (context) => UserProfilePage(
+                employeeId: widget.employeeId,
+                userData: freshUserData, // Fresh data from Firestore
+              ),
+            ),
+          );
+        }
+      } else {
+        if (mounted) {
+          CustomSnackBar.errorSnackBar(context, "User data not found");
+        }
+      }
+    } catch (e) {
+      // Hide loading if still showing
+      if (mounted) {
+        Navigator.pop(context);
+        CustomSnackBar.errorSnackBar(context, "Error loading profile: $e");
+      }
+    }
+  }
+
+
   Widget _buildModernHeader() {
     String name = _userData?['name'] ?? 'User';
     String designation = _userData?['designation'] ?? 'Employee';
     String? imageBase64 = _userData?['image'];
-    int totalNotificationCount = _pendingApprovalRequests + _pendingOvertimeRequests + _pendingLeaveApprovals;
+    int totalNotificationCount = _pendingApprovalRequests + _pendingLeaveApprovals + _pendingOvertimeRequests;
 
     return Container(
       margin: responsivePadding,
@@ -843,14 +2431,8 @@ class _DashboardViewState extends State<DashboardView>
             child: GestureDetector(
               onTap: () {
                 if (_userData != null) {
-                  Navigator.of(context).push(
-                    MaterialPageRoute(
-                      builder: (context) => UserProfilePage(
-                        employeeId: widget.employeeId,
-                        userData: _userData!,
-                      ),
-                    ),
-                  );
+                  // FIXED: Call the new method that fetches fresh data
+                  _openUserProfile();
                 } else {
                   CustomSnackBar.errorSnackBar(context, "User data not available");
                 }
@@ -1106,19 +2688,25 @@ class _DashboardViewState extends State<DashboardView>
             margin: responsivePadding,
             decoration: BoxDecoration(
               borderRadius: BorderRadius.circular(cardBorderRadius + 4),
-              // 🎨 Dark Modern Gradient for better contrast
+              // ✅ NEW: Better gradient colors instead of dark gray
               gradient: LinearGradient(
                 begin: Alignment.topLeft,
                 end: Alignment.bottomRight,
                 colors: _isDarkMode
-                    ? [const Color(0xFF1F2937), const Color(0xFF374151)] // Dark gray gradient
-                    : [const Color(0xFF1F2937), const Color(0xFF4B5563)], // Consistent dark theme
+                    ? [
+                  const Color(0xFF1E40AF), // Darker blue
+                  const Color(0xFF3730A3), // Darker indigo
+                ]
+                    : [
+                  const Color(0xFF1E3A8A), // Navy blue
+                  const Color(0xFF581C87), // Dark purple
+                ],
               ),
               boxShadow: [
                 BoxShadow(
                   color: _isDarkMode
-                      ? Colors.black.withOpacity(0.3)
-                      : const Color(0xFF1F2937).withOpacity(0.15),
+                      ? const Color(0xFF1E40AF).withOpacity(0.2)
+                      : const Color(0xFF1E3A8A).withOpacity(0.2),
                   blurRadius: 20,
                   offset: const Offset(0, 8),
                 ),
@@ -1141,7 +2729,7 @@ class _DashboardViewState extends State<DashboardView>
                             Text(
                               "Today's Status",
                               style: TextStyle(
-                                color: Colors.white.withOpacity(0.85),
+                                color: Colors.white.withOpacity(0.9),
                                 fontSize: (isLargeScreen ? 18 : (isTablet ? 16 : 14)) * responsiveFontSize,
                                 fontWeight: FontWeight.w500,
                               ),
@@ -1169,7 +2757,7 @@ class _DashboardViewState extends State<DashboardView>
                               Text(
                                 "Since ${DateFormat('h:mm a').format(_checkInTime!)}",
                                 style: TextStyle(
-                                  color: Colors.white.withOpacity(0.8),
+                                  color: Colors.white.withOpacity(0.85),
                                   fontSize: (isLargeScreen ? 18 : (isTablet ? 16 : 14)) * responsiveFontSize,
                                   fontWeight: FontWeight.w400,
                                 ),
@@ -1186,10 +2774,10 @@ class _DashboardViewState extends State<DashboardView>
                         decoration: BoxDecoration(
                           color: _isCheckedIn
                               ? Colors.green.withOpacity(0.25)
-                              : Colors.white.withOpacity(0.15),
+                              : Colors.white.withOpacity(0.2),
                           borderRadius: BorderRadius.circular(16),
                           border: Border.all(
-                            color: Colors.white.withOpacity(0.25),
+                            color: Colors.white.withOpacity(0.3),
                           ),
                         ),
                         child: Row(
@@ -1217,131 +2805,18 @@ class _DashboardViewState extends State<DashboardView>
 
                   SizedBox(height: 20),
 
-                  // ✅ ENHANCED: Quick Info Section with Overtime Integration
+                  // ✅ SIMPLIFIED: Quick Info Section WITHOUT overtime info
                   Container(
                     padding: EdgeInsets.all(isLargeScreen ? 18 : (isTablet ? 16 : 14)),
                     decoration: BoxDecoration(
-                      color: Colors.white.withOpacity(0.08),
+                      color: Colors.white.withOpacity(0.1),
                       borderRadius: BorderRadius.circular(12),
                       border: Border.all(
-                        color: Colors.white.withOpacity(0.15),
+                        color: Colors.white.withOpacity(0.2),
                       ),
                     ),
                     child: Column(
                       children: [
-                        // ✅ PRIORITY: Active Overtime Information (Show First)
-                        if (_hasActiveOvertime && _activeOvertimeAssignments.isNotEmpty) ...[
-                          Container(
-                            padding: EdgeInsets.all(12),
-                            decoration: BoxDecoration(
-                              color: Colors.orangeAccent.withOpacity(0.15),
-                              borderRadius: BorderRadius.circular(8),
-                              border: Border.all(color: Colors.orangeAccent.withOpacity(0.3)),
-                            ),
-                            child: Column(
-                              children: [
-                                Row(
-                                  children: [
-                                    Icon(Icons.work_history_rounded, color: Colors.orangeAccent, size: 18),
-                                    SizedBox(width: 8),
-                                    Text(
-                                      "OVERTIME ACTIVE NOW",
-                                      style: TextStyle(
-                                        color: Colors.orangeAccent,
-                                        fontSize: (isLargeScreen ? 14 : (isTablet ? 13 : 12)) * responsiveFontSize,
-                                        fontWeight: FontWeight.bold,
-                                        letterSpacing: 0.5,
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                                SizedBox(height: 8),
-                                ...(_activeOvertimeAssignments.take(2).map((overtime) => Container(
-                                  margin: EdgeInsets.only(bottom: 8),
-                                  child: Column(
-                                    children: [
-                                      _buildInfoRow(
-                                        icon: Icons.business_center_rounded,
-                                        label: "Project",
-                                        value: "${overtime.projectName} (${overtime.projectCode})",
-                                        valueColor: Colors.orangeAccent.withOpacity(0.95),
-                                      ),
-                                      SizedBox(height: 6),
-                                      _buildInfoRow(
-                                        icon: Icons.access_time_rounded,
-                                        label: "Hours",
-                                        value: "${DateFormat('h:mm a').format(overtime.startTime)} - ${DateFormat('h:mm a').format(overtime.endTime)}",
-                                        valueColor: Colors.greenAccent.withOpacity(0.9),
-                                      ),
-                                    ],
-                                  ),
-                                )).toList()),
-                                if (_activeOvertimeAssignments.length > 2)
-                                  Text(
-                                    "... and ${_activeOvertimeAssignments.length - 2} more active",
-                                    style: TextStyle(
-                                      color: Colors.orangeAccent.withOpacity(0.8),
-                                      fontSize: (isLargeScreen ? 12 : (isTablet ? 11 : 10)) * responsiveFontSize,
-                                      fontStyle: FontStyle.italic,
-                                    ),
-                                  ),
-                              ],
-                            ),
-                          ),
-                          SizedBox(height: 12),
-                        ],
-
-                        // ✅ SECONDARY: Today's Scheduled Overtime (If no active overtime)
-                        if (_hasActiveOvertime && _todayOvertimeSchedule.isNotEmpty && _activeOvertimeAssignments.isEmpty) ...[
-                          Container(
-                            padding: EdgeInsets.all(12),
-                            decoration: BoxDecoration(
-                              color: Colors.blueAccent.withOpacity(0.12),
-                              borderRadius: BorderRadius.circular(8),
-                              border: Border.all(color: Colors.blueAccent.withOpacity(0.25)),
-                            ),
-                            child: Column(
-                              children: [
-                                Row(
-                                  children: [
-                                    Icon(Icons.event_available_rounded, color: Colors.blueAccent, size: 18),
-                                    SizedBox(width: 8),
-                                    Text(
-                                      "📅 TODAY'S OVERTIME SCHEDULE",
-                                      style: TextStyle(
-                                        color: Colors.blueAccent,
-                                        fontSize: (isLargeScreen ? 14 : (isTablet ? 13 : 12)) * responsiveFontSize,
-                                        fontWeight: FontWeight.bold,
-                                        letterSpacing: 0.5,
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                                SizedBox(height: 8),
-                                ...(_todayOvertimeSchedule.take(3).map((overtime) => Container(
-                                  margin: EdgeInsets.only(bottom: 6),
-                                  child: _buildInfoRow(
-                                    icon: Icons.schedule_rounded,
-                                    label: "${overtime.projectName}",
-                                    value: "${DateFormat('h:mm a').format(overtime.startTime)} - ${DateFormat('h:mm a').format(overtime.endTime)}",
-                                    valueColor: Colors.blueAccent.withOpacity(0.9),
-                                  ),
-                                )).toList()),
-                                if (_todayOvertimeSchedule.length > 3)
-                                  Text(
-                                    "... ${_todayOvertimeSchedule.length - 3} more scheduled",
-                                    style: TextStyle(
-                                      color: Colors.blueAccent.withOpacity(0.8),
-                                      fontSize: (isLargeScreen ? 12 : (isTablet ? 11 : 10)) * responsiveFontSize,
-                                      fontStyle: FontStyle.italic,
-                                    ),
-                                  ),
-                              ],
-                            ),
-                          ),
-                          SizedBox(height: 12),
-                        ],
-
                         // Work Schedule Info
                         if (_workSchedule != null) ...[
                           _buildInfoRow(
@@ -1392,26 +2867,26 @@ class _DashboardViewState extends State<DashboardView>
 
                   SizedBox(height: 20),
 
-                  // ✅ ENHANCED: Status badges with overtime integration
-                  if (_needsSync || _connectivityService.currentStatus == ConnectionStatus.offline || _hasActiveOvertime) ...[
+                  // ✅ SIMPLIFIED: Status badges WITHOUT overtime (only sync/offline info)
+                  if (_needsSync || _connectivityService.currentStatus == ConnectionStatus.offline) ...[
                     Container(
                       padding: EdgeInsets.all(12),
                       decoration: BoxDecoration(
-                        color: Colors.white.withOpacity(0.05),
+                        color: Colors.white.withOpacity(0.08),
                         borderRadius: BorderRadius.circular(8),
-                        border: Border.all(color: Colors.white.withOpacity(0.1)),
+                        border: Border.all(color: Colors.white.withOpacity(0.15)),
                       ),
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           Row(
                             children: [
-                              Icon(Icons.info_outline, color: Colors.white.withOpacity(0.7), size: 16),
+                              Icon(Icons.info_outline, color: Colors.white.withOpacity(0.8), size: 16),
                               SizedBox(width: 8),
                               Text(
-                                "Status Indicators",
+                                "Connection Status",
                                 style: TextStyle(
-                                  color: Colors.white.withOpacity(0.8),
+                                  color: Colors.white.withOpacity(0.9),
                                   fontSize: (isLargeScreen ? 14 : (isTablet ? 12 : 11)) * responsiveFontSize,
                                   fontWeight: FontWeight.w600,
                                 ),
@@ -1423,66 +2898,13 @@ class _DashboardViewState extends State<DashboardView>
                             spacing: 8,
                             runSpacing: 6,
                             children: [
-                              // ✅ Active Overtime Badge
-                              if (_hasActiveOvertime && _activeOvertimeAssignments.isNotEmpty)
-                                Container(
-                                  padding: EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                                  decoration: BoxDecoration(
-                                    color: Colors.orangeAccent.withOpacity(0.2),
-                                    borderRadius: BorderRadius.circular(16),
-                                    border: Border.all(color: Colors.orangeAccent.withOpacity(0.4)),
-                                  ),
-                                  child: Row(
-                                    mainAxisSize: MainAxisSize.min,
-                                    children: [
-                                      Icon(Icons.work_history, size: 14, color: Colors.orangeAccent),
-                                      SizedBox(width: 6),
-                                      Text(
-                                        "Overtime Active",
-                                        style: TextStyle(
-                                          color: Colors.orangeAccent.withOpacity(0.95),
-                                          fontSize: (isLargeScreen ? 12 : (isTablet ? 11 : 10)) * responsiveFontSize,
-                                          fontWeight: FontWeight.w600,
-                                        ),
-                                      ),
-                                    ],
-                                  ),
-                                ),
-
-                              // ✅ Scheduled Overtime Badge
-                              if (_hasActiveOvertime && _todayOvertimeSchedule.isNotEmpty && _activeOvertimeAssignments.isEmpty)
-                                Container(
-                                  padding: EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                                  decoration: BoxDecoration(
-                                    color: Colors.blueAccent.withOpacity(0.2),
-                                    borderRadius: BorderRadius.circular(16),
-                                    border: Border.all(color: Colors.blueAccent.withOpacity(0.4)),
-                                  ),
-                                  child: Row(
-                                    mainAxisSize: MainAxisSize.min,
-                                    children: [
-                                      Icon(Icons.event_available, size: 14, color: Colors.blueAccent),
-                                      SizedBox(width: 6),
-                                      Text(
-                                        "${_todayOvertimeSchedule.length} Overtime Scheduled",
-                                        style: TextStyle(
-                                          color: Colors.blueAccent.withOpacity(0.95),
-                                          fontSize: (isLargeScreen ? 12 : (isTablet ? 11 : 10)) * responsiveFontSize,
-                                          fontWeight: FontWeight.w600,
-                                        ),
-                                      ),
-                                    ],
-                                  ),
-                                ),
-
-                              // Existing badges
                               if (_needsSync && _isCheckedIn)
                                 Container(
                                   padding: EdgeInsets.symmetric(horizontal: 10, vertical: 6),
                                   decoration: BoxDecoration(
-                                    color: Colors.amberAccent.withOpacity(0.2),
+                                    color: Colors.amberAccent.withOpacity(0.25),
                                     borderRadius: BorderRadius.circular(16),
-                                    border: Border.all(color: Colors.amberAccent.withOpacity(0.4)),
+                                    border: Border.all(color: Colors.amberAccent.withOpacity(0.5)),
                                   ),
                                   child: Row(
                                     mainAxisSize: MainAxisSize.min,
@@ -1490,7 +2912,7 @@ class _DashboardViewState extends State<DashboardView>
                                       Icon(Icons.sync, size: 14, color: Colors.amberAccent),
                                       SizedBox(width: 6),
                                       Text(
-                                        "Pending Sync",
+                                        "Will sync when online",
                                         style: TextStyle(
                                           color: Colors.amberAccent.withOpacity(0.95),
                                           fontSize: (isLargeScreen ? 12 : (isTablet ? 11 : 10)) * responsiveFontSize,
@@ -1505,19 +2927,19 @@ class _DashboardViewState extends State<DashboardView>
                                 Container(
                                   padding: EdgeInsets.symmetric(horizontal: 10, vertical: 6),
                                   decoration: BoxDecoration(
-                                    color: Colors.redAccent.withOpacity(0.2),
+                                    color: Colors.orangeAccent.withOpacity(0.25),
                                     borderRadius: BorderRadius.circular(16),
-                                    border: Border.all(color: Colors.redAccent.withOpacity(0.4)),
+                                    border: Border.all(color: Colors.orangeAccent.withOpacity(0.5)),
                                   ),
                                   child: Row(
                                     mainAxisSize: MainAxisSize.min,
                                     children: [
-                                      Icon(Icons.wifi_off, size: 14, color: Colors.redAccent),
+                                      Icon(Icons.wifi_off, size: 14, color: Colors.orangeAccent),
                                       SizedBox(width: 6),
                                       Text(
-                                        "Offline Mode",
+                                        "Working offline",
                                         style: TextStyle(
-                                          color: Colors.redAccent.withOpacity(0.95),
+                                          color: Colors.orangeAccent.withOpacity(0.95),
                                           fontSize: (isLargeScreen ? 12 : (isTablet ? 11 : 10)) * responsiveFontSize,
                                           fontWeight: FontWeight.w500,
                                         ),
@@ -1538,10 +2960,10 @@ class _DashboardViewState extends State<DashboardView>
                     Container(
                       padding: EdgeInsets.all(isLargeScreen ? 16 : (isTablet ? 14 : 12)),
                       decoration: BoxDecoration(
-                        color: Colors.orangeAccent.withOpacity(0.15),
+                        color: Colors.orangeAccent.withOpacity(0.2),
                         borderRadius: BorderRadius.circular(10),
                         border: Border.all(
-                          color: Colors.orangeAccent.withOpacity(0.3),
+                          color: Colors.orangeAccent.withOpacity(0.4),
                         ),
                       ),
                       child: Row(
@@ -1583,8 +3005,8 @@ class _DashboardViewState extends State<DashboardView>
                         backgroundColor: (!_isCheckedIn && !_isWithinGeofence) || _isLoading || _isAuthenticating
                             ? Colors.grey.withOpacity(0.5)
                             : _isCheckedIn
-                            ? const Color(0xFFE53E3E) // More vibrant red for check out
-                            : const Color(0xFF38A169), // More vibrant green for check in
+                            ? const Color(0xFFE53E3E) // Red for check out
+                            : const Color(0xFF38A169), // Green for check in
                         foregroundColor: Colors.white,
                         shape: RoundedRectangleBorder(
                           borderRadius: BorderRadius.circular(16),
@@ -1714,6 +3136,8 @@ class _DashboardViewState extends State<DashboardView>
     );
   }
 
+  // Updated _buildQuickActionsSection() method
+
   Widget _buildQuickActionsSection() {
     return Container(
       margin: EdgeInsets.symmetric(horizontal: responsivePadding.horizontal),
@@ -1721,7 +3145,7 @@ class _DashboardViewState extends State<DashboardView>
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Padding(
-            padding: EdgeInsets.only(left: isTablet ? 8 : 4, bottom: isTablet ? 20 : 16),
+            padding: EdgeInsets.only(left: isTablet ? 8 : 4, bottom: isTablet ? 16 : 12),
             child: Text(
               "Quick Actions",
               style: TextStyle(
@@ -1732,20 +3156,26 @@ class _DashboardViewState extends State<DashboardView>
             ),
           ),
 
+          // ✅ NEW: Overtime Status Card (if applicable)
+          if (_hasActiveOvertime && (_activeOvertimeAssignments.isNotEmpty || _todayOvertimeSchedule.isNotEmpty))
+            _buildOvertimeStatusCard(),
+
+          // Rest Timing Card (if applicable)
           if (_hasActiveRestTiming())
             _buildRestTimingCard(),
 
-          SizedBox(height: containerSpacing),
+          SizedBox(height: containerSpacing * 0.75),
 
+          // Quick Actions Grid
           GridView.count(
             shrinkWrap: true,
             physics: const NeverScrollableScrollPhysics(),
-            crossAxisCount: isLargeScreen ? 4 : (isTablet ? 4 : 2),
-            crossAxisSpacing: isTablet ? 16 : 12,
-            mainAxisSpacing: isTablet ? 16 : 12,
-            childAspectRatio: isLargeScreen ? 1.3 : (isTablet ? 1.2 : 1.1),
+            crossAxisCount: isLargeScreen ? 4 : (isTablet ? 3 : 2),
+            crossAxisSpacing: isTablet ? 12 : 8,
+            mainAxisSpacing: isTablet ? 12 : 8,
+            childAspectRatio: isLargeScreen ? 1.6 : (isTablet ? 1.4 : 1.2),
             children: [
-              _buildQuickActionCard(
+              _buildCompactQuickActionCard(
                 icon: Icons.event_available,
                 title: "Apply Leave",
                 subtitle: "Request time off",
@@ -1764,7 +3194,7 @@ class _DashboardViewState extends State<DashboardView>
                   ).then((_) => _refreshDashboard());
                 },
               ),
-              _buildQuickActionCard(
+              _buildCompactQuickActionCard(
                 icon: Icons.history,
                 title: "Leave History",
                 subtitle: "View applications",
@@ -1783,7 +3213,17 @@ class _DashboardViewState extends State<DashboardView>
                   ).then((_) => _refreshDashboard());
                 },
               ),
-              _buildQuickActionCard(
+
+              _buildCompactQuickActionCard(
+                icon: Icons.receipt_long,
+                title: "Salary Slip",
+                subtitle: "Request slip",
+                color: Colors.green,
+                onTap: () {
+                  _showComingSoonDialog("Apply for Salary Slip");
+                },
+              ),
+              _buildCompactQuickActionCard(
                 icon: Icons.calendar_view_month,
                 title: "My Attendance",
                 subtitle: "View records",
@@ -1800,17 +3240,41 @@ class _DashboardViewState extends State<DashboardView>
                   );
                 },
               ),
+
+              // Overtime approval card for approvers
+              if (_isOvertimeApprover)
+                _buildCompactQuickActionCard(
+                  icon: Icons.approval,
+                  title: "Overtime Approvals",
+                  subtitle: _pendingOvertimeRequests > 0
+                      ? "$_pendingOvertimeRequests pending"
+                      : "No pending",
+                  color: Colors.orange,
+                  showBadge: _pendingOvertimeRequests > 0,
+                  badgeCount: _pendingOvertimeRequests,
+                  onTap: () {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (context) => PendingOvertimeView(
+                          approverId: widget.employeeId,
+                        ),
+                      ),
+                    ).then((_) => _loadPendingOvertimeApprovals());
+                  },
+                ),
+
+              // Overtime creation card
               if (_userData != null &&
                   (_userData!['hasOvertimeAccess'] == true ||
                       _userData!['overtimeAccessGrantedAt'] != null ||
                       _userData!['standardizedOvertimeAccess'] == true))
-                _buildQuickActionCard(
+                _buildCompactQuickActionCard(
                   icon: Icons.access_time,
-                  title: "Overtime",
+                  title: "Create Overtime",
                   subtitle: "Request overtime",
-                  color: Colors.orange,
+                  color: Colors.indigo,
                   onTap: () {
-                    debugPrint("🎯 DATABASE-VERIFIED: Overtime card tapped");
                     Navigator.push(
                       context,
                       MaterialPageRoute(
@@ -1818,7 +3282,7 @@ class _DashboardViewState extends State<DashboardView>
                           requesterId: widget.employeeId,
                         ),
                       ),
-                    );
+                    ).then((_) => _refreshDashboard());
                   },
                 ),
             ],
@@ -1828,70 +3292,299 @@ class _DashboardViewState extends State<DashboardView>
     );
   }
 
-  Widget _buildQuickActionCard({
+// ✅ NEW: Overtime Status Card Method
+  Widget _buildOvertimeStatusCard() {
+    return Container(
+      margin: EdgeInsets.only(bottom: containerSpacing),
+      padding: EdgeInsets.all(isLargeScreen ? 24 : (isTablet ? 20 : 16)),
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: _activeOvertimeAssignments.isNotEmpty
+              ? [Colors.orange.shade600, Colors.orange.shade400] // Active overtime
+              : [Colors.blue.shade600, Colors.blue.shade400], // Scheduled overtime
+        ),
+        borderRadius: BorderRadius.circular(cardBorderRadius + 4),
+        boxShadow: [
+          BoxShadow(
+            color: (_activeOvertimeAssignments.isNotEmpty ? Colors.orange : Colors.blue).withOpacity(0.3),
+            blurRadius: 16,
+            offset: const Offset(0, 8),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Container(
+                padding: EdgeInsets.all(isTablet ? 16 : 12),
+                decoration: BoxDecoration(
+                  color: Colors.white.withOpacity(0.2),
+                  shape: BoxShape.circle,
+                ),
+                child: Icon(
+                  _activeOvertimeAssignments.isNotEmpty
+                      ? Icons.work_history_rounded
+                      : Icons.event_available_rounded,
+                  color: Colors.white,
+                  size: isTablet ? 32 : 28,
+                ),
+              ),
+              SizedBox(width: containerSpacing),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      _activeOvertimeAssignments.isNotEmpty
+                          ? "Overtime Active Now!"
+                          : "Overtime Scheduled Today",
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontSize: (isLargeScreen ? 24 : (isTablet ? 20 : 18)) * responsiveFontSize,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      _activeOvertimeAssignments.isNotEmpty
+                          ? "${_activeOvertimeAssignments.length} active assignment${_activeOvertimeAssignments.length > 1 ? 's' : ''}"
+                          : "${_todayOvertimeSchedule.length} scheduled assignment${_todayOvertimeSchedule.length > 1 ? 's' : ''}",
+                      style: TextStyle(
+                        color: Colors.white.withOpacity(0.9),
+                        fontSize: (isLargeScreen ? 16 : (isTablet ? 14 : 12)) * responsiveFontSize,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          SizedBox(height: containerSpacing),
+          Container(
+            padding: EdgeInsets.all(containerSpacing),
+            decoration: BoxDecoration(
+              color: Colors.white.withOpacity(0.15),
+              borderRadius: BorderRadius.circular(cardBorderRadius - 2),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                if (_activeOvertimeAssignments.isNotEmpty) ...[
+                  // Show active overtime details
+                  ...(_activeOvertimeAssignments.take(2).map((overtime) => Container(
+                    margin: EdgeInsets.only(bottom: 8),
+                    child: Row(
+                      children: [
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                "${overtime.projectName} (${overtime.projectCode})",
+                                style: TextStyle(
+                                  color: Colors.white,
+                                  fontSize: (isLargeScreen ? 16 : (isTablet ? 14 : 13)) * responsiveFontSize,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
+                              const SizedBox(height: 2),
+                              Text(
+                                "${DateFormat('h:mm a').format(overtime.startTime)} - ${DateFormat('h:mm a').format(overtime.endTime)}",
+                                style: TextStyle(
+                                  color: Colors.white.withOpacity(0.9),
+                                  fontSize: (isLargeScreen ? 14 : (isTablet ? 12 : 11)) * responsiveFontSize,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                        Container(
+                          padding: const EdgeInsets.all(8),
+                          decoration: BoxDecoration(
+                            color: Colors.white.withOpacity(0.2),
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                          child: Icon(
+                            Icons.schedule,
+                            color: Colors.white,
+                            size: 16,
+                          ),
+                        ),
+                      ],
+                    ),
+                  )).toList()),
+                  if (_activeOvertimeAssignments.length > 2)
+                    Text(
+                      "... and ${_activeOvertimeAssignments.length - 2} more active",
+                      style: TextStyle(
+                        color: Colors.white.withOpacity(0.8),
+                        fontSize: (isLargeScreen ? 12 : (isTablet ? 11 : 10)) * responsiveFontSize,
+                        fontStyle: FontStyle.italic,
+                      ),
+                    ),
+                ] else if (_todayOvertimeSchedule.isNotEmpty) ...[
+                  // Show scheduled overtime details
+                  ...(_todayOvertimeSchedule.take(3).map((overtime) => Container(
+                    margin: EdgeInsets.only(bottom: 6),
+                    child: Row(
+                      children: [
+                        Expanded(
+                          child: Text(
+                            "${overtime.projectName}",
+                            style: TextStyle(
+                              color: Colors.white,
+                              fontSize: (isLargeScreen ? 15 : (isTablet ? 13 : 12)) * responsiveFontSize,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                        ),
+                        Text(
+                          "${DateFormat('h:mm a').format(overtime.startTime)} - ${DateFormat('h:mm a').format(overtime.endTime)}",
+                          style: TextStyle(
+                            color: Colors.white.withOpacity(0.9),
+                            fontSize: (isLargeScreen ? 13 : (isTablet ? 11 : 10)) * responsiveFontSize,
+                          ),
+                        ),
+                      ],
+                    ),
+                  )).toList()),
+                  if (_todayOvertimeSchedule.length > 3)
+                    Text(
+                      "... ${_todayOvertimeSchedule.length - 3} more scheduled",
+                      style: TextStyle(
+                        color: Colors.white.withOpacity(0.8),
+                        fontSize: (isLargeScreen ? 12 : (isTablet ? 11 : 10)) * responsiveFontSize,
+                        fontStyle: FontStyle.italic,
+                      ),
+                    ),
+                ],
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildCompactQuickActionCard({
     required IconData icon,
     required String title,
     required String subtitle,
     required Color color,
     required VoidCallback onTap,
+    bool showBadge = false,
+    int badgeCount = 0,
   }) {
     return Material(
       color: Colors.transparent,
       child: InkWell(
         onTap: onTap,
-        borderRadius: BorderRadius.circular(cardBorderRadius + 4),
+        borderRadius: BorderRadius.circular(cardBorderRadius),
         child: Container(
           decoration: BoxDecoration(
             color: _isDarkMode ? const Color(0xFF1E293B) : Colors.white,
-            borderRadius: BorderRadius.circular(cardBorderRadius + 4),
+            borderRadius: BorderRadius.circular(cardBorderRadius),
             border: Border.all(
               color: _isDarkMode ? Colors.white.withOpacity(0.1) : Colors.grey.withOpacity(0.08),
             ),
             boxShadow: [
               BoxShadow(
-                color: _isDarkMode ? Colors.black.withOpacity(0.2) : Colors.grey.withOpacity(0.08),
-                blurRadius: 12,
-                offset: const Offset(0, 4),
+                color: _isDarkMode ? Colors.black.withOpacity(0.2) : Colors.grey.withOpacity(0.06),
+                blurRadius: 8,
+                offset: const Offset(0, 2),
               ),
             ],
           ),
           child: Padding(
-            padding: EdgeInsets.all(isLargeScreen ? 24 : (isTablet ? 20 : 16)),
+            // ✅ REDUCED: Much smaller padding
+            padding: EdgeInsets.all(isLargeScreen ? 16 : (isTablet ? 14 : 12)),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                Container(
-                  padding: EdgeInsets.all(isLargeScreen ? 16 : (isTablet ? 12 : 10)),
-                  decoration: BoxDecoration(
-                    color: color.withOpacity(0.1),
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                  child: Icon(
-                    icon,
-                    color: color,
-                    size: isLargeScreen ? 32 : (isTablet ? 28 : 24),
-                  ),
+                // ✅ COMPACT: Icon section
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Stack(
+                      children: [
+                        Container(
+                          // ✅ REDUCED: Smaller icon container
+                          padding: EdgeInsets.all(isLargeScreen ? 12 : (isTablet ? 10 : 8)),
+                          decoration: BoxDecoration(
+                            color: color.withOpacity(0.1),
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                          child: Icon(
+                            icon,
+                            color: color,
+                            // ✅ REDUCED: Smaller icon size
+                            size: isLargeScreen ? 24 : (isTablet ? 22 : 20),
+                          ),
+                        ),
+                        // Badge support
+                        if (showBadge && badgeCount > 0)
+                          Positioned(
+                            right: -2,
+                            top: -2,
+                            child: Container(
+                              padding: EdgeInsets.all(3),
+                              decoration: BoxDecoration(
+                                color: Colors.red,
+                                shape: BoxShape.circle,
+                                border: Border.all(color: Colors.white, width: 1),
+                              ),
+                              constraints: BoxConstraints(
+                                minWidth: 16,
+                                minHeight: 16,
+                              ),
+                              child: Text(
+                                badgeCount > 99 ? '99+' : badgeCount.toString(),
+                                style: TextStyle(
+                                  color: Colors.white,
+                                  fontSize: 8,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                                textAlign: TextAlign.center,
+                              ),
+                            ),
+                          ),
+                      ],
+                    ),
+                  ],
                 ),
-                const Spacer(),
-                Text(
-                  title,
-                  style: TextStyle(
-                    fontSize: (isLargeScreen ? 20 : (isTablet ? 18 : 16)) * responsiveFontSize,
-                    fontWeight: FontWeight.bold,
-                    color: _isDarkMode ? Colors.white : Colors.black87,
-                  ),
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                ),
-                const SizedBox(height: 4),
-                Text(
-                  subtitle,
-                  style: TextStyle(
-                    fontSize: (isLargeScreen ? 16 : (isTablet ? 14 : 12)) * responsiveFontSize,
-                    color: _isDarkMode ? Colors.grey.shade400 : Colors.grey.shade600,
-                  ),
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
+
+                // ✅ COMPACT: Text section
+                Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      title,
+                      style: TextStyle(
+                        // ✅ REDUCED: Smaller title font
+                        fontSize: (isLargeScreen ? 16 : (isTablet ? 15 : 14)) * responsiveFontSize,
+                        fontWeight: FontWeight.bold,
+                        color: _isDarkMode ? Colors.white : Colors.black87,
+                      ),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                    SizedBox(height: 2), // ✅ REDUCED: Less spacing
+                    Text(
+                      subtitle,
+                      style: TextStyle(
+                        // ✅ REDUCED: Smaller subtitle font
+                        fontSize: (isLargeScreen ? 12 : (isTablet ? 11 : 10)) * responsiveFontSize,
+                        color: _isDarkMode ? Colors.grey.shade400 : Colors.grey.shade600,
+                      ),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ],
                 ),
               ],
             ),
@@ -2725,66 +4418,175 @@ class _DashboardViewState extends State<DashboardView>
   Future<void> _checkGeofenceStatus() async {
     if (!mounted) return;
 
-    setState(() {
-      _isCheckingLocation = true;
-    });
+    // Prevent multiple simultaneous checks
+    if (_isLocationRefreshing) {
+      debugPrint("⚡ Location check already in progress, skipping...");
+      return;
+    }
+
+    _isLocationRefreshing = true;
+
+    if (mounted) {
+      setState(() {
+        _isCheckingLocation = true;
+      });
+    }
 
     try {
-      Map<String, dynamic> status = await EnhancedGeofenceUtil.checkGeofenceStatus(context);
+      debugPrint("📍 Manual location check triggered...");
 
-      bool withinGeofence = status['withinGeofence'] as bool;
-      double? distance = status['distance'] as double?;
-      String locationType = status['locationType'] as String? ?? 'unknown';
+      // Force fresh location check (bypass cache)
+      _isLocationCacheValid = false;
+      _cachedPosition = null;
 
-      if (locationType == 'polygon') {
-        final polygonLocation = status['location'] as PolygonLocationModel?;
+      // Use enhanced geofence with employee exemption checking
+      Map<String, dynamic> status = await EnhancedGeofenceUtil.checkGeofenceStatusForEmployee(
+        context,
+        widget.employeeId,
+      );
 
-        if (mounted) {
-          setState(() {
-            _isWithinGeofence = withinGeofence;
-            _distanceToOffice = distance;
+      if (mounted) {
+        bool withinGeofence = status['withinGeofence'] as bool;
+        double? distance = status['distance'] as double?;
+        String locationType = status['locationType'] as String? ?? 'unknown';
+        bool isExempted = status['isExempted'] ?? false;
 
-            if (polygonLocation != null) {
+        // Handle different location types
+        if (locationType == 'polygon') {
+          final polygonLocation = status['location'] as PolygonLocationModel?;
+          if (polygonLocation != null) {
+            setState(() {
+              _isWithinGeofence = withinGeofence;
+              _distanceToOffice = distance;
               _nearestLocation = LocationModel(
                 id: polygonLocation.id,
-                name: "${polygonLocation.name} (Polygon Boundary)",
+                name: polygonLocation.name,
                 address: polygonLocation.description,
                 latitude: polygonLocation.centerLatitude,
                 longitude: polygonLocation.centerLongitude,
                 radius: 0,
                 isActive: polygonLocation.isActive,
               );
-            } else {
-              _nearestLocation = null;
-            }
-
-            _isCheckingLocation = false;
+            });
+          }
+        } else if (locationType == 'exemption') {
+          final exemptLocation = status['location'] as LocationModel?;
+          setState(() {
+            _isWithinGeofence = true; // Always true for exempt employees
+            _distanceToOffice = 0.0;
+            _nearestLocation = exemptLocation;
+          });
+          debugPrint("🆓 Employee ${widget.employeeId} is location exempt");
+        } else {
+          final circularLocation = status['location'] as LocationModel?;
+          setState(() {
+            _isWithinGeofence = withinGeofence;
+            _nearestLocation = circularLocation;
+            _distanceToOffice = distance;
           });
         }
+
+        _lastSuccessfulLocationCheck = DateTime.now();
+
+        // Show success message for manual refresh
+        String locationStatus = withinGeofence ? 'INSIDE' : 'OUTSIDE';
+        String exemptionStatus = isExempted ? ' (EXEMPT)' : '';
+        String locationName = _nearestLocation?.name ?? 'office location';
+
+        if (isExempted) {
+          CustomSnackBar.successSnackBar("✅ Location updated! You can check in/out from anywhere.");
+        } else if (withinGeofence) {
+          CustomSnackBar.successSnackBar("✅ Location updated! You're at $locationName.");
+        } else {
+          String distanceText = distance != null ? " (${distance.toStringAsFixed(0)}m away)" : "";
+          CustomSnackBar.infoSnackBar("📍 Location updated! Outside $locationName$distanceText");
+        }
+
+        debugPrint("📍 Manual location update: $locationStatus$exemptionStatus at $locationName");
+      }
+
+    } catch (e) {
+      debugPrint('❌ Error checking geofence: $e');
+      if (mounted) {
+        setState(() {
+          _isWithinGeofence = false;
+          _nearestLocation = null;
+          _distanceToOffice = null;
+        });
+        CustomSnackBar.errorSnackBar("Failed to check location: $e");
+      }
+    } finally {
+      _isLocationRefreshing = false;
+      if (mounted) {
+        setState(() {
+          _isCheckingLocation = false;
+        });
+      }
+    }
+  }
+
+
+  Future<void> _processLocationWithPosition(Position position) async {
+    try {
+      // ✅ ENHANCED: Use new method that supports employee exemptions
+      Map<String, dynamic> status = await EnhancedGeofenceUtil.checkGeofenceStatusForEmployee(
+          context,
+          widget.employeeId,
+          currentPosition: position
+      );
+
+      bool withinGeofence = status['withinGeofence'] as bool;
+      double? distance = status['distance'] as double?;
+      String locationType = status['locationType'] as String? ?? 'unknown';
+      bool isExempted = status['isExempted'] ?? false;
+
+      if (locationType == 'polygon') {
+        final polygonLocation = status['location'] as PolygonLocationModel?;
+        if (mounted) {
+          setState(() {
+            _isWithinGeofence = withinGeofence;
+            _distanceToOffice = distance;
+            if (polygonLocation != null) {
+              _nearestLocation = LocationModel(
+                id: polygonLocation.id,
+                name: polygonLocation.name,
+                address: polygonLocation.description,
+                latitude: polygonLocation.centerLatitude,
+                longitude: polygonLocation.centerLongitude,
+                radius: 0,
+                isActive: polygonLocation.isActive,
+              );
+            }
+          });
+        }
+      } else if (locationType == 'exemption') {
+        // Handle exempt employees
+        final exemptLocation = status['location'] as LocationModel?;
+        if (mounted) {
+          setState(() {
+            _isWithinGeofence = true; // Always true for exempt employees
+            _distanceToOffice = 0.0;
+            _nearestLocation = exemptLocation;
+          });
+        }
+        debugPrint("🆓 Employee ${widget.employeeId} is location exempt - can check in/out from anywhere");
       } else {
         final circularLocation = status['location'] as LocationModel?;
-
         if (mounted) {
           setState(() {
             _isWithinGeofence = withinGeofence;
             _nearestLocation = circularLocation;
             _distanceToOffice = distance;
-            _isCheckingLocation = false;
           });
         }
       }
 
-      if (mounted) {
-        _fetchAvailableLocations();
-      }
+      String locationStatus = withinGeofence ? 'INSIDE' : 'OUTSIDE';
+      String exemptionStatus = isExempted ? ' (EXEMPT)' : '';
+      debugPrint("⚡ Location processed: $locationStatus (${distance?.toStringAsFixed(0)}m)$exemptionStatus");
+
     } catch (e) {
-      debugPrint('Error checking geofence: $e');
-      if (mounted) {
-        setState(() {
-          _isCheckingLocation = false;
-        });
-        CustomSnackBar.errorSnackBar(context, "Error checking geofence status: $e");
-      }
+      debugPrint("❌ Error processing location: $e");
     }
   }
 
@@ -2829,9 +4631,11 @@ class _DashboardViewState extends State<DashboardView>
     }
 
     try {
-      debugPrint("=== FETCHING WORK SCHEDULE ===");
+      debugPrint("=== FETCHING ENHANCED WORK SCHEDULE ===");
 
       String? employeePin = _userData!['pin']?.toString();
+
+      // ✅ Use enhanced work schedule service
       WorkSchedule? schedule = await WorkScheduleService.getEmployeeWorkSchedule(
           widget.employeeId,
           employeePin
@@ -2844,15 +4648,22 @@ class _DashboardViewState extends State<DashboardView>
         });
 
         if (schedule != null) {
-          debugPrint("✅ Work schedule loaded successfully");
-          _setupCheckOutReminder();
+          debugPrint("✅ Enhanced work schedule loaded successfully");
+          debugPrint("  - Is Alternative Saturday: ${schedule.isAlternativeSaturday}");
+          debugPrint("  - Status: ${schedule.alternativeSaturdayStatus}");
+          debugPrint("  - Message: ${schedule.alternativeSaturdayMessage}");
+          debugPrint("  - Timing: ${schedule.alternativeSaturdayTiming}");
+
+          if (!schedule.isOffDay) {
+            _setupCheckOutReminder();
+          }
           _updateCurrentTimingMessage();
         } else {
           debugPrint("⚠️ No work schedule found");
         }
       }
     } catch (e) {
-      debugPrint("❌ Error fetching work schedule: $e");
+      debugPrint("❌ Error fetching enhanced work schedule: $e");
       if (mounted) {
         setState(() => _isLoadingSchedule = false);
       }
@@ -2877,6 +4688,7 @@ class _DashboardViewState extends State<DashboardView>
     Color messageColor = Colors.blue;
 
     try {
+      // ✅ SIMPLIFIED: Handle only regular work schedule (no Saturday logic)
       if (WorkScheduleService.isInBreakTime(_workSchedule!, now)) {
         message = "Break Time: ${_workSchedule!.breakStartTime} - ${_workSchedule!.breakEndTime}";
         messageColor = Colors.orange;
@@ -3294,10 +5106,217 @@ class _DashboardViewState extends State<DashboardView>
 
     await _checkLineManagerStatus();
 
+    await _checkOvertimeApproverStatus();
+
     debugPrint("=== FETCH USER DATA COMPLETE ===");
 
     debugPrint("🕐 Starting work schedule fetch...");
     _fetchWorkSchedule();
+  }
+
+
+
+
+  void _showAttendanceAnalytics() async {
+    try {
+      // Show loading dialog
+      showDialog(
+        context: context,
+        barrierDismissible: false,
+        builder: (context) => const AlertDialog(
+          content: Row(
+            children: [
+              CircularProgressIndicator(),
+              SizedBox(width: 16),
+              Text("Loading analytics..."),
+            ],
+          ),
+        ),
+      );
+
+      final attendanceRepo = getIt<AttendanceRepository>();
+
+      // Get current month statistics
+      DateTime now = DateTime.now();
+      Map<String, dynamic> currentMonthStats = await attendanceRepo.getAttendanceStatistics(
+        employeeId: widget.employeeId,
+        startDate: DateTime(now.year, now.month, 1),
+        endDate: DateTime(now.year, now.month + 1, 0),
+      );
+
+      // Get last month statistics for comparison
+      DateTime lastMonth = DateTime(now.year, now.month - 1, 1);
+      Map<String, dynamic> lastMonthStats = await attendanceRepo.getAttendanceStatistics(
+        employeeId: widget.employeeId,
+        startDate: lastMonth,
+        endDate: DateTime(now.year, now.month, 0),
+      );
+
+      Navigator.pop(context); // Close loading dialog
+
+      // Show analytics dialog
+      showDialog(
+        context: context,
+        builder: (context) => AlertDialog(
+          title: const Text("Attendance Analytics"),
+          content: SizedBox(
+            width: double.maxFinite,
+            child: SingleChildScrollView(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text("Current Month (${DateFormat('MMMM yyyy').format(now)})",
+                      style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+                  const SizedBox(height: 8),
+                  _buildAnalyticsRow("Present Days", "${currentMonthStats['presentDays'] ?? 0}"),
+                  _buildAnalyticsRow("Total Hours", "${(currentMonthStats['totalHours'] ?? 0).toStringAsFixed(1)}h"),
+                  _buildAnalyticsRow("Overtime Hours", "${(currentMonthStats['totalOvertimeHours'] ?? 0).toStringAsFixed(1)}h"),
+                  _buildAnalyticsRow("Attendance Rate", "${(currentMonthStats['attendancePercentage'] ?? 0).toStringAsFixed(1)}%"),
+                  _buildAnalyticsRow("On-Time Rate", "${(currentMonthStats['onTimePercentage'] ?? 0).toStringAsFixed(1)}%"),
+                  _buildAnalyticsRow("Unique Locations", "${currentMonthStats['uniqueLocationsCount'] ?? 0}"),
+
+                  const SizedBox(height: 16),
+                  Text("Last Month Comparison",
+                      style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+                  const SizedBox(height: 8),
+                  _buildComparisonRow("Present Days",
+                      currentMonthStats['presentDays'] ?? 0,
+                      lastMonthStats['presentDays'] ?? 0),
+                  _buildComparisonRow("Total Hours",
+                      currentMonthStats['totalHours'] ?? 0.0,
+                      lastMonthStats['totalHours'] ?? 0.0),
+                  _buildComparisonRow("Attendance Rate",
+                      currentMonthStats['attendancePercentage'] ?? 0.0,
+                      lastMonthStats['attendancePercentage'] ?? 0.0),
+                ],
+              ),
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text("Close"),
+            ),
+          ],
+        ),
+      );
+
+    } catch (e) {
+      Navigator.pop(context); // Close loading dialog
+      CustomSnackBar.errorSnackBar("Error loading analytics: $e");
+    }
+  }
+
+  Widget _buildAnalyticsRow(String label, String value) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 2),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          Text(label),
+          Text(value, style: const TextStyle(fontWeight: FontWeight.w600)),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildComparisonRow(String label, dynamic current, dynamic last) {
+    double change = 0.0;
+    if (last != null && last != 0) {
+      change = ((current - last) / last) * 100;
+    }
+
+    Color changeColor = change > 0 ? Colors.green : (change < 0 ? Colors.red : Colors.grey);
+    String changeText = change > 0 ? '+${change.toStringAsFixed(1)}%' : '${change.toStringAsFixed(1)}%';
+
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 2),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          Text(label),
+          Row(
+            children: [
+              Text(current.toString(), style: const TextStyle(fontWeight: FontWeight.w600)),
+              const SizedBox(width: 8),
+              Text(changeText, style: TextStyle(color: changeColor, fontSize: 12)),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+// 🆕 NEW: Force sync all data
+  Future<void> _forceSyncAllData() async {
+    try {
+      // Show loading dialog
+      showDialog(
+        context: context,
+        barrierDismissible: false,
+        builder: (context) => const AlertDialog(
+          content: Row(
+            children: [
+              CircularProgressIndicator(),
+              SizedBox(width: 16),
+              Text("Syncing all data..."),
+            ],
+          ),
+        ),
+      );
+
+      // Perform comprehensive sync
+      final syncService = getIt<SyncService>();
+      bool success = await syncService.manualSync();
+
+      // Also force refresh dashboard data
+      await _forceAttendanceSync();
+
+      Navigator.pop(context); // Close loading dialog
+
+      if (success) {
+        CustomSnackBar.successSnackBar("All data synchronized successfully!");
+      } else {
+        CustomSnackBar.errorSnackBar("Some data failed to sync. Check debug screen for details.");
+      }
+
+    } catch (e) {
+      Navigator.pop(context); // Close loading dialog
+      CustomSnackBar.errorSnackBar("Sync error: $e");
+    }
+  }
+
+// 🆕 NEW: Show developer console (for advanced debugging)
+  void _showDeveloperConsole() {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text("Developer Console"),
+        content: const Text(
+            "This section contains advanced debugging tools and system information.\n\n"
+                "• View real-time logs\n"
+                "• Database schema information\n"
+                "• Network request monitoring\n"
+                "• Performance metrics\n\n"
+                "This feature is currently in development."
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text("Close"),
+          ),
+          ElevatedButton(
+            onPressed: () {
+              Navigator.pop(context);
+              // TODO: Implement advanced developer console
+              CustomSnackBar.infoSnackBar("Developer console coming soon!");
+            },
+            child: const Text("Open Console"),
+          ),
+        ],
+      ),
+    );
   }
 
   void _standardizeOvertimeFieldsFromDatabase(Map<String, dynamic> data) {
@@ -3514,16 +5533,11 @@ class _DashboardViewState extends State<DashboardView>
 
   Future<void> _saveUserDataLocally(Map<String, dynamic> userData) async {
     try {
-      Map<String, dynamic> dataCopy = Map<String, dynamic>.from(userData);
-
-      dataCopy.forEach((key, value) {
-        if (value is Timestamp) {
-          dataCopy[key] = value.toDate().toIso8601String();
-        }
-      });
+      // ✅ Convert Timestamps BEFORE encoding
+      Map<String, dynamic> cleanData = _convertTimestampsForLocalStorage(userData);
 
       final SharedPreferences prefs = await SharedPreferences.getInstance();
-      await prefs.setString('user_data_${widget.employeeId}', jsonEncode(dataCopy));
+      await prefs.setString('user_data_${widget.employeeId}', jsonEncode(cleanData));
       await prefs.setString('user_name_${widget.employeeId}', userData['name'] ?? '');
 
       debugPrint("💾 User data saved locally for ID: ${widget.employeeId}");
@@ -3556,147 +5570,575 @@ class _DashboardViewState extends State<DashboardView>
     }
   }
 
+
+
+// Add this new method to sync monitoring state
   Future<void> _fetchAttendanceStatus() async {
     try {
       String today = DateFormat('yyyy-MM-dd').format(DateTime.now());
 
-      // ✅ STEP 1: Always check local data first
-      final localAttendance = await _attendanceRepository.getTodaysAttendance(widget.employeeId);
+      debugPrint("🔍 === FETCHING ATTENDANCE STATUS (COMPLETE FIXED) ===");
+      debugPrint("Employee ID: ${widget.employeeId}");
+      debugPrint("Date: $today");
+      debugPrint("Connectivity: ${_connectivityService.currentStatus}");
 
-      if (localAttendance != null && mounted) {
-        setState(() {
-          _isCheckedIn = localAttendance.checkIn != null && localAttendance.checkOut == null;
-          if (_isCheckedIn && localAttendance.checkIn != null) {
-            _checkInTime = DateTime.parse(localAttendance.checkIn!);
-          } else {
-            _checkInTime = null;
+      // Step 1: ALWAYS check local data first (highest priority)
+      final localRecord = await _attendanceRepository.getTodaysAttendance(widget.employeeId);
+
+      bool localCheckedIn = false;
+      DateTime? localCheckInTime;
+      bool hasUnsynced = false;
+
+      if (localRecord != null) {
+        localCheckedIn = localRecord.hasCheckIn && !localRecord.hasCheckOut;
+        hasUnsynced = !localRecord.isSynced;
+
+        if (localCheckedIn && localRecord.checkIn != null) {
+          try {
+            localCheckInTime = DateTime.parse(localRecord.checkIn!);
+          } catch (e) {
+            debugPrint("❌ Error parsing local check-in time: $e");
+            localCheckedIn = false;
           }
-        });
+        }
 
-        debugPrint("📱 Local attendance status: CheckedIn=$_isCheckedIn, CheckOut=${localAttendance.checkOut}");
+        debugPrint("📱 LOCAL DATA:");
+        debugPrint("  - Checked in: $localCheckedIn");
+        debugPrint("  - Check-in time: $localCheckInTime");
+        debugPrint("  - Is synced: ${!hasUnsynced}");
+        debugPrint("  - Has unsynced data: $hasUnsynced");
+      } else {
+        debugPrint("📱 LOCAL DATA: No record found");
       }
 
-      // ✅ STEP 2: If online, force refresh from the CORRECT Firestore path
-      if (_connectivityService.currentStatus == ConnectionStatus.online) {
-        try {
-          // 🔥 FIXED: Use the same path as the repository
-          DocumentSnapshot attendanceDoc = await FirebaseFirestore.instance
-              .collection('Attendance_Records')
-              .doc('PTSEmployees')
-              .collection('Records')
-              .doc('${widget.employeeId}-$today')
-              .get()
-              .timeout(const Duration(seconds: 5));
+      // Step 2: If offline OR local has unsynced data, use local as authoritative
+      if (_connectivityService.currentStatus == ConnectionStatus.offline || hasUnsynced) {
+        debugPrint("🏠 USING LOCAL DATA AS AUTHORITATIVE");
+        debugPrint("  Reason: ${_connectivityService.currentStatus == ConnectionStatus.offline ? 'OFFLINE' : 'UNSYNCED LOCAL DATA'}");
 
-          if (attendanceDoc.exists && mounted) {
-            Map<String, dynamic> data = attendanceDoc.data() as Map<String, dynamic>;
+        if (mounted) {
+          setState(() {
+            _isCheckedIn = localCheckedIn;
+            _checkInTime = localCheckInTime;
+          });
+        }
 
-            debugPrint("🌐 Fresh Firestore data: $data");
+        // Sync monitoring with local state
+        await _syncMonitoringWithAttendanceState(localCheckedIn);
+        debugPrint("✅ Using local data - State: ${localCheckedIn ? 'CHECKED IN' : 'CHECKED OUT'}");
+        return;
+      }
 
-            // Convert Timestamp to DateTime for state management
-            DateTime? firestoreCheckIn;
-            DateTime? firestoreCheckOut;
+      // Step 3: If online and no unsynced local data, check Firestore
+      bool firestoreCheckedIn = false;
+      DateTime? firestoreCheckInTime;
+      bool firestoreDataExists = false;
 
-            if (data['checkIn'] != null && data['checkIn'] is Timestamp) {
-              firestoreCheckIn = (data['checkIn'] as Timestamp).toDate();
-            }
+      try {
+        debugPrint("🌐 Checking Firestore data...");
+        DocumentSnapshot attendanceDoc = await FirebaseFirestore.instance
+            .collection('Attendance_Records')
+            .doc('PTSEmployees')
+            .collection('Records')
+            .doc('${widget.employeeId}-$today')
+            .get()
+            .timeout(const Duration(seconds: 8));
 
-            if (data['checkOut'] != null && data['checkOut'] is Timestamp) {
-              firestoreCheckOut = (data['checkOut'] as Timestamp).toDate();
-            }
+        if (attendanceDoc.exists) {
+          firestoreDataExists = true;
+          Map<String, dynamic> data = attendanceDoc.data() as Map<String, dynamic>;
 
-            setState(() {
-              _isCheckedIn = firestoreCheckIn != null && firestoreCheckOut == null;
-              if (_isCheckedIn && firestoreCheckIn != null) {
-                _checkInTime = firestoreCheckIn;
-              } else {
-                _checkInTime = null;
+          DateTime? fsCheckIn;
+          DateTime? fsCheckOut;
+
+          // Parse check-in
+          if (data['checkIn'] != null) {
+            if (data['checkIn'] is Timestamp) {
+              fsCheckIn = (data['checkIn'] as Timestamp).toDate();
+            } else if (data['checkIn'] is String) {
+              try {
+                fsCheckIn = DateTime.parse(data['checkIn']);
+              } catch (e) {
+                debugPrint("❌ Error parsing Firestore checkIn: $e");
               }
-            });
-
-            debugPrint("🔄 Updated dashboard state: CheckedIn=$_isCheckedIn, CheckIn=$firestoreCheckIn, CheckOut=$firestoreCheckOut");
-
-            // ✅ STEP 3: Update local cache with fresh Firestore data
-            await _saveAttendanceStatusLocally(today, data);
-
-            // ✅ STEP 4: Also update the repository's local cache
-            await _updateRepositoryCache(data, today);
-
-          } else {
-            debugPrint("📭 No attendance record found in Firestore for today");
+            }
           }
-        } catch (e) {
-          debugPrint("❌ Network error fetching from correct Firestore path: $e");
+
+          // Parse check-out
+          if (data['checkOut'] != null) {
+            if (data['checkOut'] is Timestamp) {
+              fsCheckOut = (data['checkOut'] as Timestamp).toDate();
+            } else if (data['checkOut'] is String) {
+              try {
+                fsCheckOut = DateTime.parse(data['checkOut']);
+              } catch (e) {
+                debugPrint("❌ Error parsing Firestore checkOut: $e");
+              }
+            }
+          }
+
+          firestoreCheckedIn = fsCheckIn != null && fsCheckOut == null;
+          firestoreCheckInTime = fsCheckIn;
+
+          debugPrint("🌐 FIRESTORE DATA:");
+          debugPrint("  - Document exists: true");
+          debugPrint("  - Checked in: $firestoreCheckedIn");
+          debugPrint("  - Check-in time: $firestoreCheckInTime");
+          debugPrint("  - Check-out time: $fsCheckOut");
+
+          // Update local cache with Firestore data
+          await _updateRepositoryCache(data, today);
+        } else {
+          debugPrint("🌐 FIRESTORE DATA: No document found");
+        }
+      } catch (e) {
+        debugPrint("❌ Error fetching Firestore data: $e");
+      }
+
+      // Step 4: Determine final state with priority logic
+      bool finalCheckedIn;
+      DateTime? finalCheckInTime;
+      String source;
+
+      if (localRecord != null && localRecord.isSynced && firestoreDataExists && firestoreCheckedIn != localCheckedIn) {
+        // Data mismatch between synced local and Firestore - Firestore wins (more recent)
+        finalCheckedIn = firestoreCheckedIn;
+        finalCheckInTime = firestoreCheckInTime;
+        source = "Firestore (resolved conflict)";
+        debugPrint("⚠️ Conflict resolved: Local=$localCheckedIn, Firestore=$firestoreCheckedIn -> Using Firestore");
+      } else if (localRecord != null) {
+        // Use local data (synced or unsynced)
+        finalCheckedIn = localCheckedIn;
+        finalCheckInTime = localCheckInTime;
+        source = "Local (${localRecord.isSynced ? 'synced' : 'unsynced'})";
+      } else if (firestoreDataExists) {
+        // No local data, use Firestore
+        finalCheckedIn = firestoreCheckedIn;
+        finalCheckInTime = firestoreCheckInTime;
+        source = "Firestore (no local data)";
+      } else {
+        // No data anywhere - fresh start
+        finalCheckedIn = false;
+        finalCheckInTime = null;
+        source = "Default (no data found)";
+      }
+
+      debugPrint("🎯 FINAL DECISION:");
+      debugPrint("  - State: ${finalCheckedIn ? 'CHECKED IN' : 'CHECKED OUT'}");
+      debugPrint("  - Source: $source");
+      debugPrint("  - Check-in time: $finalCheckInTime");
+
+      // Step 5: Update UI state only if changed
+      bool stateChanged = _isCheckedIn != finalCheckedIn;
+      bool timeChanged = _checkInTime != finalCheckInTime;
+
+      if (stateChanged || timeChanged) {
+        debugPrint("🔄 State changed - updating UI");
+        if (mounted) {
+          setState(() {
+            _isCheckedIn = finalCheckedIn;
+            _checkInTime = finalCheckInTime;
+          });
+        }
+      } else {
+        debugPrint("✅ State unchanged - no UI update needed");
+      }
+
+      // Step 6: Sync monitoring with final state
+      await _syncMonitoringWithAttendanceState(finalCheckedIn);
+
+      debugPrint("✅ Attendance status fetch completed successfully");
+
+    } catch (e) {
+      debugPrint("❌ Critical error in _fetchAttendanceStatus: $e");
+      debugPrint("Stack trace: ${StackTrace.current}");
+
+      // Fallback to local data if available
+      try {
+        debugPrint("🔄 Attempting fallback to local data...");
+        final localRecord = await _attendanceRepository.getTodaysAttendance(widget.employeeId);
+        if (localRecord != null && mounted) {
+          bool fallbackState = localRecord.hasCheckIn && !localRecord.hasCheckOut;
+          DateTime? fallbackTime;
+
+          if (fallbackState && localRecord.checkIn != null) {
+            try {
+              fallbackTime = DateTime.parse(localRecord.checkIn!);
+            } catch (parseError) {
+              debugPrint("❌ Error parsing fallback time: $parseError");
+              fallbackState = false;
+            }
+          }
+
+          setState(() {
+            _isCheckedIn = fallbackState;
+            _checkInTime = fallbackTime;
+          });
+
+          await _syncMonitoringWithAttendanceState(fallbackState);
+          debugPrint("✅ Fallback successful: ${fallbackState ? 'CHECKED IN' : 'CHECKED OUT'}");
+        } else {
+          debugPrint("❌ No fallback data available");
+          if (mounted) {
+            setState(() {
+              _isCheckedIn = false;
+              _checkInTime = null;
+            });
+          }
+          await _syncMonitoringWithAttendanceState(false);
+        }
+      } catch (fallbackError) {
+        debugPrint("❌ Fallback also failed: $fallbackError");
+        // Final safety - ensure user can still use app
+        if (mounted) {
+          setState(() {
+            _isCheckedIn = false;
+            _checkInTime = null;
+          });
         }
       }
-    } catch (e) {
-      debugPrint("❌ Error in _fetchAttendanceStatus: $e");
-      if (mounted) {
-        setState(() {
-          _isCheckedIn = false;
-          _checkInTime = null;
-        });
+    }
+  }
+
+// Helper method to sync monitoring state
+  Future<void> _syncMonitoringWithAttendanceState(bool isCheckedIn) async {
+    try {
+      debugPrint("🔄 Syncing monitoring with attendance state: $isCheckedIn");
+      debugPrint("  Current monitoring active: $_isGeofenceMonitoringActive");
+
+      if (isCheckedIn && !_isGeofenceMonitoringActive) {
+        // Should be monitoring but isn't
+        debugPrint("🛡️ Starting monitoring - user is checked in");
+        await _startGeofenceExitMonitoring();
+      } else if (!isCheckedIn && _isGeofenceMonitoringActive) {
+        // Shouldn't be monitoring but is
+        debugPrint("🛑 Stopping monitoring - user is checked out");
+        await _stopGeofenceExitMonitoring();
+      } else {
+        debugPrint("✅ Monitoring state is already correct");
       }
+    } catch (e) {
+      debugPrint("❌ Error syncing monitoring state: $e");
+    }
+  }
+
+// Helper method for offline state restoration
+  Future<void> _handleOfflineStateRestoration() async {
+    try {
+      debugPrint("📱 Handling offline state restoration...");
+
+      final localRecord = await _attendanceRepository.getTodaysAttendance(widget.employeeId);
+
+      if (localRecord != null) {
+        bool shouldBeCheckedIn = localRecord.hasCheckIn && !localRecord.hasCheckOut;
+        DateTime? checkInTime;
+
+        if (shouldBeCheckedIn && localRecord.checkIn != null) {
+          try {
+            checkInTime = DateTime.parse(localRecord.checkIn!);
+          } catch (e) {
+            debugPrint("Error parsing offline check-in time: $e");
+            shouldBeCheckedIn = false;
+          }
+        }
+
+        debugPrint("📱 OFFLINE STATE RESTORATION:");
+        debugPrint("  - Local record exists: true");
+        debugPrint("  - Should be checked in: $shouldBeCheckedIn");
+        debugPrint("  - Check-in time: $checkInTime");
+        debugPrint("  - Is synced: ${localRecord.isSynced}");
+
+        if (mounted) {
+          setState(() {
+            _isCheckedIn = shouldBeCheckedIn;
+            _checkInTime = checkInTime;
+          });
+        }
+
+        // Start/stop monitoring based on offline state
+        await _syncMonitoringWithAttendanceState(shouldBeCheckedIn);
+
+        debugPrint("✅ Offline state restoration completed");
+
+        // Show user feedback about offline mode
+        if (!localRecord.isSynced) {
+          CustomSnackBar.infoSnackBar("Working offline - data will sync when connected");
+        }
+
+      } else {
+        debugPrint("📱 No local record found for offline restoration");
+
+        if (mounted) {
+          setState(() {
+            _isCheckedIn = false;
+            _checkInTime = null;
+          });
+        }
+
+        // Ensure monitoring is stopped if no local record
+        await _syncMonitoringWithAttendanceState(false);
+      }
+
+    } catch (e) {
+      debugPrint("❌ Error in offline state restoration: $e");
+    }
+  }
+
+// Also add this method to ensure proper initialization
+  Future<void> _initializeAttendanceState() async {
+    try {
+      debugPrint("🚀 Initializing attendance state on app start...");
+
+      // Clear any existing state
+      _isCheckedIn = false;
+      _checkInTime = null;
+      _isGeofenceMonitoringActive = false;
+
+      // Fetch fresh state
+      await _fetchAttendanceStatus();
+
+      debugPrint("✅ Attendance state initialization completed");
+    } catch (e) {
+      debugPrint("❌ Error initializing attendance state: $e");
     }
   }
 
 
   Future<void> _updateRepositoryCache(Map<String, dynamic> firestoreData, String date) async {
     try {
-      // Convert Timestamps to ISO strings
-      Map<String, dynamic> localData = Map<String, dynamic>.from(firestoreData);
+      debugPrint("🔄 === UPDATING REPOSITORY CACHE (ENHANCED) ===");
 
-      if (localData['checkIn'] != null && localData['checkIn'] is Timestamp) {
-        localData['checkIn'] = (localData['checkIn'] as Timestamp).toDate().toIso8601String();
-      }
-      if (localData['checkOut'] != null && localData['checkOut'] is Timestamp) {
-        localData['checkOut'] = (localData['checkOut'] as Timestamp).toDate().toIso8601String();
+      // Create clean data for local storage
+      Map<String, dynamic> localData = {};
+
+      // Copy all non-timestamp fields
+      firestoreData.forEach((key, value) {
+        if (value is! Timestamp) {
+          localData[key] = value;
+        }
+      });
+
+      // Handle timestamps with validation
+      if (firestoreData['checkIn'] != null) {
+        if (firestoreData['checkIn'] is Timestamp) {
+          DateTime checkInDate = (firestoreData['checkIn'] as Timestamp).toDate();
+          localData['checkIn'] = checkInDate.toIso8601String();
+          debugPrint("✅ Converted checkIn: ${localData['checkIn']}");
+        } else {
+          localData['checkIn'] = firestoreData['checkIn'].toString();
+        }
       }
 
-      // Create/update local record through repository
+      if (firestoreData['checkOut'] != null) {
+        if (firestoreData['checkOut'] is Timestamp) {
+          DateTime checkOutDate = (firestoreData['checkOut'] as Timestamp).toDate();
+          localData['checkOut'] = checkOutDate.toIso8601String();
+          debugPrint("✅ Converted checkOut: ${localData['checkOut']}");
+        } else {
+          localData['checkOut'] = firestoreData['checkOut'].toString();
+        }
+      }
+
+      // Validate data integrity
+      if (localData['checkIn'] != null && localData['checkOut'] != null) {
+        try {
+          DateTime checkInTime = DateTime.parse(localData['checkIn']);
+          DateTime checkOutTime = DateTime.parse(localData['checkOut']);
+
+          if (checkOutTime.isBefore(checkInTime)) {
+            debugPrint("🚨 Invalid data: Check-out before check-in - removing check-out");
+            localData.remove('checkOut');
+          }
+        } catch (e) {
+          debugPrint("❌ Error validating timestamps: $e");
+        }
+      }
+
+      // Create and save record
       LocalAttendanceRecord record = LocalAttendanceRecord(
         employeeId: widget.employeeId,
-        date: date,
-        checkIn: localData['checkIn'],
-        checkOut: localData['checkOut'],
-        locationId: localData['locationId'] ?? 'unknown',
+        date: localData['date'] ?? date,
+        checkIn: localData['checkIn']?.toString(),
+        checkOut: localData['checkOut']?.toString(),
+        checkInLocationId: localData['checkInLocation']?.toString(),
+        checkOutLocationId: localData['checkOutLocation']?.toString(),
+        checkInLocationName: localData['checkInLocationName']?.toString(),
+        checkOutLocationName: localData['checkOutLocationName']?.toString(),
         isSynced: true,
         rawData: localData,
       );
 
-      // Update local database directly
+      // Atomic database update
       final dbHelper = getIt<DatabaseHelper>();
+      await dbHelper.database.then((db) async {
+        await db.transaction((txn) async {
+          await txn.delete(
+            'attendance',
+            where: 'employee_id = ? AND date = ?',
+            whereArgs: [widget.employeeId, date],
+          );
+          await txn.insert('attendance', record.toMap());
+        });
+      });
 
-      // Delete existing record for today
-      await dbHelper.delete(
-        'attendance',
-        where: 'employee_id = ? AND date = ?',
-        whereArgs: [widget.employeeId, date],
-      );
-
-      // Insert fresh record
-      await dbHelper.insert('attendance', record.toMap());
-
-      debugPrint("✅ Repository cache updated with fresh Firestore data");
+      debugPrint("✅ Repository cache updated with integrity checks");
 
     } catch (e) {
       debugPrint("❌ Error updating repository cache: $e");
     }
   }
 
+
+
+  Future<void> _verifyAndFixAttendanceState() async {
+    try {
+      debugPrint("🔍 === VERIFYING ATTENDANCE STATE ===");
+
+      String today = DateFormat('yyyy-MM-dd').format(DateTime.now());
+
+      // Get data from all sources
+      Map<String, dynamic> firestoreData = {};
+      LocalAttendanceRecord? localData;
+
+      // Check Firestore
+      if (_connectivityService.currentStatus == ConnectionStatus.online) {
+        try {
+          DocumentSnapshot doc = await FirebaseFirestore.instance
+              .collection('Attendance_Records')
+              .doc('PTSEmployees')
+              .collection('Records')
+              .doc('${widget.employeeId}-$today')
+              .get();
+
+          if (doc.exists) {
+            firestoreData = doc.data() as Map<String, dynamic>;
+          }
+        } catch (e) {
+          debugPrint("Error fetching Firestore data: $e");
+        }
+      }
+
+      // Check local database
+      try {
+        localData = await _attendanceRepository.getTodaysAttendance(widget.employeeId);
+      } catch (e) {
+        debugPrint("Error fetching local data: $e");
+      }
+
+      // Compare and determine correct state
+      bool firestoreHasCheckIn = false;
+      bool firestoreHasCheckOut = false;
+      bool localHasCheckIn = false;
+      bool localHasCheckOut = false;
+
+      // Parse Firestore data
+      if (firestoreData.isNotEmpty) {
+        firestoreHasCheckIn = firestoreData['checkIn'] != null;
+        firestoreHasCheckOut = firestoreData['checkOut'] != null;
+      }
+
+      // Parse local data
+      if (localData != null) {
+        localHasCheckIn = localData.checkIn != null;
+        localHasCheckOut = localData.checkOut != null;
+      }
+
+      debugPrint("📊 STATE COMPARISON:");
+      debugPrint("  Dashboard state: $_isCheckedIn");
+      debugPrint("  Firestore: checkIn=$firestoreHasCheckIn, checkOut=$firestoreHasCheckOut");
+      debugPrint("  Local DB: checkIn=$localHasCheckIn, checkOut=$localHasCheckOut");
+
+      // Determine the TRUTH (priority: Firestore > Local > Dashboard)
+      bool correctState = false;
+      DateTime? correctCheckInTime;
+
+      if (firestoreData.isNotEmpty) {
+        // Use Firestore as source of truth
+        if (firestoreHasCheckIn && !firestoreHasCheckOut) {
+          correctState = true;
+          try {
+            if (firestoreData['checkIn'] is Timestamp) {
+              correctCheckInTime = (firestoreData['checkIn'] as Timestamp).toDate();
+            } else if (firestoreData['checkIn'] is String) {
+              correctCheckInTime = DateTime.parse(firestoreData['checkIn']);
+            }
+          } catch (e) {
+            debugPrint("Error parsing check-in time: $e");
+          }
+        }
+      } else if (localData != null) {
+        // Fallback to local data
+        if (localHasCheckIn && !localHasCheckOut) {
+          correctState = true;
+          try {
+            correctCheckInTime = DateTime.parse(localData.checkIn!);
+          } catch (e) {
+            debugPrint("Error parsing local check-in time: $e");
+          }
+        }
+      }
+
+      // Fix dashboard state if incorrect
+      bool timeIncorrect = false;
+      if (correctState && _checkInTime != null && correctCheckInTime != null) {
+        int timeDifferenceMinutes = _checkInTime!.difference(correctCheckInTime).abs().inMinutes;
+        timeIncorrect = timeDifferenceMinutes > 5;
+      }
+
+      if (_isCheckedIn != correctState || timeIncorrect) {
+
+        debugPrint("🔧 FIXING DASHBOARD STATE:");
+        debugPrint("  Changing from: $_isCheckedIn -> $correctState");
+        debugPrint("  Time from: $_checkInTime -> $correctCheckInTime");
+
+        setState(() {
+          _isCheckedIn = correctState;
+          _checkInTime = correctCheckInTime;
+        });
+
+        // Show user notification about state correction
+        if (mounted) {
+          CustomSnackBar.infoSnackBar(
+              correctState
+                  ? "✅ State corrected: You are checked in"
+                  : "✅ State corrected: You are checked out"
+          );
+        }
+      } else {
+        debugPrint("✅ Dashboard state is correct");
+      }
+
+    } catch (e) {
+      debugPrint("❌ Error in state verification: $e");
+    }
+  }
+
+
+  Map<String, dynamic> _convertTimestampsForLocalStorage(Map<String, dynamic> data) {
+    Map<String, dynamic> cleanData = Map<String, dynamic>.from(data);
+
+    // Convert all Timestamp fields to ISO strings
+    cleanData.forEach((key, value) {
+      if (value is Timestamp) {
+        cleanData[key] = value.toDate().toIso8601String();
+        debugPrint("🔄 Converted $key from Timestamp to: ${cleanData[key]}");
+      }
+    });
+
+    return cleanData;
+  }
+
   Future<void> _saveAttendanceStatusLocally(String date, Map<String, dynamic> data) async {
     try {
       final SharedPreferences prefs = await SharedPreferences.getInstance();
-      if (data['checkIn'] != null && data['checkIn'] is Timestamp) {
-        data['checkIn'] = (data['checkIn'] as Timestamp).toDate().toIso8601String();
-      }
-      if (data['checkOut'] != null && data['checkOut'] is Timestamp) {
-        data['checkOut'] = (data['checkOut'] as Timestamp).toDate().toIso8601String();
-      }
-      await prefs.setString('attendance_${widget.employeeId}_$date', jsonEncode(data));
-      debugPrint("Attendance status saved locally for date: $date");
+
+      // ✅ Convert Timestamps BEFORE encoding
+      Map<String, dynamic> cleanData = _convertTimestampsForLocalStorage(data);
+
+      await prefs.setString('attendance_${widget.employeeId}_$date', jsonEncode(cleanData));
+      debugPrint("✅ Attendance status saved locally for date: $date");
     } catch (e) {
-      debugPrint('Error saving attendance status locally: $e');
+      debugPrint('❌ Error saving attendance status locally: $e');
     }
   }
 
@@ -3716,11 +6158,15 @@ class _DashboardViewState extends State<DashboardView>
 
     debugPrint("🔄 Starting ${_isCheckedIn ? 'check-out' : 'check-in'} process...");
 
-    await _checkGeofenceStatus();
-
     if (!_isCheckedIn) {
       // ================ CHECK-IN FLOW ================
       debugPrint("✅ Starting check-in process...");
+
+      // Fast location check using cached data
+      if (!_isWithinGeofence) {
+        _showLocationErrorDialog("check-in");
+        return;
+      }
 
       // Validate work schedule timing if available
       if (_workSchedule != null) {
@@ -3731,7 +6177,12 @@ class _DashboardViewState extends State<DashboardView>
       }
 
       if (!mounted) return;
+
+      // 🔥 NEW: Set authenticating state and show immediate UI feedback
       setState(() => _isAuthenticating = true);
+
+      // Show immediate feedback
+      CustomSnackBar.infoSnackBar("Authenticating for check-in...");
 
       try {
         // Navigate to face authentication
@@ -3749,14 +6200,31 @@ class _DashboardViewState extends State<DashboardView>
 
         if (!mounted) return;
 
-        setState(() => _isAuthenticating = false);
-
         debugPrint("🔍 Check-in authentication result: $result");
 
         if (result == true) {
           debugPrint("✅ Face authentication successful for check-in");
-          await _processCheckIn();
+
+          // 🔥 CRITICAL FIX: Update UI state IMMEDIATELY
+          DateTime checkInTime = DateTime.now();
+          setState(() {
+            _isCheckedIn = true;
+            _checkInTime = checkInTime;
+            _isAuthenticating = false;
+          });
+
+          // Show immediate success feedback
+          String locationName = _nearestLocation?.name ?? 'office location';
+          CustomSnackBar.successSnackBar("✅ Checked in at $locationName (${DateFormat('h:mm a').format(checkInTime)})");
+
+          // Start monitoring immediately after UI update
+          await _startGeofenceExitMonitoring();
+
+          // Database operations happen in background
+          unawaited(_processCheckInInBackground(checkInTime));
+
         } else {
+          setState(() => _isAuthenticating = false);
           debugPrint("❌ Face authentication failed for check-in");
           CustomSnackBar.errorSnackBar("Face authentication failed. Please try again.");
         }
@@ -3770,6 +6238,15 @@ class _DashboardViewState extends State<DashboardView>
       // ================ CHECK-OUT FLOW ================
       debugPrint("✅ Starting check-out process...");
 
+      // Store original state for potential rollback
+      DateTime? originalCheckInTime = _checkInTime;
+
+      // Fast location check using cached data
+      if (!_isWithinGeofence) {
+        _showLocationErrorDialog("check-out");
+        return;
+      }
+
       // Validate work schedule timing if available
       if (_workSchedule != null) {
         DateTime checkOutTime = DateTime.now();
@@ -3779,7 +6256,12 @@ class _DashboardViewState extends State<DashboardView>
       }
 
       if (!mounted) return;
+
+      // 🔥 NEW: Set authenticating state and show immediate UI feedback
       setState(() => _isAuthenticating = true);
+
+      // Show immediate feedback
+      CustomSnackBar.infoSnackBar("Authenticating for check-out...");
 
       try {
         // Navigate to face authentication
@@ -3797,14 +6279,31 @@ class _DashboardViewState extends State<DashboardView>
 
         if (!mounted) return;
 
-        setState(() => _isAuthenticating = false);
-
         debugPrint("🔍 Check-out authentication result: $result");
 
         if (result == true) {
           debugPrint("✅ Face authentication successful for check-out");
-          await _processCheckOut();
+
+          // 🔥 CRITICAL FIX: Update UI state IMMEDIATELY
+          DateTime checkOutTime = DateTime.now();
+          setState(() {
+            _isCheckedIn = false;
+            _checkInTime = null;
+            _isAuthenticating = false;
+          });
+
+          // Show immediate success feedback
+          String locationName = _nearestLocation?.name ?? 'office location';
+          CustomSnackBar.successSnackBar("✅ Checked out from $locationName (${DateFormat('h:mm a').format(checkOutTime)})");
+
+          // Stop monitoring immediately after UI update
+          await _stopGeofenceExitMonitoring();
+
+          // Database operations happen in background
+          unawaited(_processCheckOutInBackground(checkOutTime));
+
         } else {
+          setState(() => _isAuthenticating = false);
           debugPrint("❌ Face authentication failed for check-out");
           CustomSnackBar.errorSnackBar("Face authentication failed. Please try again.");
         }
@@ -3816,12 +6315,291 @@ class _DashboardViewState extends State<DashboardView>
     }
   }
 
+  /// Background check-in processing (doesn't affect UI)
+  Future<void> _processCheckInInBackground(DateTime checkInTime) async {
+    try {
+      debugPrint("🔄 Processing check-in in background...");
+
+      Position? currentPosition = await GeofenceUtil.getCurrentPosition();
+      String locationId = _nearestLocation?.id ?? 'default';
+      String locationName = _nearestLocation?.name ?? 'Unknown Location';
+
+      // Database operations
+      bool checkInSuccess = await _attendanceRepository.recordCheckIn(
+        employeeId: widget.employeeId,
+        checkInTime: checkInTime,
+        locationId: locationId,
+        locationName: locationName,
+        locationLat: currentPosition?.latitude ?? _nearestLocation?.latitude ?? 0.0,
+        locationLng: currentPosition?.longitude ?? _nearestLocation?.longitude ?? 0.0,
+        additionalData: {
+          'checkInMethod': 'face_authentication',
+          'deviceInfo': 'mobile_app',
+          'geofenceStatus': _isWithinGeofence ? 'inside' : 'outside',
+          'distanceToOffice': _distanceToOffice,
+          'locationAddress': _nearestLocation?.address ?? 'Unknown Address',
+          'locationRadius': _nearestLocation?.radius ?? 0,
+        },
+      );
+
+      if (!checkInSuccess && mounted) {
+        // 🔥 ROLLBACK: If database write fails, revert UI state
+        debugPrint("❌ Check-in database write failed - reverting UI state");
+        setState(() {
+          _isCheckedIn = false;
+          _checkInTime = null;
+        });
+        await _stopGeofenceExitMonitoring();
+        CustomSnackBar.errorSnackBar("❌ Failed to record check-in. Please try again.");
+        return;
+      }
+
+      debugPrint("✅ Check-in background processing completed");
+
+      // Refresh activity in background (optional)
+      unawaited(_fetchTodaysActivity());
+
+    } catch (e) {
+      debugPrint("❌ Error in background check-in processing: $e");
+
+      // 🔥 ROLLBACK: Revert UI state on error
+      if (mounted) {
+        setState(() {
+          _isCheckedIn = false;
+          _checkInTime = null;
+        });
+        await _stopGeofenceExitMonitoring();
+        CustomSnackBar.errorSnackBar("Check-in error: $e");
+      }
+    }
+  }
+
+  /// Background check-out processing (doesn't affect UI)
+  Future<void> _processCheckOutInBackground(DateTime checkOutTime) async {
+    try {
+      debugPrint("🔄 Processing check-out in background...");
+
+      Position? currentPosition = await GeofenceUtil.getCurrentPosition();
+      String locationId = _nearestLocation?.id ?? 'default';
+      String locationName = _nearestLocation?.name ?? 'Unknown Location';
+
+      // Database operations
+      bool checkOutSuccess = await _attendanceRepository.recordCheckOut(
+        employeeId: widget.employeeId,
+        checkOutTime: checkOutTime,
+        locationId: locationId,
+        locationName: locationName,
+        locationLat: currentPosition?.latitude ?? _nearestLocation?.latitude ?? 0.0,
+        locationLng: currentPosition?.longitude ?? _nearestLocation?.longitude ?? 0.0,
+        additionalData: {
+          'checkOutMethod': 'face_authentication',
+          'deviceInfo': 'mobile_app',
+          'geofenceStatus': _isWithinGeofence ? 'inside' : 'outside',
+          'distanceToOffice': _distanceToOffice,
+          'locationAddress': _nearestLocation?.address ?? 'Unknown Address',
+          'locationRadius': _nearestLocation?.radius ?? 0,
+        },
+      );
+
+      if (!checkOutSuccess && mounted) {
+        // 🔥 ROLLBACK: If database write fails, revert UI state
+        debugPrint("❌ Check-out database write failed - reverting UI state");
+        setState(() {
+          _isCheckedIn = true;
+          _checkInTime = _checkInTime; // Restore original time
+        });
+        await _startGeofenceExitMonitoring();
+        CustomSnackBar.errorSnackBar("❌ Failed to record check-out. Please try again.");
+        return;
+      }
+
+      debugPrint("✅ Check-out background processing completed");
+
+      // Refresh activity in background (optional)
+      unawaited(_fetchTodaysActivity());
+
+    } catch (e) {
+      debugPrint("❌ Error in background check-out processing: $e");
+
+      // 🔥 ROLLBACK: Revert UI state on error
+      if (mounted) {
+        setState(() {
+          _isCheckedIn = true;
+          // Note: We need to store original check-in time to restore properly
+        });
+        await _startGeofenceExitMonitoring();
+        CustomSnackBar.errorSnackBar("Check-out error: $e");
+      }
+    }
+  }
+
+// 🆕 ADD: Location error dialog method
+  void _showLocationErrorDialog(String action) {
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => AlertDialog(
+        backgroundColor: _isDarkMode ? const Color(0xFF1E293B) : Colors.white,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(cardBorderRadius)),
+        title: Row(
+          children: [
+            Container(
+              padding: const EdgeInsets.all(8),
+              decoration: BoxDecoration(
+                color: Colors.orange.withOpacity(0.1),
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: const Icon(Icons.location_off, color: Colors.orange, size: 24),
+            ),
+            SizedBox(width: containerSpacing * 0.75),
+            Expanded(
+              child: Text(
+                "Location Required",
+                style: TextStyle(
+                  color: _isDarkMode ? Colors.white : Colors.black87,
+                  fontSize: (isLargeScreen ? 20 : (isTablet ? 18 : 16)) * responsiveFontSize,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+            ),
+          ],
+        ),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(
+              "You need to be at the office location to $action.",
+              style: TextStyle(
+                fontSize: (isLargeScreen ? 16 : (isTablet ? 14 : 12)) * responsiveFontSize,
+                color: _isDarkMode ? Colors.grey.shade300 : Colors.grey.shade700,
+              ),
+            ),
+            SizedBox(height: containerSpacing),
+            if (_distanceToOffice != null)
+              Container(
+                padding: EdgeInsets.all(containerSpacing),
+                decoration: BoxDecoration(
+                  color: Colors.orange.withOpacity(0.1),
+                  borderRadius: BorderRadius.circular(cardBorderRadius - 4),
+                  border: Border.all(color: Colors.orange.withOpacity(0.3)),
+                ),
+                child: Row(
+                  children: [
+                    const Icon(Icons.info, color: Colors.orange, size: 20),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        "You are ${_distanceToOffice!.toStringAsFixed(0)}m away from the office. Please move closer and try again.",
+                        style: TextStyle(
+                          color: Colors.orange.shade800,
+                          fontSize: (isLargeScreen ? 14 : (isTablet ? 12 : 11)) * responsiveFontSize,
+                          fontWeight: FontWeight.w500,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              )
+            else
+              Container(
+                padding: EdgeInsets.all(containerSpacing),
+                decoration: BoxDecoration(
+                  color: Colors.blue.withOpacity(0.1),
+                  borderRadius: BorderRadius.circular(cardBorderRadius - 4),
+                  border: Border.all(color: Colors.blue.withOpacity(0.3)),
+                ),
+                child: Row(
+                  children: [
+                    const Icon(Icons.refresh, color: Colors.blue, size: 20),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        "Tap 'Refresh Location' to check your current position.",
+                        style: TextStyle(
+                          color: Colors.blue.shade800,
+                          fontSize: (isLargeScreen ? 14 : (isTablet ? 12 : 11)) * responsiveFontSize,
+                          fontWeight: FontWeight.w500,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: Text(
+              "Cancel",
+              style: TextStyle(color: Colors.grey.shade600),
+            ),
+          ),
+          ElevatedButton.icon(
+            icon: const Icon(Icons.refresh, size: 18),
+            label: const Text("Refresh Location"),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.orange,
+              foregroundColor: Colors.white,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+            ),
+            onPressed: () async {
+              Navigator.pop(context);
+
+              // Show loading indicator
+              if (mounted) {
+                setState(() {
+                  _isCheckingLocation = true;
+                });
+              }
+
+              // Force fresh location check
+              _isLocationCacheValid = false; // Clear cache
+              await _checkGeofenceStatus();
+
+              // Show result to user
+              Future.delayed(const Duration(milliseconds: 500), () {
+                if (mounted) {
+                  if (_isWithinGeofence) {
+                    CustomSnackBar.successSnackBar("✅ Location updated! You're now at the office.");
+                  } else {
+                    String message = "❌ Still outside office location";
+                    if (_distanceToOffice != null) {
+                      message += " (${_distanceToOffice!.toStringAsFixed(0)}m away)";
+                    }
+                    CustomSnackBar.errorSnackBar(message);
+                  }
+                }
+              });
+            },
+          ),
+        ],
+      ),
+    );
+  }
+
 // ================ ADD THESE NEW METHODS ================
 
   /// Process check-in after successful authentication
   Future<void> _processCheckIn() async {
     try {
+      debugPrint("🚀 === PROCESSING CHECK-IN WITH IMMEDIATE UI UPDATE ===");
+
       Position? currentPosition = await GeofenceUtil.getCurrentPosition();
+      String locationId = _nearestLocation?.id ?? 'default';
+      String locationName = _nearestLocation?.name ?? 'Unknown Location';
+
+      // ✅ CRITICAL: Update UI state IMMEDIATELY before any database operations
+      DateTime nowTime = DateTime.now();
+      if (mounted) {
+        setState(() {
+          _isCheckedIn = true;
+          _checkInTime = nowTime;
+        });
+      }
+
+      // Show immediate success feedback
+      CustomSnackBar.successSnackBar("✅ Checked in successfully at $locationName (${DateFormat('h:mm a').format(nowTime)})");
 
       await CheckInOutHandler.handleOffLocationAction(
         context: context,
@@ -3831,59 +6609,89 @@ class _DashboardViewState extends State<DashboardView>
         currentPosition: currentPosition,
         isCheckIn: true,
         onRegularAction: () async {
-          debugPrint("🏢 Recording check-in...");
+          debugPrint("🏢 Recording check-in with geofence monitoring...");
 
+          _isLocationCacheValid = false;
+
+          // Database operations happen in background - UI is already updated
           bool checkInSuccess = await _attendanceRepository.recordCheckIn(
             employeeId: widget.employeeId,
-            checkInTime: DateTime.now(),
-            locationId: _nearestLocation?.id ?? 'default',
-            locationName: _nearestLocation?.name ?? 'Unknown',
-            locationLat: currentPosition?.latitude ?? _nearestLocation!.latitude,
-            locationLng: currentPosition?.longitude ?? _nearestLocation!.longitude,
+            checkInTime: nowTime, // Use the same time as UI
+            locationId: locationId,
+            locationName: locationName,
+            locationLat: currentPosition?.latitude ?? _nearestLocation?.latitude ?? 0.0,
+            locationLng: currentPosition?.longitude ?? _nearestLocation?.longitude ?? 0.0,
+            additionalData: {
+              'checkInMethod': 'face_authentication',
+              'deviceInfo': 'mobile_app',
+              'geofenceStatus': _isWithinGeofence ? 'inside' : 'outside',
+              'distanceToOffice': _distanceToOffice,
+              'locationAddress': _nearestLocation?.address ?? 'Unknown Address',
+              'locationRadius': _nearestLocation?.radius ?? 0,
+            },
           );
 
-          if (checkInSuccess && mounted) {
-            // ✅ Update state immediately
+          if (!checkInSuccess && mounted) {
+            // ✅ ROLLBACK: If database write fails, revert UI state
+            debugPrint("❌ Check-in database write failed - reverting UI state");
             setState(() {
-              _isCheckedIn = true;
-              _checkInTime = DateTime.now();
-              if (_connectivityService.currentStatus == ConnectionStatus.offline) {
-                _needsSync = true;
-              }
+              _isCheckedIn = false;
+              _checkInTime = null;
             });
-
-            _setupCheckOutReminder();
-
-            // ✅ Force refresh dashboard state
-            await Future.delayed(const Duration(milliseconds: 500));
-            await _fetchAttendanceStatus();
-            await _fetchTodaysActivity();
-
-            CustomSnackBar.successSnackBar("✅ Checked in successfully at $_currentTime");
-
-            // Final verification
-            Timer(const Duration(seconds: 2), () async {
-              if (mounted) {
-                await _fetchAttendanceStatus();
-                debugPrint("✅ Check-in state verified: _isCheckedIn = $_isCheckedIn");
-              }
-            });
-
-          } else if (mounted) {
             CustomSnackBar.errorSnackBar("❌ Failed to record check-in. Please try again.");
+            return;
           }
+
+          // ✅ SUCCESS: Start geofence monitoring after successful DB write
+          await _startGeofenceExitMonitoring();
+          _setupCheckOutReminder();
+
+          // Background refresh (no UI impact)
+          Future.delayed(const Duration(seconds: 3), () async {
+            if (mounted) {
+              await _fetchTodaysActivity(); // Update activity history only
+            }
+          });
+
+          debugPrint("✅ Check-in completed successfully with immediate UI update");
         },
       );
     } catch (e) {
       debugPrint("❌ Error processing check-in: $e");
+
+      // ✅ ROLLBACK: Revert UI state on error
+      if (mounted) {
+        setState(() {
+          _isCheckedIn = false;
+          _checkInTime = null;
+        });
+      }
       CustomSnackBar.errorSnackBar("Check-in error: $e");
     }
   }
 
+
+
   /// Process check-out after successful authentication
   Future<void> _processCheckOut() async {
     try {
+      debugPrint("🚀 === PROCESSING CHECK-OUT WITH IMMEDIATE UI UPDATE ===");
+
       Position? currentPosition = await GeofenceUtil.getCurrentPosition();
+      String locationId = _nearestLocation?.id ?? 'default';
+      String locationName = _nearestLocation?.name ?? 'Unknown Location';
+
+      // ✅ CRITICAL: Update UI state IMMEDIATELY before any database operations
+      DateTime nowTime = DateTime.now();
+      if (mounted) {
+        setState(() {
+          _isCheckedIn = false;
+          _checkInTime = null;
+        });
+      }
+
+      // Show immediate success feedback
+      CustomSnackBar.successSnackBar("✅ Checked out successfully from $locationName (${DateFormat('h:mm a').format(nowTime)})");
 
       await CheckInOutHandler.handleOffLocationAction(
         context: context,
@@ -3893,76 +6701,910 @@ class _DashboardViewState extends State<DashboardView>
         currentPosition: currentPosition,
         isCheckIn: false,
         onRegularAction: () async {
-          debugPrint("🏃‍♂️ Recording check-out...");
+          debugPrint("🏃‍♂️ Recording check-out and stopping monitoring...");
 
+          _isLocationCacheValid = false;
+
+          // Database operations happen in background - UI is already updated
           bool checkOutSuccess = await _attendanceRepository.recordCheckOut(
             employeeId: widget.employeeId,
-            checkOutTime: DateTime.now(),
+            checkOutTime: nowTime, // Use the same time as UI
+            locationId: locationId,
+            locationName: locationName,
+            locationLat: currentPosition?.latitude ?? _nearestLocation?.latitude ?? 0.0,
+            locationLng: currentPosition?.longitude ?? _nearestLocation?.longitude ?? 0.0,
+            additionalData: {
+              'checkOutMethod': 'face_authentication',
+              'deviceInfo': 'mobile_app',
+              'geofenceStatus': _isWithinGeofence ? 'inside' : 'outside',
+              'distanceToOffice': _distanceToOffice,
+              'locationAddress': _nearestLocation?.address ?? 'Unknown Address',
+              'locationRadius': _nearestLocation?.radius ?? 0,
+            },
           );
 
-          if (checkOutSuccess && mounted) {
-            // ✅ Update state immediately
+          if (!checkOutSuccess && mounted) {
+            // ✅ ROLLBACK: If database write fails, revert UI state
+            debugPrint("❌ Check-out database write failed - reverting UI state");
             setState(() {
-              _isCheckedIn = false;
-              _checkInTime = null;
-              if (_connectivityService.currentStatus == ConnectionStatus.offline) {
-                _needsSync = true;
-              }
+              _isCheckedIn = true;
+              _checkInTime = _checkInTime; // Restore previous check-in time
             });
-
-            _checkOutReminderTimer?.cancel();
-
-            // ✅ Force refresh dashboard state
-            await Future.delayed(const Duration(milliseconds: 500));
-            await _fetchAttendanceStatus();
-            await _fetchTodaysActivity();
-
-            CustomSnackBar.successSnackBar("✅ Checked out successfully at $_currentTime");
-
-            // Enhanced verification for Android
-            Timer(const Duration(seconds: 2), () async {
-              if (mounted) {
-                await _fetchAttendanceStatus();
-                if (_isCheckedIn) {
-                  debugPrint("⚠️ Check-out state inconsistency detected, forcing refresh...");
-
-                  // Force refresh from Firestore
-                  await _attendanceRepository.forceRefreshTodayFromFirestore(widget.employeeId);
-                  await _fetchAttendanceStatus();
-
-                  if (_isCheckedIn) {
-                    debugPrint("🚨 State still inconsistent after force refresh!");
-                    CustomSnackBar.errorSnackBar("⚠️ Check-out recorded but state inconsistent. Please sync manually.");
-                  } else {
-                    debugPrint("✅ Check-out state corrected after force refresh");
-                  }
-                }
-                debugPrint("✅ Check-out state verified: _isCheckedIn = $_isCheckedIn");
-              }
-            });
-
-            // ✅ Additional verification after longer delay
-            Timer(const Duration(seconds: 5), () async {
-              if (mounted) {
-                await _fetchAttendanceStatus();
-                debugPrint("✅ Check-out state final verification: _isCheckedIn = $_isCheckedIn");
-
-                // If still showing as checked in, show manual sync option
-                if (_isCheckedIn) {
-                  _showCheckOutSyncDialog();
-                }
-              }
-            });
-
-          } else if (mounted) {
             CustomSnackBar.errorSnackBar("❌ Failed to record check-out. Please try again.");
+            return;
           }
+
+          // ✅ SUCCESS: Stop geofence monitoring after successful DB write
+          await _stopGeofenceExitMonitoring();
+          _checkOutReminderTimer?.cancel();
+
+          // Background refresh (no UI impact)
+          Future.delayed(const Duration(seconds: 3), () async {
+            if (mounted) {
+              await _fetchTodaysActivity(); // Update activity history only
+            }
+          });
+
+          debugPrint("✅ Check-out completed successfully with immediate UI update");
         },
       );
     } catch (e) {
       debugPrint("❌ Error processing check-out: $e");
+
+      // ✅ ROLLBACK: Revert UI state on error
+      if (mounted) {
+        setState(() {
+          _isCheckedIn = true;
+          // Note: We would need to store the original check-in time to restore it properly
+          // For now, we'll trigger a state refresh
+        });
+
+        // Force refresh to get correct state from database
+        await _fetchAttendanceStatus();
+      }
       CustomSnackBar.errorSnackBar("Check-out error: $e");
     }
+  }
+
+  Future<void> _fetchAttendanceStatusForSync() async {
+    try {
+      debugPrint("🔄 Fetching attendance status for sync verification only...");
+
+      String today = DateFormat('yyyy-MM-dd').format(DateTime.now());
+
+      // Only check if there's a data mismatch that needs correction
+      final localRecord = await _attendanceRepository.getTodaysAttendance(widget.employeeId);
+
+      if (localRecord != null) {
+        bool expectedState = localRecord.hasCheckIn && !localRecord.hasCheckOut;
+
+        // Only update UI if there's a significant mismatch
+        if (_isCheckedIn != expectedState) {
+          debugPrint("⚠️ UI state mismatch detected - correcting...");
+
+          DateTime? correctCheckInTime;
+          if (expectedState && localRecord.checkIn != null) {
+            try {
+              correctCheckInTime = DateTime.parse(localRecord.checkIn!);
+            } catch (e) {
+              debugPrint("❌ Error parsing check-in time: $e");
+            }
+          }
+
+          if (mounted) {
+            setState(() {
+              _isCheckedIn = expectedState;
+              _checkInTime = correctCheckInTime;
+            });
+          }
+
+          debugPrint("🔧 UI state corrected to match database");
+        }
+      }
+
+    } catch (e) {
+      debugPrint("❌ Error in sync verification: $e");
+    }
+  }
+
+  DateTime? _originalCheckInTime;
+
+
+  Future<void> _storeOriginalCheckInState() async {
+    _originalCheckInTime = _checkInTime;
+  }
+
+// ✅ MODIFIED: Enhanced rollback for check-out
+  void _rollbackCheckOutState() {
+    if (mounted) {
+      setState(() {
+        _isCheckedIn = true;
+        _checkInTime = _originalCheckInTime;
+      });
+    }
+  }
+
+
+  Future<void> _startGeofenceExitMonitoring() async {
+    // 🔥 CRITICAL FIX: Only start if actually checked in
+    if (!_isCheckedIn) {
+      debugPrint("⚠️ Not starting geofence monitoring - user is not checked in");
+      return;
+    }
+
+    try {
+      debugPrint("🔄 Starting geofence exit monitoring for checked-in user...");
+
+      String employeeName = _userData?['name'] ?? 'Employee';
+      bool started = await _geofenceExitService.startMonitoring(widget.employeeId, employeeName);
+
+      if (started && mounted) {
+        setState(() {
+          _isGeofenceMonitoringActive = true;
+          _monitoringStatus = "Active";
+        });
+
+        debugPrint("✅ Geofence exit monitoring started successfully");
+        CustomSnackBar.infoSnackBar("🛡️ Phoenician Work area monitoring is now active");
+
+      } else {
+        debugPrint("⚠️ Failed to start geofence exit monitoring");
+      }
+
+    } catch (e) {
+      debugPrint("❌ Error starting geofence exit monitoring: $e");
+    }
+  }
+
+  // ✅ NEW: Stop geofence exit monitoring
+  Future<void> _stopGeofenceExitMonitoring() async {
+    try {
+      debugPrint("🔄 Stopping geofence exit monitoring...");
+
+      await _geofenceExitService.stopMonitoring();
+
+      if (mounted) {
+        setState(() {
+          _isGeofenceMonitoringActive = false;
+          _monitoringStatus = "Inactive";
+        });
+      }
+
+      debugPrint("✅ Geofence exit monitoring stopped");
+
+    } catch (e) {
+      debugPrint("❌ Error stopping geofence exit monitoring: $e");
+    }
+  }
+
+
+  // ✅ NEW: Handle geofence exit notifications (Employee only)
+  void _handleGeofenceExitNotification(Map<String, dynamic> data) {
+    final notificationType = data['type'];
+
+    if (notificationType == 'geofence_exit_prompt') {
+      // Employee needs to provide exit reason
+      String eventId = data['eventId'] ?? '';
+      _showExitReasonDialog(eventId);
+    }
+    // Note: No HR notifications since they use separate platform
+  }
+
+
+  void _showExitReasonDialog(String eventId) {
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => AlertDialog(
+        backgroundColor: _isDarkMode ? const Color(0xFF1E293B) : Colors.white,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(cardBorderRadius)),
+        title: Row(
+          children: [
+            Container(
+              padding: const EdgeInsets.all(8),
+              decoration: BoxDecoration(
+                color: Colors.blue.withOpacity(0.1),
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: const Icon(Icons.location_searching, color: Colors.blue, size: 24),
+            ),
+            SizedBox(width: containerSpacing * 0.75),
+            Expanded(
+              child: Text(
+                "Quick Check-in",
+                style: TextStyle(
+                  color: _isDarkMode ? Colors.white : Colors.black87,
+                  fontSize: (isLargeScreen ? 20 : (isTablet ? 18 : 16)) * responsiveFontSize,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+            ),
+          ],
+        ),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(
+              "Hi ${_userData?['name']?.split(' ').first ?? 'there'}! We noticed you stepped away from the work area.",
+              style: TextStyle(
+                fontSize: (isLargeScreen ? 16 : (isTablet ? 14 : 12)) * responsiveFontSize,
+                color: _isDarkMode ? Colors.grey.shade300 : Colors.grey.shade700,
+              ),
+            ),
+            SizedBox(height: containerSpacing),
+            Container(
+              padding: EdgeInsets.all(containerSpacing),
+              decoration: BoxDecoration(
+                color: Colors.blue.withOpacity(0.1),
+                borderRadius: BorderRadius.circular(cardBorderRadius - 4),
+                border: Border.all(color: Colors.blue.withOpacity(0.3)),
+              ),
+              child: Row(
+                children: [
+                  const Icon(Icons.info, color: Colors.blue, size: 20),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      "This helps us ensure safety and project coordination. Where are you headed?",
+                      style: TextStyle(
+                        color: Colors.blue.shade700,
+                        fontSize: (isLargeScreen ? 14 : (isTablet ? 12 : 11)) * responsiveFontSize,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            SizedBox(height: containerSpacing),
+
+            // Quick reason buttons
+            Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              children: [
+                _buildQuickReasonChip("Lunch Break", Icons.restaurant, eventId),
+                _buildQuickReasonChip("Client Meeting", Icons.business, eventId),
+                _buildQuickReasonChip("Personal Emergency", Icons.emergency, eventId),
+                _buildQuickReasonChip("Bathroom Break", Icons.wc, eventId),
+                _buildQuickReasonChip("Material Pickup", Icons.inventory, eventId),
+                _buildQuickReasonChip("Other", Icons.more_horiz, eventId),
+              ],
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () {
+              Navigator.pop(context);
+              // Record "No reason provided" after 30 seconds
+              Timer(const Duration(seconds: 30), () {
+                _geofenceExitService.recordExitReason(eventId, "no_reason_provided");
+              });
+            },
+            child: Text("Skip", style: TextStyle(color: Colors.grey.shade600)),
+          ),
+        ],
+      ),
+    );
+  }
+
+
+
+  Widget _buildQuickReasonChip(String reason, IconData icon, String eventId) {
+    return ActionChip(
+      avatar: Icon(icon, size: 18, color: Colors.white),
+      label: Text(
+        reason,
+        style: TextStyle(color: Colors.white, fontSize: 12),
+      ),
+      backgroundColor: Colors.blue.shade600,
+      onPressed: () async {
+        Navigator.pop(context);
+        _isShowingExitWarning = false;
+
+        // Record the reason
+        final geofenceService = getIt<GeofenceExitMonitoringService>();
+        await geofenceService.recordExitReason(eventId, reason.toLowerCase().replaceAll(' ', '_'));
+
+        // Show success message
+        CustomSnackBar.successSnackBar("Exit reason recorded: $reason");
+
+        // Update UI to show the reason
+        setState(() {
+          // Trigger refresh of exit events display
+        });
+
+        await _loadRecentExitEvents();
+      },
+    );
+  }
+
+  void _scheduleExitReminder(String eventId) {
+    _exitWarningTimer?.cancel();
+    _exitWarningTimer = Timer(const Duration(minutes: 5), () {
+      if (mounted && _currentExitEventId == eventId) {
+        CustomSnackBar.infoSnackBar("Don't forget to provide your exit reason!");
+      }
+    });
+  }
+
+
+  String _getNextGeofenceCheckTime() {
+    try {
+      final geofenceService = getIt<GeofenceExitMonitoringService>();
+      final status = geofenceService.getMonitoringStatus();
+
+      if (status['lastCheck'] != null) {
+        final lastCheck = DateTime.parse(status['lastCheck']);
+        final intervalMinutes = status['intervalMinutes'] ?? 120;
+        final nextCheck = lastCheck.add(Duration(minutes: intervalMinutes));
+        final timeUntilNext = nextCheck.difference(DateTime.now());
+
+        if (timeUntilNext.isNegative) {
+          return "Now";
+        } else if (timeUntilNext.inHours > 0) {
+          return "${timeUntilNext.inHours}h ${timeUntilNext.inMinutes % 60}m";
+        } else {
+          return "${timeUntilNext.inMinutes}m";
+        }
+      }
+
+      return "Soon";
+    } catch (e) {
+      return "Unknown";
+    }
+  }
+
+
+  // Complete _buildGeofenceMonitoringCard() Widget Implementation
+// Place this in your dashboard_view.dart file
+
+  Widget _buildGeofenceMonitoringCard() {
+    return Container(
+      margin: EdgeInsets.symmetric(horizontal: responsivePadding.horizontal),
+      child: Card(
+        elevation: 0,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(cardBorderRadius)),
+        color: _isDarkMode ? const Color(0xFF1E293B) : Colors.white,
+        child: Container(
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(cardBorderRadius),
+            border: Border.all(
+              color: _isDarkMode ? Colors.white.withOpacity(0.1) : Colors.grey.withOpacity(0.08),
+            ),
+            boxShadow: [
+              BoxShadow(
+                color: _isDarkMode ? Colors.black.withOpacity(0.2) : Colors.grey.withOpacity(0.06),
+                blurRadius: 12,
+                offset: const Offset(0, 2),
+              ),
+            ],
+          ),
+          child: Padding(
+            padding: EdgeInsets.all(isLargeScreen ? 24 : (isTablet ? 20 : 16)),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                // Header Section
+                Row(
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.all(8),
+                      decoration: BoxDecoration(
+                        color: _isGeofenceMonitoringActive
+                            ? Colors.green.withOpacity(0.1)
+                            : Colors.grey.withOpacity(0.1),
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: Icon(
+                        _isGeofenceMonitoringActive ? Icons.shield : Icons.shield_outlined,
+                        color: _isGeofenceMonitoringActive ? Colors.green : Colors.grey,
+                        size: 20,
+                      ),
+                    ),
+                    SizedBox(width: containerSpacing),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            "Work Area Monitoring",
+                            style: TextStyle(
+                              fontSize: (isLargeScreen ? 18 : (isTablet ? 16 : 14)) * responsiveFontSize,
+                              fontWeight: FontWeight.bold,
+                              color: _isDarkMode ? Colors.white : Colors.black87,
+                            ),
+                          ),
+                          const SizedBox(height: 4),
+                          Text(
+                            _isGeofenceMonitoringActive
+                                ? "Active - Checking every 2 hours"
+                                : "Check in to enable monitoring",
+                            style: TextStyle(
+                              color: _isDarkMode ? Colors.grey.shade400 : Colors.grey.shade600,
+                              fontSize: (isLargeScreen ? 14 : (isTablet ? 12 : 11)) * responsiveFontSize,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    Container(
+                      padding: EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                      decoration: BoxDecoration(
+                        color: _isGeofenceMonitoringActive
+                            ? Colors.green.withOpacity(0.2)
+                            : Colors.grey.withOpacity(0.2),
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Container(
+                            width: 6,
+                            height: 6,
+                            decoration: BoxDecoration(
+                              color: _isGeofenceMonitoringActive ? Colors.green : Colors.grey,
+                              shape: BoxShape.circle,
+                            ),
+                          ),
+                          SizedBox(width: 6),
+                          Text(
+                            _monitoringStatus ?? "Inactive",
+                            style: TextStyle(
+                              color: _isGeofenceMonitoringActive ? Colors.green : Colors.grey,
+                              fontSize: (isLargeScreen ? 12 : (isTablet ? 11 : 10)) * responsiveFontSize,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+
+                // Monitoring Details Section (when active)
+                if (_isGeofenceMonitoringActive) ...[
+                  SizedBox(height: containerSpacing),
+                  Container(
+                    padding: EdgeInsets.all(16),
+                    decoration: BoxDecoration(
+                      color: Colors.blue.withOpacity(0.1),
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(color: Colors.blue.withOpacity(0.2)),
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          children: [
+                            Icon(Icons.schedule, color: Colors.blue, size: 16),
+                            SizedBox(width: 8),
+                            Text(
+                              "Monitoring Schedule",
+                              style: TextStyle(
+                                color: Colors.blue.shade700,
+                                fontSize: (isLargeScreen ? 14 : (isTablet ? 13 : 12)) * responsiveFontSize,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                          ],
+                        ),
+                        SizedBox(height: 8),
+                        Text(
+                          "Frequency: Every 2 hours\nNext check in approximately: ${_getNextCheckTime()}",
+                          style: TextStyle(
+                            color: Colors.blue.shade600,
+                            fontSize: (isLargeScreen ? 13 : (isTablet ? 12 : 11)) * responsiveFontSize,
+                            height: 1.4,
+                          ),
+                        ),
+                        SizedBox(height: 12),
+                        Row(
+                          children: [
+                            Icon(Icons.info_outline, color: Colors.blue, size: 14),
+                            SizedBox(width: 6),
+                            Expanded(
+                              child: Text(
+                                "Monitoring tracks your location only during work hours for safety and compliance purposes.",
+                                style: TextStyle(
+                                  color: Colors.blue.shade600,
+                                  fontSize: (isLargeScreen ? 11 : (isTablet ? 10 : 9)) * responsiveFontSize,
+                                  fontStyle: FontStyle.italic,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+
+                // Recent Activity Section
+                if (_recentExitEvents.isNotEmpty) ...[
+                  SizedBox(height: containerSpacing),
+                  Divider(color: _isDarkMode ? Colors.white.withOpacity(0.1) : Colors.grey.withOpacity(0.3)),
+                  SizedBox(height: containerSpacing * 0.5),
+
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Text(
+                        "Recent Activity",
+                        style: TextStyle(
+                          fontSize: (isLargeScreen ? 16 : (isTablet ? 14 : 12)) * responsiveFontSize,
+                          fontWeight: FontWeight.bold,
+                          color: _isDarkMode ? Colors.white : Colors.black87,
+                        ),
+                      ),
+                      // Live indicator
+                      Container(
+                        padding: EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                        decoration: BoxDecoration(
+                          color: Colors.green.withOpacity(0.1),
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Container(
+                              width: 6,
+                              height: 6,
+                              decoration: BoxDecoration(
+                                color: Colors.green,
+                                shape: BoxShape.circle,
+                              ),
+                            ),
+                            SizedBox(width: 4),
+                            Text(
+                              "LIVE",
+                              style: TextStyle(
+                                color: Colors.green,
+                                fontSize: (isLargeScreen ? 10 : (isTablet ? 9 : 8)) * responsiveFontSize,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                  SizedBox(height: containerSpacing * 0.5),
+
+                  // Recent Events List
+                  ...(_recentExitEvents.take(3).map((event) => Container(
+                    margin: EdgeInsets.only(bottom: 8),
+                    padding: EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      color: _isDarkMode ? Colors.white.withOpacity(0.05) : Colors.grey.withOpacity(0.05),
+                      borderRadius: BorderRadius.circular(8),
+                      border: event.returnTime == null ? Border.all(
+                        color: Colors.orange.withOpacity(0.5),
+                        width: 1,
+                      ) : null,
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          children: [
+                            Icon(
+                              _getEventStatusIcon(event.status),
+                              color: _getEventStatusColor(event.status),
+                              size: 16,
+                            ),
+                            SizedBox(width: 8),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    "${DateFormat('MMM dd, h:mm a').format(event.exitTime)}",
+                                    style: TextStyle(
+                                      fontSize: (isLargeScreen ? 12 : (isTablet ? 11 : 10)) * responsiveFontSize,
+                                      fontWeight: FontWeight.w600,
+                                      color: _isDarkMode ? Colors.white : Colors.black87,
+                                    ),
+                                  ),
+                                  if (event.exitReason != null) ...[
+                                    SizedBox(height: 2),
+                                    Text(
+                                      "Reason: ${event.exitReason!.replaceAll('_', ' ').toUpperCase()}",
+                                      style: TextStyle(
+                                        fontSize: (isLargeScreen ? 10 : (isTablet ? 9 : 8)) * responsiveFontSize,
+                                        color: _isDarkMode ? Colors.grey.shade400 : Colors.grey.shade600,
+                                      ),
+                                    ),
+                                  ],
+                                ],
+                              ),
+                            ),
+                            Column(
+                              crossAxisAlignment: CrossAxisAlignment.end,
+                              children: [
+                                if (event.returnTime == null)
+                                  Container(
+                                    padding: EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                    decoration: BoxDecoration(
+                                      color: Colors.orange.withOpacity(0.2),
+                                      borderRadius: BorderRadius.circular(8),
+                                    ),
+                                    child: Text(
+                                      "ACTIVE",
+                                      style: TextStyle(
+                                        color: Colors.orange,
+                                        fontSize: (isLargeScreen ? 9 : (isTablet ? 8 : 7)) * responsiveFontSize,
+                                        fontWeight: FontWeight.bold,
+                                      ),
+                                    ),
+                                  )
+                                else if (event.durationMinutes > 0)
+                                  Text(
+                                    "${event.durationMinutes}m",
+                                    style: TextStyle(
+                                      fontSize: (isLargeScreen ? 11 : (isTablet ? 10 : 9)) * responsiveFontSize,
+                                      color: Colors.blue.shade600,
+                                      fontWeight: FontWeight.w600,
+                                    ),
+                                  ),
+                              ],
+                            ),
+                          ],
+                        ),
+
+                        // Show return time if available
+                        if (event.returnTime != null) ...[
+                          SizedBox(height: 6),
+                          Row(
+                            children: [
+                              Icon(Icons.keyboard_return, color: Colors.green, size: 12),
+                              SizedBox(width: 6),
+                              Text(
+                                "Returned: ${DateFormat('h:mm a').format(event.returnTime!)}",
+                                style: TextStyle(
+                                  fontSize: (isLargeScreen ? 10 : (isTablet ? 9 : 8)) * responsiveFontSize,
+                                  color: Colors.green.shade600,
+                                  fontWeight: FontWeight.w500,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ],
+                      ],
+                    ),
+                  )).toList()),
+
+                  // Show more button
+                  if (_recentExitEvents.length > 3)
+                    Padding(
+                      padding: EdgeInsets.only(top: 8),
+                      child: Center(
+                        child: TextButton.icon(
+                          onPressed: () => _showFullExitHistory(),
+                          icon: Icon(
+                            Icons.history,
+                            size: 16,
+                            color: Theme.of(context).colorScheme.primary,
+                          ),
+                          label: Text(
+                            "View All (${_recentExitEvents.length})",
+                            style: TextStyle(
+                              color: Theme.of(context).colorScheme.primary,
+                              fontSize: (isLargeScreen ? 12 : (isTablet ? 11 : 10)) * responsiveFontSize,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                          style: TextButton.styleFrom(
+                            padding: EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(8),
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
+                ],
+
+                // No Activity Message
+                if (_isGeofenceMonitoringActive && _recentExitEvents.isEmpty) ...[
+                  SizedBox(height: containerSpacing),
+                  Container(
+                    width: double.infinity,
+                    padding: EdgeInsets.all(16),
+                    decoration: BoxDecoration(
+                      color: Colors.green.withOpacity(0.1),
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(color: Colors.green.withOpacity(0.2)),
+                    ),
+                    child: Column(
+                      children: [
+                        Icon(
+                          Icons.check_circle_outline,
+                          color: Colors.green,
+                          size: 32,
+                        ),
+                        SizedBox(height: 8),
+                        Text(
+                          "No Recent Activity",
+                          style: TextStyle(
+                            color: Colors.green.shade700,
+                            fontSize: (isLargeScreen ? 14 : (isTablet ? 13 : 12)) * responsiveFontSize,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                        SizedBox(height: 4),
+                        Text(
+                          "You've been within the work area during all recent checks.",
+                          textAlign: TextAlign.center,
+                          style: TextStyle(
+                            color: Colors.green.shade600,
+                            fontSize: (isLargeScreen ? 12 : (isTablet ? 11 : 10)) * responsiveFontSize,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+
+                // Action Buttons (if monitoring not active)
+                if (!_isGeofenceMonitoringActive && _isCheckedIn) ...[
+                  SizedBox(height: containerSpacing),
+                  Container(
+                    width: double.infinity,
+                    padding: EdgeInsets.all(16),
+                    decoration: BoxDecoration(
+                      color: Colors.orange.withOpacity(0.1),
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(color: Colors.orange.withOpacity(0.2)),
+                    ),
+                    child: Column(
+                      children: [
+                        Icon(
+                          Icons.warning_amber_rounded,
+                          color: Colors.orange,
+                          size: 24,
+                        ),
+                        SizedBox(height: 8),
+                        Text(
+                          "Monitoring Not Active",
+                          style: TextStyle(
+                            color: Colors.orange.shade700,
+                            fontSize: (isLargeScreen ? 14 : (isTablet ? 13 : 12)) * responsiveFontSize,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                        SizedBox(height: 4),
+                        Text(
+                          "Work area monitoring should activate automatically when you check in.",
+                          textAlign: TextAlign.center,
+                          style: TextStyle(
+                            color: Colors.orange.shade600,
+                            fontSize: (isLargeScreen ? 12 : (isTablet ? 11 : 10)) * responsiveFontSize,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+// Helper method to get next check time
+
+
+
+
+
+  // ✅ NEW: Add geofence monitoring card to your dashboard
+
+
+  // Helper methods for event status
+  IconData _getEventStatusIcon(String status) {
+    switch (status) {
+      case 'resolved':
+        return Icons.check_circle;
+      case 'active':
+        return Icons.warning;
+      case 'grace_period':
+        return Icons.schedule;
+      default:
+        return Icons.info;
+    }
+  }
+
+  Color _getEventStatusColor(String status) {
+    switch (status) {
+      case 'resolved':
+        return Colors.green;
+      case 'active':
+        return Colors.orange;
+      case 'grace_period':
+        return Colors.blue;
+      default:
+        return Colors.grey;
+    }
+  }
+
+  // Show full exit history
+  void _showFullExitHistory() {
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.transparent,
+      isScrollControlled: true,
+      builder: (context) => Container(
+        height: MediaQuery.of(context).size.height * 0.7,
+        decoration: BoxDecoration(
+          color: _isDarkMode ? const Color(0xFF1E293B) : Colors.white,
+          borderRadius: BorderRadius.vertical(top: Radius.circular(cardBorderRadius + 12)),
+        ),
+        child: Column(
+          children: [
+            Container(
+              margin: EdgeInsets.only(top: containerSpacing * 0.75),
+              width: 40,
+              height: 4,
+              decoration: BoxDecoration(
+                color: Colors.grey.shade300,
+                borderRadius: BorderRadius.circular(2),
+              ),
+            ),
+
+            Padding(
+              padding: EdgeInsets.all(containerSpacing),
+              child: Row(
+                children: [
+                  Icon(Icons.history, color: Theme.of(context).colorScheme.primary),
+                  SizedBox(width: containerSpacing),
+                  Text(
+                    "Exit History",
+                    style: TextStyle(
+                      fontSize: (isLargeScreen ? 24 : (isTablet ? 20 : 18)) * responsiveFontSize,
+                      fontWeight: FontWeight.bold,
+                      color: _isDarkMode ? Colors.white : Colors.black87,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+
+            Expanded(
+              child: ListView.builder(
+                padding: EdgeInsets.symmetric(horizontal: containerSpacing),
+                itemCount: _recentExitEvents.length,
+                itemBuilder: (context, index) {
+                  GeofenceExitEvent event = _recentExitEvents[index];
+                  return Card(
+                    margin: EdgeInsets.only(bottom: 8),
+                    child: ListTile(
+                      leading: Icon(
+                        _getEventStatusIcon(event.status),
+                        color: _getEventStatusColor(event.status),
+                      ),
+                      title: Text("${DateFormat('MMM dd, yyyy h:mm a').format(event.exitTime)}"),
+                      subtitle: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text("Duration: ${event.durationMinutes} minutes"),
+                          if (event.exitReason != null)
+                            Text("Reason: ${event.exitReason!.replaceAll('_', ' ')}"),
+                          Text("Status: ${event.status.replaceAll('_', ' ')}"),
+                        ],
+                      ),
+                      isThreeLine: true,
+                    ),
+                  );
+                },
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
   }
 
   /// Show sync dialog for check-out state issues
@@ -4021,101 +7663,499 @@ class _DashboardViewState extends State<DashboardView>
   // Check In/Out Handler - Optimized
 
 
+  // Add this method to your _DashboardViewState class
+
   Future<void> _forceAttendanceSync() async {
     if (_connectivityService.currentStatus == ConnectionStatus.offline) {
       CustomSnackBar.errorSnackBar("Cannot sync while offline. Please check your connection.");
       return;
     }
 
-    setState(() => _isLoading = true); // Only show loading for manual actions
+    debugPrint("🔄 === FORCING COMPREHENSIVE ATTENDANCE SYNC WITH PRIORITY ===");
 
     try {
-      debugPrint("🔄 Starting force attendance sync...");
+      // Step 1: Force sync all pending attendance records with priority logic
+      final attendanceRepo = getIt<AttendanceRepository>();
+      bool attendanceSync = await attendanceRepo.syncPendingRecordsWithPriority();
 
-      await _attendanceRepository.forceRefreshTodayFromFirestore(widget.employeeId);
+      // Step 2: Force sync today's specific record
+      String today = DateFormat('yyyy-MM-dd').format(DateTime.now());
+      bool todaySync = await attendanceRepo.forceSyncAttendanceForDate(widget.employeeId, today);
+
+      // Step 3: Force refresh dashboard state from authoritative source
       await _fetchAttendanceStatus();
+
+      // Step 4: Refresh today's activity
       await _fetchTodaysActivity();
-      await _attendanceRepository.syncPendingRecords();
-
-      await Future.delayed(const Duration(milliseconds: 500));
-      await _fetchAttendanceStatus();
-
-      setState(() {
-        _needsSync = false;
-        _isLoading = false;
-      });
 
       debugPrint("✅ Force attendance sync completed");
-      CustomSnackBar.successSnackBar("Attendance data synchronized successfully!");
+
+      // Show user feedback
+      if (attendanceSync && todaySync) {
+        CustomSnackBar.successSnackBar("Attendance data synchronized successfully with priority logic!");
+      } else if (todaySync) {
+        CustomSnackBar.successSnackBar("Today's attendance synchronized successfully!");
+      } else {
+        CustomSnackBar.infoSnackBar("Attendance data sync completed with some warnings");
+      }
 
     } catch (e) {
-      setState(() => _isLoading = false);
       debugPrint("❌ Error during force attendance sync: $e");
       CustomSnackBar.errorSnackBar("Sync failed: $e");
     }
   }
 
-  Future<void> _refreshDashboard() async {
-    debugPrint("🔄 Starting dashboard refresh...");
 
-    // Force refresh attendance status first
-    await _fetchAttendanceStatus();
+  Future<void> _debugAttendanceState() async {
+    try {
+      String today = DateFormat('yyyy-MM-dd').format(DateTime.now());
 
-    // Then refresh other data
-    await _fetchUserData();
-    await _fetchTodaysActivity();
-    await _fetchOvertimeAssignments(); // ✅ ADD THIS LINE
-    await _checkGeofenceStatus();
+      debugPrint("🔍 === ATTENDANCE STATE DEBUG ===");
+      debugPrint("Date: $today");
+      debugPrint("Employee: ${widget.employeeId}");
+      debugPrint("Current Dashboard State: _isCheckedIn = $_isCheckedIn");
 
-    if (_connectivityService.currentStatus == ConnectionStatus.online) {
-      final pendingRecords = await _attendanceRepository.getPendingRecords();
+      // Check local database
+      final attendanceRepo = getIt<AttendanceRepository>();
+      final localRecord = await attendanceRepo.getTodaysAttendance(widget.employeeId);
+
+      debugPrint("\n📱 LOCAL DATABASE:");
+      if (localRecord != null) {
+        debugPrint("  ✅ Record exists");
+        debugPrint("  - Check-in: ${localRecord.checkIn}");
+        debugPrint("  - Check-out: ${localRecord.checkOut}");
+        debugPrint("  - Has check-in: ${localRecord.hasCheckIn}");
+        debugPrint("  - Has check-out: ${localRecord.hasCheckOut}");
+        debugPrint("  - Is synced: ${localRecord.isSynced}");
+        debugPrint("  - Expected state: CHECKED ${localRecord.hasCheckIn && !localRecord.hasCheckOut ? 'IN' : 'OUT'}");
+        debugPrint("  - Location: ${localRecord.locationSummary}");
+      } else {
+        debugPrint("  ❌ No local record found");
+      }
+
+      // Check Firestore if online
+      if (_connectivityService.currentStatus == ConnectionStatus.online) {
+        debugPrint("\n🌐 FIRESTORE:");
+        try {
+          DocumentSnapshot doc = await FirebaseFirestore.instance
+              .collection('Attendance_Records')
+              .doc('PTSEmployees')
+              .collection('Records')
+              .doc('${widget.employeeId}-$today')
+              .get()
+              .timeout(const Duration(seconds: 5));
+
+          if (doc.exists) {
+            Map<String, dynamic> data = doc.data() as Map<String, dynamic>;
+            debugPrint("  ✅ Firestore record exists");
+
+            // Parse timestamps
+            DateTime? fsCheckIn;
+            DateTime? fsCheckOut;
+
+            if (data['checkIn'] is Timestamp) {
+              fsCheckIn = (data['checkIn'] as Timestamp).toDate();
+            } else if (data['checkIn'] is String) {
+              fsCheckIn = DateTime.tryParse(data['checkIn']);
+            }
+
+            if (data['checkOut'] is Timestamp) {
+              fsCheckOut = (data['checkOut'] as Timestamp).toDate();
+            } else if (data['checkOut'] is String) {
+              fsCheckOut = DateTime.tryParse(data['checkOut']);
+            }
+
+            debugPrint("  - Check-in: $fsCheckIn");
+            debugPrint("  - Check-out: $fsCheckOut");
+            debugPrint("  - Has check-in: ${fsCheckIn != null}");
+            debugPrint("  - Has check-out: ${fsCheckOut != null}");
+            debugPrint("  - Expected state: CHECKED ${fsCheckIn != null && fsCheckOut == null ? 'IN' : 'OUT'}");
+            debugPrint("  - Raw checkIn: ${data['checkIn']}");
+            debugPrint("  - Raw checkOut: ${data['checkOut']}");
+
+          } else {
+            debugPrint("  ❌ No Firestore record found");
+          }
+        } catch (e) {
+          debugPrint("  ❌ Firestore error: $e");
+        }
+      } else {
+        debugPrint("\n🌐 FIRESTORE: Offline - cannot check");
+      }
+
+      debugPrint("\n🎯 ANALYSIS:");
+      debugPrint("  - Dashboard shows: ${_isCheckedIn ? 'CHECK OUT' : 'CHECK IN'} button");
+      debugPrint("  - User should see: ${localRecord?.hasCheckIn == true && localRecord?.hasCheckOut != true ? 'CHECK OUT' : 'CHECK IN'} button");
+
+      bool isCorrect = _isCheckedIn == (localRecord?.hasCheckIn == true && localRecord?.hasCheckOut != true);
+      debugPrint("  - State is correct: ${isCorrect ? '✅ YES' : '❌ NO'}");
+
+      if (!isCorrect) {
+        debugPrint("\n🔧 RECOMMENDED ACTIONS:");
+        debugPrint("  1. Run _fetchAttendanceStatus() to refresh state");
+        debugPrint("  2. If still incorrect, force sync with _forceAttendanceSync()");
+        debugPrint("  3. Check for data corruption in local database");
+      }
+
+      debugPrint("=== END ATTENDANCE DEBUG ===\n");
+
+      // Show results in a dialog for easy viewing
       if (mounted) {
-        setState(() {
-          _needsSync = pendingRecords.isNotEmpty;
-        });
+        String message = "Debug Results:\n\n";
+        message += "Dashboard State: ${_isCheckedIn ? 'CHECKED IN' : 'CHECKED OUT'}\n";
+
+        if (localRecord != null) {
+          message += "Local DB: ${localRecord.hasCheckIn && !localRecord.hasCheckOut ? 'CHECKED IN' : 'CHECKED OUT'}\n";
+          message += "Synced: ${localRecord.isSynced ? 'YES' : 'NO'}\n";
+        } else {
+          message += "Local DB: NO RECORD\n";
+        }
+
+        message += "States Match: ${isCorrect ? 'YES' : 'NO'}\n";
+
+        if (!isCorrect) {
+          message += "\n⚠️ State mismatch detected!\nTry refreshing or force sync.";
+        }
+
+        showDialog(
+          context: context,
+          builder: (context) => AlertDialog(
+            title: const Text("Attendance Debug Results"),
+            content: Text(message),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(context),
+                child: const Text("Close"),
+              ),
+              if (!isCorrect) ...[
+                TextButton(
+                  onPressed: () {
+                    Navigator.pop(context);
+                    _fetchAttendanceStatus();
+                  },
+                  child: const Text("Refresh State"),
+                ),
+                TextButton(
+                  onPressed: () {
+                    Navigator.pop(context);
+                    _forceAttendanceSync();
+                  },
+                  child: const Text("Force Sync"),
+                ),
+              ],
+            ],
+          ),
+        );
+      }
+
+    } catch (e) {
+      debugPrint("❌ Error in attendance debug: $e");
+      if (mounted) {
+        CustomSnackBar.errorSnackBar("Debug error: $e");
       }
     }
-
-    if (_isLineManager) {
-      await _loadPendingApprovalRequests();
-      await _loadPendingLeaveApprovals();
-    }
-
-    debugPrint("Enhanced dashboard refresh completed");
   }
 
+
+
+  // ADD THESE METHODS TO YOUR _DashboardViewState class in dashboard_view.dart
+
+// ✅ ENHANCED: Force sync attendance with proper priority
+
+
+// ✅ ENHANCED: Manual sync with better error handling
   Future<void> _manualSync() async {
     if (_connectivityService.currentStatus == ConnectionStatus.offline) {
       CustomSnackBar.errorSnackBar("Cannot sync while offline. Please check your connection.");
       return;
     }
 
-    if (mounted) {
-      setState(() => _isLoading = true);
-    }
+    // Show toast instead of full loading overlay
+    CustomSnackBar.infoSnackBar("Synchronizing data with priority logic...");
 
     try {
+      // Use enhanced sync service
       await _syncService.manualSync();
 
-      await _fetchUserData();
-      await _fetchAttendanceStatus();
-      await _fetchTodaysActivity();
+      // Force attendance sync with priority
+      await _forceAttendanceSync();
 
       if (mounted) {
         setState(() {
           _needsSync = false;
-          _isLoading = false;
         });
       }
 
-      CustomSnackBar.successSnackBar("Data synchronized successfully");
+      CustomSnackBar.successSnackBar("Data synchronized successfully with local priority");
     } catch (e) {
-      if (mounted) {
-        setState(() => _isLoading = false);
-      }
-      CustomSnackBar.errorSnackBar("Error during sync: $e");
+      debugPrint("❌ Error during manual sync: $e");
+      CustomSnackBar.errorSnackBar("Sync failed: $e");
     }
   }
+
+// ✅ NEW: Debug attendance state with detailed analysis
+  Future<void> _debugAttendanceStateDetailed() async {
+    try {
+      String today = DateFormat('yyyy-MM-dd').format(DateTime.now());
+
+      debugPrint("🔍 === DETAILED ATTENDANCE STATE DEBUG ===");
+      debugPrint("Date: $today");
+      debugPrint("Employee: ${widget.employeeId}");
+      debugPrint("Current Dashboard State: _isCheckedIn = $_isCheckedIn");
+
+      // Check local database
+      final attendanceRepo = getIt<AttendanceRepository>();
+      final localRecord = await attendanceRepo.getTodaysAttendance(widget.employeeId);
+
+      debugPrint("\n📱 LOCAL DATABASE:");
+      if (localRecord != null) {
+        debugPrint("  ✅ Record exists");
+        debugPrint("  - Check-in: ${localRecord.checkIn}");
+        debugPrint("  - Check-out: ${localRecord.checkOut}");
+        debugPrint("  - Has check-in: ${localRecord.hasCheckIn}");
+        debugPrint("  - Has check-out: ${localRecord.hasCheckOut}");
+        debugPrint("  - Is synced: ${localRecord.isSynced}");
+        debugPrint("  - Expected state: CHECKED ${localRecord.hasCheckIn && !localRecord.hasCheckOut ? 'IN' : 'OUT'}");
+        debugPrint("  - Location: ${localRecord.locationSummary}");
+        debugPrint("  - Raw data keys: ${localRecord.rawData.keys.toList()}");
+      } else {
+        debugPrint("  ❌ No local record found");
+      }
+
+      // Check Firestore if online
+      if (_connectivityService.currentStatus == ConnectionStatus.online) {
+        debugPrint("\n🌐 FIRESTORE:");
+        try {
+          DocumentSnapshot doc = await FirebaseFirestore.instance
+              .collection('Attendance_Records')
+              .doc('PTSEmployees')
+              .collection('Records')
+              .doc('${widget.employeeId}-$today')
+              .get()
+              .timeout(const Duration(seconds: 5));
+
+          if (doc.exists) {
+            Map<String, dynamic> data = doc.data() as Map<String, dynamic>;
+            debugPrint("  ✅ Firestore record exists");
+
+            // Parse timestamps
+            DateTime? fsCheckIn;
+            DateTime? fsCheckOut;
+
+            if (data['checkIn'] is Timestamp) {
+              fsCheckIn = (data['checkIn'] as Timestamp).toDate();
+            } else if (data['checkIn'] is String) {
+              fsCheckIn = DateTime.tryParse(data['checkIn']);
+            }
+
+            if (data['checkOut'] is Timestamp) {
+              fsCheckOut = (data['checkOut'] as Timestamp).toDate();
+            } else if (data['checkOut'] is String) {
+              fsCheckOut = DateTime.tryParse(data['checkOut']);
+            }
+
+            debugPrint("  - Check-in: $fsCheckIn");
+            debugPrint("  - Check-out: $fsCheckOut");
+            debugPrint("  - Has check-in: ${fsCheckIn != null}");
+            debugPrint("  - Has check-out: ${fsCheckOut != null}");
+            debugPrint("  - Expected state: CHECKED ${fsCheckIn != null && fsCheckOut == null ? 'IN' : 'OUT'}");
+            debugPrint("  - Raw checkIn: ${data['checkIn']}");
+            debugPrint("  - Raw checkOut: ${data['checkOut']}");
+            debugPrint("  - Last sync: ${data['lastSyncedAt']}");
+            debugPrint("  - Sync source: ${data['syncSource']}");
+
+          } else {
+            debugPrint("  ❌ No Firestore record found");
+          }
+        } catch (e) {
+          debugPrint("  ❌ Firestore error: $e");
+        }
+      } else {
+        debugPrint("\n🌐 FIRESTORE: Offline - cannot check");
+      }
+
+      debugPrint("\n🎯 ANALYSIS:");
+      debugPrint("  - Dashboard shows: ${_isCheckedIn ? 'CHECK OUT' : 'CHECK IN'} button");
+
+      bool expectedState = localRecord?.hasCheckIn == true && localRecord?.hasCheckOut != true;
+      debugPrint("  - User should see: ${expectedState ? 'CHECK OUT' : 'CHECK IN'} button");
+
+      bool isCorrect = _isCheckedIn == expectedState;
+      debugPrint("  - State is correct: ${isCorrect ? '✅ YES' : '❌ NO'}");
+
+      if (localRecord != null) {
+        debugPrint("  - Local sync status: ${localRecord.isSynced ? 'SYNCED' : 'UNSYNCED'}");
+        if (!localRecord.isSynced) {
+          debugPrint("  - ⚠️ LOCAL DATA NOT SYNCED - This should take priority!");
+        }
+      }
+
+      if (!isCorrect) {
+        debugPrint("\n🔧 RECOMMENDED ACTIONS:");
+        debugPrint("  1. Run _fetchAttendanceStatus() to refresh state");
+        debugPrint("  2. If still incorrect, run _forceAttendanceSync()");
+        debugPrint("  3. Check for data corruption in local database");
+        if (localRecord != null && !localRecord.isSynced) {
+          debugPrint("  4. PRIORITY: Sync local unsynced data to Firestore");
+        }
+      }
+
+      debugPrint("=== END DETAILED ATTENDANCE DEBUG ===\n");
+
+      // Show results in a dialog for easy viewing
+      if (mounted) {
+        String message = "Debug Results:\n\n";
+        message += "Dashboard State: ${_isCheckedIn ? 'CHECKED IN' : 'CHECKED OUT'}\n";
+
+        if (localRecord != null) {
+          message += "Local DB: ${localRecord.hasCheckIn && !localRecord.hasCheckOut ? 'CHECKED IN' : 'CHECKED OUT'}\n";
+          message += "Synced: ${localRecord.isSynced ? 'YES' : 'NO'}\n";
+          if (!localRecord.isSynced) {
+            message += "⚠️ LOCAL DATA UNSYNCED\n";
+          }
+        } else {
+          message += "Local DB: NO RECORD\n";
+        }
+
+        message += "States Match: ${isCorrect ? 'YES' : 'NO'}\n";
+
+        if (!isCorrect || (localRecord != null && !localRecord.isSynced)) {
+          message += "\n⚠️ Issues detected!\n";
+          if (!localRecord!.isSynced) {
+            message += "Local data needs sync priority.";
+          }
+        }
+
+        showDialog(
+          context: context,
+          builder: (context) => AlertDialog(
+            title: const Text("Detailed Attendance Debug"),
+            content: Text(message),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(context),
+                child: const Text("Close"),
+              ),
+              if (!isCorrect) ...[
+                TextButton(
+                  onPressed: () {
+                    Navigator.pop(context);
+                    _fetchAttendanceStatus();
+                  },
+                  child: const Text("Refresh State"),
+                ),
+                TextButton(
+                  onPressed: () {
+                    Navigator.pop(context);
+                    _forceAttendanceSync();
+                  },
+                  child: const Text("Force Sync"),
+                ),
+              ],
+              if (localRecord != null && !localRecord.isSynced) ...[
+                ElevatedButton(
+                  onPressed: () {
+                    Navigator.pop(context);
+                    _forceSyncPriorityData();
+                  },
+                  style: ElevatedButton.styleFrom(backgroundColor: Colors.orange),
+                  child: const Text("Sync Local Priority"),
+                ),
+              ],
+            ],
+          ),
+        );
+      }
+
+    } catch (e) {
+      debugPrint("❌ Error in detailed attendance debug: $e");
+      if (mounted) {
+        CustomSnackBar.errorSnackBar("Debug error: $e");
+      }
+    }
+  }
+
+// ✅ NEW: Force sync with local data priority
+  Future<void> _forceSyncPriorityData() async {
+    if (_connectivityService.currentStatus == ConnectionStatus.offline) {
+      CustomSnackBar.errorSnackBar("Cannot sync while offline. Please check your connection.");
+      return;
+    }
+
+    try {
+      CustomSnackBar.infoSnackBar("Force syncing local priority data...");
+
+      String today = DateFormat('yyyy-MM-dd').format(DateTime.now());
+      final attendanceRepo = getIt<AttendanceRepository>();
+
+      // Force sync today's record with local priority
+      bool success = await attendanceRepo.forceSyncAttendanceForDate(widget.employeeId, today);
+
+      if (success) {
+        // Refresh dashboard state
+        await _fetchAttendanceStatus();
+        await _fetchTodaysActivity();
+
+        CustomSnackBar.successSnackBar("Local priority data synced successfully!");
+      } else {
+        CustomSnackBar.errorSnackBar("Failed to sync local priority data");
+      }
+
+    } catch (e) {
+      debugPrint("❌ Error in force sync priority: $e");
+      CustomSnackBar.errorSnackBar("Force sync error: $e");
+    }
+  }
+
+
+
+  // Add this debug method to your _DashboardViewState class for testing
+
+
+
+  Future<void> _refreshDashboard() async {
+    debugPrint("🔄 Dashboard refresh requested...");
+
+    if (_isProcessingCheckInOut) {
+      debugPrint("⚡ Skipping refresh - check-in/out in progress");
+      return;
+    }
+
+    // Smart refresh - only refresh what's needed
+    await _executeSmartRefresh(['important', 'normal']);
+  }
+
+  Future<void> _onAppResume() async {
+    debugPrint("📱 App resumed - smart refresh");
+
+    // Clear cache for critical data to force fresh check
+    final now = DateTime.now();
+    _dataCache.remove('attendance_${DateFormat('yyyy-MM-dd').format(now)}');
+
+    // Force refresh critical and important data
+    await _executeSmartRefresh(['critical', 'important']);
+  }
+
+  Future<void> _processCheckInWithFlag() async {
+    _isProcessingCheckInOut = true;
+    try {
+      await _processCheckIn();
+    } finally {
+      _isProcessingCheckInOut = false;
+    }
+  }
+
+  Future<void> _processCheckOutWithFlag() async {
+    _isProcessingCheckInOut = true;
+    try {
+      await _processCheckOut();
+    } finally {
+      _isProcessingCheckInOut = false;
+    }
+  }
+
+
+
 
 
 
@@ -4268,401 +8308,15 @@ class _DashboardViewState extends State<DashboardView>
     }
   }
 
-  Future<void> _checkOvertimeApproverStatus() async {
-    if (mounted) {
-      setState(() => _checkingApproverStatus = true);
-    }
 
-    try {
-      debugPrint("=== DASHBOARD: CHECKING OVERTIME APPROVER STATUS ===");
-      debugPrint("Current Employee: ${widget.employeeId}");
-      debugPrint("Employee Name: ${_userData?['name']}");
-      debugPrint("Employee PIN: ${_userData?['pin']}");
 
-      bool isApprover = await OvertimeApproverService.isApprover(widget.employeeId);
 
-      debugPrint("🎯 APPROVER SERVICE RESULT: $isApprover");
 
-      if (isApprover) {
-        debugPrint("✅ User IS an overtime approver");
 
-        Map<String, dynamic>? approverInfo = await OvertimeApproverService.getCurrentApprover();
 
-        if (approverInfo != null) {
-          debugPrint("✅ Approver info retrieved:");
-          debugPrint("  - ID: ${approverInfo['approverId']}");
-          debugPrint("  - Name: ${approverInfo['approverName']}");
-          debugPrint("  - Source: ${approverInfo['source']}");
-        }
 
-        await _setupApproverNotifications();
 
-        if (mounted) {
-          setState(() {
-            _isOvertimeApprover = true;
-            _approverInfo = approverInfo;
-            _checkingApproverStatus = false;
-          });
-        }
 
-        await _loadPendingOvertimeRequests();
-
-        debugPrint("✅ DASHBOARD: Approver setup completed successfully");
-
-        if (mounted) {
-          CustomSnackBar.successSnackBar("You are now set up as an overtime approver!");
-        }
-
-      } else {
-        debugPrint("❌ User is NOT an overtime approver");
-
-        if (widget.employeeId == 'scvCD591SEspd8jKuIGZ' && _userData?['pin'] == '1289') {
-          debugPrint("🔧 FORCE SETUP: This user has PIN 1289, setting up as approver...");
-
-          bool forceSetup = await OvertimeApproverService.forceSetupCurrentUserAsApprover(
-            employeeId: widget.employeeId,
-            employeeName: _userData?['name'] ?? 'Overtime Approver',
-          );
-
-          if (forceSetup) {
-            debugPrint("✅ Force setup successful, rechecking...");
-            await _checkOvertimeApproverStatus();
-            return;
-          }
-        }
-
-        if (mounted) {
-          setState(() {
-            _isOvertimeApprover = false;
-            _approverInfo = null;
-            _checkingApproverStatus = false;
-          });
-        }
-      }
-
-    } catch (e) {
-      debugPrint("❌ Error checking approver status: $e");
-      if (mounted) {
-        setState(() {
-          _isOvertimeApprover = false;
-          _approverInfo = null;
-          _checkingApproverStatus = false;
-        });
-
-        CustomSnackBar.errorSnackBar("Error checking overtime approver status: $e");
-      }
-    }
-  }
-
-  Future<void> _setupApproverNotifications() async {
-    try {
-      debugPrint("=== SETTING UP APPROVER NOTIFICATIONS ===");
-      debugPrint("Setting up notifications for: ${widget.employeeId}");
-
-      final fcmTokenService = getIt<FcmTokenService>();
-      final notificationService = getIt<NotificationService>();
-
-      await fcmTokenService.registerTokenForUser(widget.employeeId);
-
-      if (widget.employeeId.startsWith('EMP')) {
-        String altId = widget.employeeId.substring(3);
-        await fcmTokenService.registerTokenForUser(altId);
-        debugPrint("Also registered FCM for alt ID: $altId");
-      }
-
-      await notificationService.subscribeToTopic('overtime_requests');
-      await notificationService.subscribeToTopic('overtime_approver_${widget.employeeId}');
-      await notificationService.subscribeToTopic('all_overtime_approvers');
-
-      if (widget.employeeId.startsWith('EMP')) {
-        String altId = widget.employeeId.substring(3);
-        await notificationService.subscribeToTopic('overtime_approver_$altId');
-      }
-
-      DocumentSnapshot tokenDoc = await FirebaseFirestore.instance
-          .collection('fcm_tokens')
-          .doc(widget.employeeId)
-          .get();
-
-      if (tokenDoc.exists) {
-        debugPrint("✅ FCM token verified in Firestore for ${widget.employeeId}");
-        var tokenData = tokenDoc.data() as Map<String, dynamic>;
-        debugPrint("Token: ${tokenData['token']?.substring(0, 20) ?? 'null'}...");
-      } else {
-        debugPrint("⚠️ FCM token NOT found in Firestore, forcing refresh...");
-        await fcmTokenService.forceTokenRefresh(widget.employeeId);
-      }
-
-      debugPrint("✅ Approver notification setup completed");
-
-    } catch (e) {
-      debugPrint("❌ Error setting up approver notifications: $e");
-    }
-  }
-
-  Future<void> _setupOvertimeApproverIfNeeded() async {
-    try {
-      debugPrint("=== CHECKING IF USER IS OVERTIME APPROVER ===");
-      debugPrint("Current Employee: ${widget.employeeId}");
-
-      bool shouldBeApprover = await _checkIfShouldBeOvertimeApprover();
-
-      if (shouldBeApprover) {
-        debugPrint("✅ User should be overtime approver, setting up...");
-
-        final fcmTokenService = getIt<FcmTokenService>();
-        await fcmTokenService.forceTokenRefresh(widget.employeeId);
-
-        if (widget.employeeId.startsWith('EMP')) {
-          await fcmTokenService.registerTokenForUser(widget.employeeId.substring(3));
-        } else {
-          await fcmTokenService.registerTokenForUser('EMP${widget.employeeId}');
-        }
-
-        await _setupAsOvertimeApprover();
-
-        final notificationService = getIt<NotificationService>();
-        await notificationService.subscribeToTopic('overtime_requests');
-        await notificationService.subscribeToTopic('overtime_approver_${widget.employeeId}');
-
-        String altId = widget.employeeId.startsWith('EMP')
-            ? widget.employeeId.substring(3)
-            : 'EMP${widget.employeeId}';
-        await notificationService.subscribeToTopic('overtime_approver_$altId');
-
-        await notificationService.subscribeToTopic('all_employees');
-
-        debugPrint("✅ Approver setup completed successfully");
-      } else {
-        debugPrint("ℹ️ User is not an overtime approver");
-      }
-    } catch (e) {
-      debugPrint("Error in overtime approver setup: $e");
-    }
-  }
-
-  Future<bool> _checkIfShouldBeOvertimeApprover() async {
-    try {
-      DocumentSnapshot approverDoc = await FirebaseFirestore.instance
-          .collection('overtime_approvers')
-          .doc(widget.employeeId)
-          .get();
-
-      if (approverDoc.exists) {
-        Map<String, dynamic> data = approverDoc.data() as Map<String, dynamic>;
-        if (data['isActive'] == true) {
-          debugPrint("Found in overtime_approvers collection");
-          return true;
-        }
-      }
-
-      DocumentSnapshot empDoc = await FirebaseFirestore.instance
-          .collection('employees')
-          .doc(widget.employeeId)
-          .get();
-
-      if (empDoc.exists) {
-        Map<String, dynamic> data = empDoc.data() as Map<String, dynamic>;
-        if (data['hasOvertimeApprovalAccess'] == true) {
-          debugPrint("Found hasOvertimeApprovalAccess in employees collection");
-          return true;
-        }
-      }
-
-      DocumentSnapshot masterDoc = await FirebaseFirestore.instance
-          .collection('MasterSheet')
-          .doc('Employee-Data')
-          .collection('employees')
-          .doc(widget.employeeId)
-          .get();
-
-      if (masterDoc.exists) {
-        Map<String, dynamic> data = masterDoc.data() as Map<String, dynamic>;
-        if (data['hasOvertimeApprovalAccess'] == true) {
-          debugPrint("Found hasOvertimeApprovalAccess in MasterSheet");
-          return true;
-        }
-      }
-
-      QuerySnapshot managerQuery = await FirebaseFirestore.instance
-          .collection('line_managers')
-          .where('managerId', isEqualTo: widget.employeeId)
-          .where('canApproveOvertime', isEqualTo: true)
-          .limit(1)
-          .get();
-
-      if (managerQuery.docs.isNotEmpty) {
-        debugPrint("Found as line manager with overtime approval");
-        return true;
-      }
-
-      if (widget.employeeId == 'EMP1289') {
-        debugPrint("Default approver EMP1289 detected");
-        return true;
-      }
-
-      return false;
-    } catch (e) {
-      debugPrint("Error checking overtime approver status: $e");
-      return false;
-    }
-  }
-
-  Future<void> _setupAsOvertimeApprover() async {
-    try {
-      debugPrint("Setting up ${widget.employeeId} as overtime approver");
-
-      String employeeName = _userData?['name'] ?? _userData?['employeeName'] ?? 'Overtime Approver';
-
-      final callable = FirebaseFunctions.instance.httpsCallable('setupOvertimeApprover');
-      final result = await callable.call({
-        'employeeId': widget.employeeId,
-        'employeeName': employeeName,
-      });
-
-      if (result.data['success'] == true) {
-        debugPrint("✅ Overtime approver setup successful");
-        await _setupOvertimeNotifications();
-        CustomSnackBar.successSnackBar(context, "You are now set up as an overtime approver!");
-      } else {
-        debugPrint("❌ Overtime approver setup failed");
-        CustomSnackBar.errorSnackBar(context, "Failed to set up as overtime approver");
-      }
-    } catch (e) {
-      debugPrint("Error setting up overtime approver: $e");
-      CustomSnackBar.errorSnackBar(context, "Error setting up approver: $e");
-    }
-  }
-
-  Future<void> _setupOvertimeNotifications() async {
-    try {
-      debugPrint("Setting up overtime notifications for ${widget.employeeId}");
-
-      final notificationService = getIt<NotificationService>();
-      final fcmTokenService = getIt<FcmTokenService>();
-
-      await fcmTokenService.registerTokenForUser(widget.employeeId);
-
-      await notificationService.subscribeToTopic('overtime_requests');
-      await notificationService.subscribeToTopic('overtime_approver_${widget.employeeId}');
-
-      String altId = widget.employeeId.startsWith('EMP')
-          ? widget.employeeId.substring(3)
-          : 'EMP${widget.employeeId}';
-      await notificationService.subscribeToTopic('overtime_approver_$altId');
-
-      final callable = FirebaseFunctions.instance.httpsCallable('registerOvertimeApproverToken');
-
-      SharedPreferences prefs = await SharedPreferences.getInstance();
-      String? token = prefs.getString('fcm_token');
-
-      if (token != null) {
-        await callable.call({
-          'approverId': widget.employeeId,
-          'token': token,
-          'approverName': _userData?['name'] ?? _userData?['employeeName'] ?? 'Overtime Approver',
-        });
-
-        debugPrint("✅ Overtime notification setup completed");
-      } else {
-        debugPrint("⚠️ No FCM token available for registration");
-      }
-    } catch (e) {
-      debugPrint("Error setting up overtime notifications: $e");
-    }
-  }
-
-  Future<void> _loadPendingOvertimeRequests() async {
-    if (!_isOvertimeApprover) return;
-
-    try {
-      debugPrint("=== LOADING PENDING OVERTIME REQUESTS ===");
-      debugPrint("Loading for approver: ${widget.employeeId}");
-
-      List<String> approverIds = [
-        widget.employeeId,
-        'EMP${widget.employeeId}',
-        widget.employeeId.startsWith('EMP') ? widget.employeeId.substring(3) : widget.employeeId,
-      ];
-
-      debugPrint("Checking for approver IDs: $approverIds");
-
-      QuerySnapshot snapshot = await FirebaseFirestore.instance
-          .collection('overtime_requests')
-          .where('status', isEqualTo: 'pending')
-          .get();
-
-      int matchingRequests = 0;
-      for (var doc in snapshot.docs) {
-        try {
-          Map<String, dynamic> data = doc.data() as Map<String, dynamic>;
-          String docApproverId = data['approverEmpId']?.toString() ?? '';
-
-          debugPrint("Request ${doc.id}: approverEmpId = '$docApproverId'");
-
-          for (String approverId in approverIds) {
-            if (docApproverId == approverId) {
-              matchingRequests++;
-              debugPrint("✅ MATCH: Request ${doc.id} matches approver $approverId");
-              break;
-            }
-          }
-        } catch (e) {
-          debugPrint("Error processing request ${doc.id}: $e");
-        }
-      }
-
-      debugPrint("Found $matchingRequests pending overtime requests");
-
-      if (mounted) {
-        setState(() {
-          _pendingOvertimeRequests = matchingRequests;
-        });
-      }
-
-    } catch (e) {
-      debugPrint("❌ Error loading pending overtime requests: $e");
-      if (mounted) {
-        setState(() {
-          _pendingOvertimeRequests = 0;
-        });
-      }
-    }
-  }
-
-  Future<void> _setupOvertimeApproverNotifications() async {
-    if (widget.employeeId != 'EMP1289') return;
-
-    try {
-      print("=== SETTING UP OVERTIME APPROVER NOTIFICATIONS ===");
-
-      final fcmTokenService = getIt<FcmTokenService>();
-      await fcmTokenService.registerTokenForUser('EMP1289');
-      await fcmTokenService.registerTokenForUser('1289');
-
-      final notificationService = getIt<NotificationService>();
-      await notificationService.subscribeToTopic('overtime_approver_EMP1289');
-      await notificationService.subscribeToTopic('overtime_approver_1289');
-      await notificationService.subscribeToTopic('overtime_requests');
-      await notificationService.subscribeToTopic('all_overtime_approvers');
-
-      final tokenDoc = await FirebaseFirestore.instance
-          .collection('fcm_tokens')
-          .doc('EMP1289')
-          .get();
-
-      if (tokenDoc.exists) {
-        print("✅ EMP1289 FCM token verified: ${tokenDoc.data()}");
-      } else {
-        print("❌ EMP1289 FCM token not found, attempting force refresh");
-        await fcmTokenService.forceTokenRefresh('EMP1289');
-      }
-
-      print("=== OVERTIME APPROVER SETUP COMPLETE ===");
-    } catch (e) {
-      print("Error setting up overtime approver notifications: $e");
-    }
-  }
 
   void _handleNotification(Map<String, dynamic> data) {
     final notificationType = data['type'];
@@ -4670,6 +8324,11 @@ class _DashboardViewState extends State<DashboardView>
     debugPrint("Type: $notificationType");
     debugPrint("Data: $data");
     debugPrint("Current Employee: ${widget.employeeId}");
+
+    if (notificationType == 'geofence_exit_prompt') {
+      _handleGeofenceExitNotification(data);
+      return;
+    }
 
     // REST TIMING SCHEDULE NOTIFICATIONS
     if (notificationType == 'rest_timing_schedule') {
@@ -5204,21 +8863,7 @@ class _DashboardViewState extends State<DashboardView>
     }
 
     // OVERTIME NOTIFICATIONS
-    else if (notificationType == 'overtime_request') {
-      debugPrint("⚠️ OVERTIME REQUEST NOTIFICATION RECEIVED");
 
-      if (_isOvertimeApprover) {
-        final String projectName = data['projectName'] ?? 'Project';
-        final String requesterName = data['requesterName'] ?? 'Someone';
-        final String employeeCount = data['employeeCount'] ?? '0';
-
-        CustomSnackBar.successSnackBar(
-            "$requesterName requested overtime for $employeeCount employees in $projectName"
-        );
-
-        _loadPendingOvertimeRequests();
-      }
-    }
     else if (notificationType == 'overtime_request_update') {
       final String status = data['status'] ?? '';
       final String projectName = data['projectName'] ?? '';
@@ -5231,6 +8876,8 @@ class _DashboardViewState extends State<DashboardView>
               : "Your overtime request for $projectName has been rejected${message.isNotEmpty ? ': $message' : ''}"
       );
     }
+
+
 
     _refreshDashboard();
     debugPrint("=== NOTIFICATION HANDLED ===");
@@ -5304,6 +8951,7 @@ class _DashboardViewState extends State<DashboardView>
       ),
     );
   }
+
 
   Widget _buildDetailRow(String label, String value) {
     return Padding(
@@ -5380,309 +9028,669 @@ class _DashboardViewState extends State<DashboardView>
     }
   }
 
-  // Settings Menu - Complete Implementation
-  void _showSettingsMenu(BuildContext context) {
-    showModalBottomSheet(
+
+  void _showFaceDataRecoveryDialog() {
+    showDialog(
       context: context,
-      backgroundColor: Colors.transparent,
-      isScrollControlled: true,
-      builder: (context) => Container(
-        height: MediaQuery.of(context).size.height * 0.85, // Increased height
-        decoration: BoxDecoration(
-          color: _isDarkMode ? const Color(0xFF1E293B) : Colors.white,
-          borderRadius: BorderRadius.vertical(top: Radius.circular(cardBorderRadius + 12)),
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withOpacity(0.1),
-              blurRadius: 20,
-              offset: const Offset(0, -5),
+      builder: (context) => AlertDialog(
+        backgroundColor: _isDarkMode ? const Color(0xFF1E293B) : Colors.white,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(cardBorderRadius)),
+        title: Row(
+          children: [
+            Container(
+              padding: const EdgeInsets.all(8),
+              decoration: BoxDecoration(
+                color: Colors.blue.withOpacity(0.1),
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: const Icon(Icons.face_retouching_natural, color: Colors.blue, size: 24),
+            ),
+            SizedBox(width: containerSpacing * 0.75),
+            Expanded(
+              child: Text(
+                "Recover Face Data",
+                style: TextStyle(
+                  color: _isDarkMode ? Colors.white : Colors.black87,
+                  fontSize: (isLargeScreen ? 20 : (isTablet ? 18 : 16)) * responsiveFontSize,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
             ),
           ],
         ),
-        child: Column(
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // Handle bar
-            Container(
-              margin: EdgeInsets.only(top: containerSpacing * 0.75),
-              width: 40,
-              height: 4,
-              decoration: BoxDecoration(
-                color: Colors.grey.shade300,
-                borderRadius: BorderRadius.circular(2),
+            Text(
+              "This will download your face authentication data from the cloud backup.",
+              style: TextStyle(
+                fontSize: (isLargeScreen ? 16 : (isTablet ? 14 : 12)) * responsiveFontSize,
+                color: _isDarkMode ? Colors.grey.shade300 : Colors.grey.shade700,
               ),
             ),
-
-            // Header
-            Padding(
-              padding: EdgeInsets.all(isLargeScreen ? 32 : (isTablet ? 28 : 24)),
-              child: Row(
+            SizedBox(height: containerSpacing),
+            Container(
+              padding: EdgeInsets.all(containerSpacing),
+              decoration: BoxDecoration(
+                color: Colors.blue.withOpacity(0.1),
+                borderRadius: BorderRadius.circular(cardBorderRadius - 4),
+                border: Border.all(color: Colors.blue.withOpacity(0.3)),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Container(
-                    padding: const EdgeInsets.all(8),
-                    decoration: BoxDecoration(
-                      color: Theme.of(context).colorScheme.primary.withOpacity(0.1),
-                      borderRadius: BorderRadius.circular(8),
-                    ),
-                    child: Icon(
-                      Icons.settings,
-                      color: Theme.of(context).colorScheme.primary,
-                      size: 24,
-                    ),
+                  Row(
+                    children: [
+                      const Icon(Icons.info, color: Colors.blue, size: 20),
+                      const SizedBox(width: 8),
+                      Text(
+                        "When to use this:",
+                        style: TextStyle(
+                          fontWeight: FontWeight.bold,
+                          color: Colors.blue.shade800,
+                          fontSize: (isLargeScreen ? 14 : (isTablet ? 12 : 11)) * responsiveFontSize,
+                        ),
+                      ),
+                    ],
                   ),
-                  SizedBox(width: containerSpacing),
+                  const SizedBox(height: 8),
                   Text(
-                    'Settings & Tools',
+                    "• After clearing app data/storage\n• When face authentication is not working\n• After reinstalling the app",
                     style: TextStyle(
-                      fontSize: (isLargeScreen ? 32 : (isTablet ? 28 : 24)) * responsiveFontSize,
-                      fontWeight: FontWeight.bold,
-                      color: _isDarkMode ? Colors.white : Colors.black87,
+                      color: Colors.blue.shade700,
+                      fontSize: (isLargeScreen ? 14 : (isTablet ? 12 : 11)) * responsiveFontSize,
                     ),
                   ),
                 ],
               ),
             ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: Text("Cancel", style: TextStyle(color: Colors.grey.shade600)),
+          ),
+          ElevatedButton.icon(
+            onPressed: () {
+              Navigator.pop(context);
+              _forceFaceDataRecovery();
+            },
+            icon: const Icon(Icons.cloud_download, size: 18),
+            label: const Text("Recover"),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.blue,
+              foregroundColor: Colors.white,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
 
-            // Settings options with NEW DEBUG & SYNC OPTIONS
+
+  void _showSimpleFaceDataRecovery() {
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => AlertDialog(
+        backgroundColor: _isDarkMode ? const Color(0xFF1E293B) : Colors.white,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(cardBorderRadius)),
+        title: Row(
+          children: [
+            Container(
+              padding: const EdgeInsets.all(8),
+              decoration: BoxDecoration(
+                color: Colors.blue.withOpacity(0.1),
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: const Icon(Icons.face_retouching_natural, color: Colors.blue, size: 24),
+            ),
+            SizedBox(width: containerSpacing * 0.75),
             Expanded(
-              child: SingleChildScrollView(
-                padding: EdgeInsets.symmetric(horizontal: isLargeScreen ? 32 : (isTablet ? 28 : 24)),
-                child: Column(
-                  children: [
-                    // ======= MAIN SETTINGS =======
-                    _buildSettingsSection("Main Settings", [
-                      _buildModernSettingsOption(
-                        icon: Icons.calendar_view_month,
-                        title: 'My Attendance',
-                        subtitle: 'View your attendance history and overtime records',
-                        onTap: () {
-                          Navigator.pop(context);
-                          Navigator.push(
-                            context,
-                            MaterialPageRoute(
-                              builder: (context) => MyAttendanceView(
-                                employeeId: widget.employeeId,
-                                userData: _userData ?? {},
-                              ),
-                            ),
-                          );
-                        },
-                      ),
-
-                      _buildModernSettingsOption(
-                        icon: Icons.event_note,
-                        title: 'Leave Management',
-                        subtitle: 'View leave balance, history, and apply for leave',
-                        onTap: () {
-                          Navigator.pop(context);
-                          Navigator.push(
-                            context,
-                            MaterialPageRoute(
-                              builder: (context) => LeaveHistoryView(
-                                employeeId: widget.employeeId,
-                                employeeName: _userData?['name'] ?? 'Employee',
-                                employeePin: _userData?['pin'] ?? widget.employeeId,
-                                userData: _userData ?? {},
-                              ),
-                            ),
-                          ).then((_) => _refreshDashboard());
-                        },
-                      ),
-
-                      _buildModernSettingsOption(
-                        icon: Icons.history,
-                        title: 'Check-Out Request History',
-                        subtitle: 'View your remote check-out requests',
-                        onTap: () {
-                          Navigator.pop(context);
-                          Navigator.of(context).push(
-                            MaterialPageRoute(
-                              builder: (context) => CheckOutRequestHistoryView(
-                                employeeId: widget.employeeId,
-                              ),
-                            ),
-                          );
-                        },
-                      ),
-                    ]),
-
-                    // ======= SYSTEM TOOLS (NEW SECTION) =======
-                    _buildSettingsSection("System Tools", [
-                      _buildModernSettingsOption(
-                        icon: Icons.sync_rounded,
-                        title: 'Force Attendance Sync',
-                        subtitle: 'Sync attendance data across all devices',
-                        iconColor: Colors.green,
-                        onTap: () async {
-                          Navigator.pop(context);
-                          await _forceAttendanceSync();
-                        },
-                      ),
-
-                      _buildModernSettingsOption(
-                        icon: Icons.cloud_sync,
-                        title: 'Manual Data Sync',
-                        subtitle: 'Sync all pending data to cloud',
-                        iconColor: Colors.orange,
-                        isEnabled: _needsSync && _connectivityService.currentStatus == ConnectionStatus.online,
-                        onTap: () async {
-                          Navigator.pop(context);
-                          await _manualSync();
-                        },
-                      ),
-
-                      _buildModernSettingsOption(
-                        icon: Icons.location_searching,
-                        title: 'View All Locations',
-                        subtitle: 'See available office locations and distances',
-                        iconColor: Colors.blue,
-                        onTap: () {
-                          Navigator.pop(context);
-                          _showLocationMenu(context);
-                        },
-                      ),
-
-                      _buildModernSettingsOption(
-                        icon: Icons.cloud_download,
-                        title: 'Recover Face Data',
-                        subtitle: 'Download face authentication data from cloud',
-                        iconColor: Colors.purple,
-                        onTap: () {
-                          Navigator.pop(context);
-                          _forceFaceDataRecovery();
-                        },
-                      ),
-                    ]),
-
-                    // ======= DEVELOPER TOOLS (NEW SECTION) =======
-                    if (kDebugMode || widget.employeeId == 'EMP1289')
-                      _buildSettingsSection("Developer Tools", [
-                        _buildModernSettingsOption(
-                          icon: Icons.bug_report,
-                          title: 'Debug Local Data',
-                          subtitle: 'View local database and cache information',
-                          iconColor: Colors.red,
-                          onTap: () {
-                            Navigator.pop(context);
-                            Navigator.push(
-                              context,
-                              MaterialPageRoute(
-                                builder: (context) => DebugDataScreen(employeeId: widget.employeeId),
-                              ),
-                            );
-                          },
-                        ),
-
-                        _buildModernSettingsOption(
-                          icon: Icons.refresh,
-                          title: 'Force Dashboard Refresh',
-                          subtitle: 'Reload all dashboard data from server',
-                          iconColor: Colors.indigo,
-                          onTap: () async {
-                            Navigator.pop(context);
-                            await _refreshDashboard();
-                          },
-                        ),
-
-                        if (widget.employeeId == 'EMP1289')
-                          _buildModernSettingsOption(
-                            icon: Icons.science,
-                            title: 'Offline Test Mode',
-                            subtitle: 'Test offline functionality',
-                            iconColor: Colors.teal,
-                            onTap: () {
-                              Navigator.pop(context);
-                              Navigator.push(
-                                context,
-                                MaterialPageRoute(
-                                  builder: (context) => OfflineTestView(
-                                    employeeId: widget.employeeId,
-                                  ),
-                                ),
-                              );
-                            },
-                          ),
-                      ]),
-
-                    // ======= ADVANCED SETTINGS =======
-                    _buildSettingsSection("Advanced", [
-                      if (_userData != null &&
-                          (_userData!['hasOvertimeAccess'] == true ||
-                              _userData!['overtimeAccessGrantedAt'] != null))
-                        _buildModernSettingsOption(
-                          icon: Icons.people_outline,
-                          title: 'Manage Employee List',
-                          subtitle: 'Create custom employee list for overtime requests',
-                          onTap: () {
-                            Navigator.pop(context);
-                            Navigator.push(
-                              context,
-                              MaterialPageRoute(
-                                builder: (context) => EmployeeListManagementView(
-                                  requesterId: widget.employeeId,
-                                ),
-                              ),
-                            );
-                          },
-                        ),
-
-                      if (widget.employeeId == 'EMP1289')
-                        _buildModernSettingsOption(
-                          icon: Icons.admin_panel_settings,
-                          title: 'Admin Panel',
-                          subtitle: 'Administrative controls',
-                          onTap: () {
-                            Navigator.pop(context);
-                            Navigator.push(
-                              context,
-                              MaterialPageRoute(
-                                builder: (context) => NotificationAdminView(
-                                  userId: widget.employeeId,
-                                ),
-                              ),
-                            );
-                          },
-                        ),
-
-                      _buildModernSettingsOption(
-                        icon: Icons.dark_mode_outlined,
-                        title: 'Dark mode',
-                        subtitle: 'Switch between light and dark themes',
-                        hasToggle: true,
-                        toggleValue: _isDarkMode,
-                        onToggleChanged: (value) {
-                          setState(() {
-                            _isDarkMode = value;
-                            _saveDarkModePreference(value);
-                          });
-                        },
-                      ),
-                    ]),
-
-                    // ======= LOGOUT =======
-                    SizedBox(height: containerSpacing),
-
-                    _buildModernSettingsOption(
-                      icon: Icons.logout,
-                      title: 'Log out',
-                      subtitle: 'Sign out of your account',
-                      textColor: Colors.red,
-                      iconColor: Colors.red,
-                      onTap: () {
-                        Navigator.pop(context);
-                        _logout();
-                      },
-                    ),
-
-                    SizedBox(height: MediaQuery.of(context).padding.bottom + 20),
-                  ],
+              child: Text(
+                "Recover Face Data",
+                style: TextStyle(
+                  color: _isDarkMode ? Colors.white : Colors.black87,
+                  fontSize: (isLargeScreen ? 20 : (isTablet ? 18 : 16)) * responsiveFontSize,
+                  fontWeight: FontWeight.bold,
                 ),
+              ),
+            ),
+          ],
+        ),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              "This will download your face authentication data from the cloud backup.",
+              style: TextStyle(
+                fontSize: (isLargeScreen ? 16 : (isTablet ? 14 : 12)) * responsiveFontSize,
+                color: _isDarkMode ? Colors.grey.shade300 : Colors.grey.shade700,
+                height: 1.4,
+              ),
+            ),
+            SizedBox(height: containerSpacing),
+            Container(
+              padding: EdgeInsets.all(containerSpacing),
+              decoration: BoxDecoration(
+                color: Colors.blue.withOpacity(0.1),
+                borderRadius: BorderRadius.circular(cardBorderRadius - 4),
+                border: Border.all(color: Colors.blue.withOpacity(0.3)),
+              ),
+              child: Row(
+                children: [
+                  const Icon(Icons.info, color: Colors.blue, size: 20),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Text(
+                      "Use this only if face authentication is not working properly.",
+                      style: TextStyle(
+                        color: Colors.blue.shade700,
+                        fontSize: (isLargeScreen ? 14 : (isTablet ? 12 : 11)) * responsiveFontSize,
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: Text("Cancel", style: TextStyle(color: Colors.grey.shade600)),
+          ),
+          ElevatedButton(
+            onPressed: () {
+              Navigator.pop(context);
+              _performSimpleFaceDataRecovery();
+            },
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.blue,
+              foregroundColor: Colors.white,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+            ),
+            child: const Text("OK, Recover"),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _performSimpleFaceDataRecovery() async {
+    // Show loading dialog
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => AlertDialog(
+        backgroundColor: _isDarkMode ? const Color(0xFF1E293B) : Colors.white,
+        content: Row(
+          children: [
+            CircularProgressIndicator(
+              valueColor: AlwaysStoppedAnimation<Color>(
+                Theme.of(context).colorScheme.primary,
+              ),
+            ),
+            const SizedBox(width: 16),
+            Text(
+              "Recovering face data...",
+              style: TextStyle(
+                color: _isDarkMode ? Colors.white : Colors.black87,
               ),
             ),
           ],
         ),
       ),
     );
+
+    try {
+      final secureFaceStorage = getIt<SecureFaceStorageService>();
+      bool recovered = await secureFaceStorage.downloadFaceDataFromCloud(widget.employeeId);
+
+      Navigator.pop(context); // Close loading dialog
+
+      // Show result dialog
+      showDialog(
+        context: context,
+        builder: (context) => AlertDialog(
+          backgroundColor: _isDarkMode ? const Color(0xFF1E293B) : Colors.white,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(cardBorderRadius)),
+          title: Row(
+            children: [
+              Icon(
+                recovered ? Icons.check_circle : Icons.error,
+                color: recovered ? Colors.green : Colors.red,
+                size: 32,
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Text(
+                  recovered ? "Success!" : "Failed",
+                  style: TextStyle(
+                    color: recovered ? Colors.green : Colors.red,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          content: Text(
+            recovered
+                ? "Face data has been successfully recovered from cloud backup. Face authentication should work now."
+                : "Failed to recover face data. Please check your internet connection and try again.",
+            style: TextStyle(
+              color: _isDarkMode ? Colors.grey.shade300 : Colors.grey.shade700,
+            ),
+          ),
+          actions: [
+            ElevatedButton(
+              onPressed: () => Navigator.pop(context),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: recovered ? Colors.green : Colors.red,
+                foregroundColor: Colors.white,
+              ),
+              child: const Text("OK"),
+            ),
+          ],
+        ),
+      );
+
+    } catch (e) {
+      Navigator.pop(context); // Close loading dialog
+
+      // Show error dialog
+      showDialog(
+        context: context,
+        builder: (context) => AlertDialog(
+          backgroundColor: _isDarkMode ? const Color(0xFF1E293B) : Colors.white,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(cardBorderRadius)),
+          title: Row(
+            children: [
+              const Icon(Icons.error, color: Colors.red, size: 32),
+              const SizedBox(width: 12),
+              Text(
+                "Error",
+                style: TextStyle(
+                  color: Colors.red,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+            ],
+          ),
+          content: Text(
+            "An error occurred while recovering face data: $e",
+            style: TextStyle(
+              color: _isDarkMode ? Colors.grey.shade300 : Colors.grey.shade700,
+            ),
+          ),
+          actions: [
+            ElevatedButton(
+              onPressed: () => Navigator.pop(context),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Colors.red,
+                foregroundColor: Colors.white,
+              ),
+              child: const Text("OK"),
+            ),
+          ],
+        ),
+      );
+    }
   }
+
+  // Settings Menu - Complete Implementation
+  void _showSettingsMenu(BuildContext context) {
+    debugPrint("=== SETTINGS MENU DEBUG ===");
+    debugPrint("Current time: ${DateTime.now()}");
+    debugPrint("_userData != null: ${_userData != null}");
+    debugPrint("_isLoading: $_isLoading");
+    debugPrint("Widget mounted: $mounted");
+    debugPrint("========================");
+
+    // Force state refresh BEFORE showing settings
+    if (mounted) {
+      setState(() {});
+    }
+
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.transparent,
+      isScrollControlled: true,
+      builder: (BuildContext freshContext) {
+        // Use StatefulBuilder to ensure fresh rebuild
+        return StatefulBuilder(
+          key: ValueKey('settings_${DateTime.now().millisecondsSinceEpoch}'),
+          builder: (BuildContext context, StateSetter setModalState) {
+            return Container(
+              height: MediaQuery.of(context).size.height * 0.8, // Increased height for debug option
+              decoration: BoxDecoration(
+                color: _isDarkMode ? const Color(0xFF1E293B) : Colors.white,
+                borderRadius: BorderRadius.vertical(top: Radius.circular(cardBorderRadius + 12)),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withOpacity(0.1),
+                    blurRadius: 20,
+                    offset: const Offset(0, -5),
+                  ),
+                ],
+              ),
+              child: Column(
+                children: [
+                  // Handle bar
+                  Container(
+                    margin: EdgeInsets.only(top: containerSpacing * 0.75),
+                    width: 40,
+                    height: 4,
+                    decoration: BoxDecoration(
+                      color: Colors.grey.shade300,
+                      borderRadius: BorderRadius.circular(2),
+                    ),
+                  ),
+
+                  // Header
+                  Padding(
+                    padding: EdgeInsets.all(isLargeScreen ? 32 : (isTablet ? 28 : 24)),
+                    child: Row(
+                      children: [
+                        Container(
+                          padding: const EdgeInsets.all(8),
+                          decoration: BoxDecoration(
+                            color: Theme.of(context).colorScheme.primary.withOpacity(0.1),
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                          child: Icon(
+                            Icons.settings,
+                            color: Theme.of(context).colorScheme.primary,
+                            size: 24,
+                          ),
+                        ),
+                        SizedBox(width: containerSpacing),
+                        Text(
+                          'Settings & Preferences',
+                          style: TextStyle(
+                            fontSize: (isLargeScreen ? 32 : (isTablet ? 28 : 24)) * responsiveFontSize,
+                            fontWeight: FontWeight.bold,
+                            color: _isDarkMode ? Colors.white : Colors.black87,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+
+                  // Settings options
+                  Expanded(
+                    child: SingleChildScrollView(
+                      padding: EdgeInsets.symmetric(horizontal: isLargeScreen ? 32 : (isTablet ? 28 : 24)),
+                      child: Column(
+                        children: [
+                          // ======= MAIN SETTINGS =======
+                          _buildSettingsSection("Main Settings", [
+                            _buildModernSettingsOption(
+                              icon: Icons.calendar_view_month,
+                              title: 'My Attendance',
+                              subtitle: 'View your attendance history and records',
+                              onTap: () {
+                                Navigator.pop(context);
+                                Navigator.push(
+                                  context,
+                                  MaterialPageRoute(
+                                    builder: (context) => MyAttendanceView(
+                                      employeeId: widget.employeeId,
+                                      userData: _userData ?? {},
+                                    ),
+                                  ),
+                                );
+                              },
+                            ),
+
+                            _buildModernSettingsOption(
+                              icon: Icons.event_note,
+                              title: 'Leave Management',
+                              subtitle: 'View leave balance, history, and apply for leave',
+                              onTap: () {
+                                Navigator.pop(context);
+                                Navigator.push(
+                                  context,
+                                  MaterialPageRoute(
+                                    builder: (context) => LeaveHistoryView(
+                                      employeeId: widget.employeeId,
+                                      employeeName: _userData?['name'] ?? 'Employee',
+                                      employeePin: _userData?['pin'] ?? widget.employeeId,
+                                      userData: _userData ?? {},
+                                    ),
+                                  ),
+                                ).then((_) => _refreshDashboard());
+                              },
+                            ),
+
+
+
+
+                            _buildModernSettingsOption(
+                              icon: Icons.receipt_long,
+                              title: 'Apply for Salary Slip',
+                              subtitle: 'Request and download salary slips',
+                              iconColor: Colors.green,
+                              onTap: () {
+                                Navigator.pop(context);
+                                _showComingSoonDialog("Apply for Salary Slip");
+                              },
+                            ),
+
+                            _buildModernSettingsOption(
+                              icon: Icons.history,
+                              title: 'Check-Out Request History',
+                              subtitle: 'View your remote check-out requests',
+                              onTap: () {
+                                Navigator.pop(context);
+                                Navigator.of(context).push(
+                                  MaterialPageRoute(
+                                    builder: (context) => CheckOutRequestHistoryView(
+                                      employeeId: widget.employeeId,
+                                    ),
+                                  ),
+                                );
+                              },
+                            ),
+                          ]),
+
+
+
+                          // ======= ADVANCED SETTINGS =======
+                          _buildSettingsSection("Advanced", [
+                            if (_userData != null &&
+                                (_userData!['hasOvertimeAccess'] == true ||
+                                    _userData!['overtimeAccessGrantedAt'] != null))
+                              _buildModernSettingsOption(
+                                icon: Icons.people_outline,
+                                title: 'Manage Employee List',
+                                subtitle: 'Create custom employee list for overtime requests',
+                                onTap: () {
+                                  Navigator.pop(context);
+                                  Navigator.push(
+                                    context,
+                                    MaterialPageRoute(
+                                      builder: (context) => EmployeeListManagementView(
+                                        requesterId: widget.employeeId,
+                                      ),
+                                    ),
+                                  );
+                                },
+                              ),
+
+                            _buildModernSettingsOption(
+                              icon: Icons.dark_mode_outlined,
+                              title: 'Dark mode',
+                              subtitle: 'Switch between light and dark themes',
+                              hasToggle: true,
+                              toggleValue: _isDarkMode,
+                              onToggleChanged: (value) {
+                                setState(() {
+                                  _isDarkMode = value;
+                                  _saveDarkModePreference(value);
+                                });
+                              },
+                            ),
+
+                            _buildDebugGeofenceOption(),
+
+                            _buildModernSettingsOption(
+                              icon: Icons.face_retouching_natural,
+                              title: 'Recover Face Data',
+                              subtitle: 'Restore face authentication data from cloud backup',
+                              iconColor: Colors.blue,
+                              onTap: () {
+                                Navigator.pop(context);
+                                _showFaceDataRecoveryDialog();
+                              },
+                            ),
+                          ]),
+
+
+
+                          // ======= LOGOUT =======
+                          SizedBox(height: containerSpacing),
+
+                          _buildModernSettingsOption(
+                            icon: Icons.logout,
+                            title: 'Log out',
+                            subtitle: 'Sign out of your account',
+                            textColor: Colors.red,
+                            iconColor: Colors.red,
+                            onTap: () {
+                              Navigator.pop(context);
+                              _logout();
+                            },
+                          ),
+
+                          SizedBox(height: MediaQuery.of(context).padding.bottom + 20),
+                        ],
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            );
+          },
+        );
+      },
+    );
+  }
+
+
+  void _showComingSoonDialog(String featureName) {
+    showDialog(
+      context: context,
+      barrierDismissible: true,
+      builder: (context) => AlertDialog(
+        backgroundColor: _isDarkMode ? const Color(0xFF1E293B) : Colors.white,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(cardBorderRadius)),
+        title: Container(
+          padding: EdgeInsets.all(containerSpacing),
+          decoration: BoxDecoration(
+            gradient: LinearGradient(
+              colors: [Colors.blue.shade600, Colors.blue.shade400],
+              begin: Alignment.centerLeft,
+              end: Alignment.centerRight,
+            ),
+            borderRadius: BorderRadius.circular(cardBorderRadius - 4),
+          ),
+          child: Row(
+            children: [
+              const Icon(Icons.rocket_launch, color: Colors.white, size: 32),
+              SizedBox(width: containerSpacing * 0.75),
+              Expanded(
+                child: Text(
+                  "Coming Soon!",
+                  style: TextStyle(
+                    color: Colors.white,
+                    fontSize: (isLargeScreen ? 22 : (isTablet ? 20 : 18)) * responsiveFontSize,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            SizedBox(height: containerSpacing),
+            Container(
+              padding: EdgeInsets.all(containerSpacing),
+              decoration: BoxDecoration(
+                color: Colors.blue.withOpacity(0.1),
+                borderRadius: BorderRadius.circular(cardBorderRadius - 4),
+                border: Border.all(color: Colors.blue.withOpacity(0.3)),
+              ),
+              child: Column(
+                children: [
+                  Row(
+                    children: [
+                      Icon(Icons.construction, color: Colors.blue, size: 20),
+                      const SizedBox(width: 8),
+                      Text(
+                        "Feature in Development",
+                        style: TextStyle(
+                          fontWeight: FontWeight.bold,
+                          color: Colors.blue.shade800,
+                          fontSize: (isLargeScreen ? 16 : (isTablet ? 14 : 13)) * responsiveFontSize,
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    "$featureName is currently under development and will be available in a future update.",
+                    style: TextStyle(
+                      color: Colors.blue.shade700,
+                      fontSize: (isLargeScreen ? 14 : (isTablet ? 13 : 12)) * responsiveFontSize,
+                      height: 1.3,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            SizedBox(height: containerSpacing),
+            Text(
+              "We're working hard to bring you this feature. Stay tuned for updates!",
+              style: TextStyle(
+                fontSize: (isLargeScreen ? 16 : (isTablet ? 14 : 13)) * responsiveFontSize,
+                color: _isDarkMode ? Colors.grey.shade300 : Colors.grey.shade700,
+              ),
+              textAlign: TextAlign.center,
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: Text("Close", style: TextStyle(color: Colors.grey.shade600)),
+          ),
+          ElevatedButton.icon(
+            icon: const Icon(Icons.notifications_active, size: 18),
+            label: const Text("Notify Me"),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.blue,
+              foregroundColor: Colors.white,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+            ),
+            onPressed: () {
+              Navigator.pop(context);
+              CustomSnackBar.successSnackBar("You'll be notified when $featureName is available!");
+            },
+          ),
+        ],
+      ),
+    );
+  }
+
+
 
   Widget _buildSettingsSection(String title, List<Widget> options) {
     return Column(
@@ -5718,7 +9726,7 @@ class _DashboardViewState extends State<DashboardView>
     Function(bool)? onToggleChanged,
     Color? iconColor,
     Color? textColor,
-    bool isEnabled = true, // NEW PARAMETER
+    bool isEnabled = true,
   }) {
     final effectiveIconColor = iconColor ?? (_isDarkMode ? Colors.white70 : Colors.black54);
     final effectiveTextColor = textColor ?? (_isDarkMode ? Colors.white : Colors.black87);
@@ -5911,6 +9919,30 @@ class _DashboardViewState extends State<DashboardView>
                       },
                     ),
 
+                    // ✅ ADD: Overtime approval notification option for overtime approvers
+                    if (_isOvertimeApprover)
+                      _buildNotificationOption(
+                        icon: Icons.access_time_filled,
+                        title: 'Overtime Approvals',
+                        subtitle: _pendingOvertimeRequests > 0
+                            ? '$_pendingOvertimeRequests requests waiting'
+                            : 'No pending overtime requests',
+                        showBadge: _pendingOvertimeRequests > 0,
+                        badgeCount: _pendingOvertimeRequests,
+                        onTap: () {
+                          Navigator.pop(context);
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (context) => PendingOvertimeView(
+                                approverId: widget.employeeId,
+                                // ✅ FIX: Remove approverName parameter
+                              ),
+                            ),
+                          ).then((_) => _loadPendingOvertimeApprovals());
+                        },
+                      ),
+
                     // Leave approvals for line managers
                     if (_isLineManager)
                       _buildNotificationOption(
@@ -5932,111 +9964,6 @@ class _DashboardViewState extends State<DashboardView>
                               ),
                             ),
                           ).then((_) => _loadPendingLeaveApprovals());
-                        },
-                      ),
-
-                    // Overtime section
-                    if (_isOvertimeApprover && _approverInfo != null)
-                      Container(
-                        margin: EdgeInsets.only(bottom: containerSpacing),
-                        padding: EdgeInsets.all(isLargeScreen ? 24 : (isTablet ? 20 : 16)),
-                        decoration: BoxDecoration(
-                          gradient: LinearGradient(
-                            colors: [Colors.orange.withOpacity(0.8), Colors.red.withOpacity(0.8)],
-                            begin: Alignment.centerLeft,
-                            end: Alignment.centerRight,
-                          ),
-                          borderRadius: BorderRadius.circular(cardBorderRadius),
-                          boxShadow: [
-                            BoxShadow(
-                              color: Colors.orange.withOpacity(0.3),
-                              blurRadius: 8,
-                              offset: const Offset(0, 4),
-                            ),
-                          ],
-                        ),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Row(
-                              children: [
-                                Icon(Icons.admin_panel_settings, color: Colors.white, size: 24),
-                                SizedBox(width: containerSpacing * 0.75),
-                                Expanded(
-                                  child: Text(
-                                    "OVERTIME APPROVER",
-                                    style: TextStyle(
-                                      color: Colors.white,
-                                      fontSize: (isLargeScreen ? 20 : (isTablet ? 18 : 16)) * responsiveFontSize,
-                                      fontWeight: FontWeight.bold,
-                                    ),
-                                  ),
-                                ),
-                                if (_pendingOvertimeRequests > 0)
-                                  Container(
-                                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                                    decoration: BoxDecoration(
-                                      color: Colors.white,
-                                      borderRadius: BorderRadius.circular(12),
-                                    ),
-                                    child: Text(
-                                      _pendingOvertimeRequests.toString(),
-                                      style: TextStyle(
-                                        color: Colors.red,
-                                        fontWeight: FontWeight.bold,
-                                        fontSize: (isLargeScreen ? 16 : (isTablet ? 14 : 12)) * responsiveFontSize,
-                                      ),
-                                    ),
-                                  ),
-                              ],
-                            ),
-                            SizedBox(height: containerSpacing),
-                            SizedBox(
-                              width: double.infinity,
-                              child: ElevatedButton.icon(
-                                onPressed: () {
-                                  Navigator.pop(context);
-                                  Navigator.push(
-                                    context,
-                                    MaterialPageRoute(
-                                      builder: (context) => PendingOvertimeView(
-                                        approverId: widget.employeeId,
-                                      ),
-                                    ),
-                                  ).then((_) => _loadPendingOvertimeRequests());
-                                },
-                                icon: const Icon(Icons.visibility),
-                                label: Text("Review $_pendingOvertimeRequests Pending Requests"),
-                                style: ElevatedButton.styleFrom(
-                                  backgroundColor: Colors.white,
-                                  foregroundColor: Colors.red,
-                                  padding: EdgeInsets.symmetric(vertical: isTablet ? 16 : 12),
-                                  shape: RoundedRectangleBorder(
-                                    borderRadius: BorderRadius.circular(12),
-                                  ),
-                                ),
-                              ),
-                            ),
-                          ],
-                        ),
-                      )
-                    else if (_userData != null &&
-                        (_userData!['hasOvertimeAccess'] == true ||
-                            _userData!['overtimeAccessGrantedAt'] != null))
-                      _buildNotificationOption(
-                        icon: Icons.access_time,
-                        title: 'Request Overtime',
-                        subtitle: 'Create new overtime request',
-                        onTap: () {
-                          Navigator.pop(context);
-                          Navigator.push(
-                            context,
-                            MaterialPageRoute(
-                              builder: (context) => CreateOvertimeView(
-                                requesterId: widget.employeeId,
-                              ),
-                            ),
-                          );
                         },
                       ),
 

@@ -1,16 +1,14 @@
-// lib/model/leave_application_model.dart - UPDATED WITH EMERGENCY LEAVE SUPPORT
+// lib/model/leave_application_model.dart - STEP 1: FIXED WITH 4 LEAVE TYPES ONLY
 
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:intl/intl.dart';
 
+// ✅ FIXED: Only 4 leave types as requested
 enum LeaveType {
-  annual,
-  maternity,
-  paternity,
-  sick,
-  unpaid,
-  emergency,
-  compensate,
+  annual,    // Annual Leave
+  sick,      // Sick Leave
+  local,     // Local Leave (NEW)
+  emergency, // Emergency Leave
 }
 
 extension LeaveTypeExtension on LeaveType {
@@ -18,18 +16,12 @@ extension LeaveTypeExtension on LeaveType {
     switch (this) {
       case LeaveType.annual:
         return 'Annual Leave';
-      case LeaveType.maternity:
-        return 'Maternity Leave';
-      case LeaveType.paternity:
-        return 'Paternity Leave';
       case LeaveType.sick:
         return 'Sick Leave';
-      case LeaveType.unpaid:
-        return 'Unpaid Leave';
+      case LeaveType.local:
+        return 'Local Leave'; // ✅ NEW
       case LeaveType.emergency:
         return 'Emergency Leave';
-      case LeaveType.compensate:
-        return 'Compensate Leave';
     }
   }
 
@@ -37,36 +29,42 @@ extension LeaveTypeExtension on LeaveType {
     return toString().split('.').last;
   }
 
-  // Updated leave allocation info
+  // ✅ UPDATED: Leave allocation info for 4 types only
   String get allocationInfo {
     switch (this) {
       case LeaveType.annual:
         return '30 days per year';
       case LeaveType.sick:
         return '15 days per year';
-      case LeaveType.maternity:
-        return '60 days per year';
-      case LeaveType.paternity:
-        return '5 days per year';
+      case LeaveType.local:
+        return '10 days per year'; // ✅ NEW
       case LeaveType.emergency:
-        return '15 days per year (double deduction)'; // ✅ UPDATED
-      case LeaveType.compensate:
-        return 'Earned through overtime';
-      case LeaveType.unpaid:
-        return 'Unlimited';
+        return '15 days per year (double deduction)';
     }
   }
 
-  // ✅ UPDATED: Certificate requirement logic
-  bool get requiresCertificate {
-    // This is now handled by the service logic with isAlreadyTaken parameter
+  // ✅ FIXED: Certificate requirement logic
+  bool isCertificateRequired(bool isAlreadyTaken) {
     // Emergency leave NEVER requires certificate
-    return false; // Default to false, actual logic is in the service
+    if (this == LeaveType.emergency) {
+      return false;
+    }
+
+    // Sick leave: only required if already taken
+    if (this == LeaveType.sick && isAlreadyTaken) {
+      return true; // Medical certificate required for sick leave already taken
+    }
+
+    // Other leave types: only required if already taken
+    if (isAlreadyTaken && (this == LeaveType.annual || this == LeaveType.local)) {
+      return true; // Supporting documents required for already taken leave
+    }
+
+    return false;
   }
 
   // ✅ UPDATED: Get certificate requirement message
   String getCertificateRequirement(bool isAlreadyTaken) {
-    // Emergency leave never requires certificate
     if (this == LeaveType.emergency) {
       return 'No certificate required for emergency leave';
     }
@@ -80,33 +78,12 @@ extension LeaveTypeExtension on LeaveType {
     }
   }
 
-  // ✅ UPDATED: Check if certificate is actually required
-  bool isCertificateRequired(bool isAlreadyTaken) {
-    // Emergency leave NEVER requires certificate
-    if (this == LeaveType.emergency) {
-      return false;
-    }
-
-    // Sick leave: only required if already taken
-    if (this == LeaveType.sick && isAlreadyTaken) {
-      return true;
-    }
-
-    // Other leave types: only required if already taken
-    if (isAlreadyTaken && this != LeaveType.sick) {
-      return true;
-    }
-
-    // Future leave (not already taken): no certificate required
-    return false;
-  }
-
-  // ✅ NEW: Check if this leave type has special deduction rules
+  // ✅ UPDATED: Check if this leave type has special deduction rules
   bool get hasSpecialDeduction {
     return this == LeaveType.emergency;
   }
 
-  // ✅ NEW: Get deduction description
+  // ✅ UPDATED: Get deduction description
   String get deductionDescription {
     switch (this) {
       case LeaveType.emergency:
@@ -115,35 +92,25 @@ extension LeaveTypeExtension on LeaveType {
         return 'Deducted from Annual Leave balance';
       case LeaveType.sick:
         return 'Deducted from Sick Leave balance';
-      case LeaveType.maternity:
-        return 'Deducted from Maternity Leave balance';
-      case LeaveType.paternity:
-        return 'Deducted from Paternity Leave balance';
-      case LeaveType.compensate:
-        return 'Deducted from Compensate Leave balance';
-      case LeaveType.unpaid:
-        return 'No deduction (unpaid leave)';
+      case LeaveType.local:
+        return 'Deducted from Local Leave balance'; // ✅ NEW
     }
   }
 
-  // ✅ NEW: Get priority level for notifications
+  // ✅ UPDATED: Get priority level for notifications
   String get priorityLevel {
     switch (this) {
       case LeaveType.emergency:
         return 'high';
       case LeaveType.sick:
         return 'medium';
-      case LeaveType.maternity:
-      case LeaveType.paternity:
-        return 'medium';
       case LeaveType.annual:
-      case LeaveType.compensate:
-      case LeaveType.unpaid:
+      case LeaveType.local:
         return 'normal';
     }
   }
 
-  // ✅ NEW: Get color for UI display
+  // ✅ UPDATED: Get color for UI display
   String get colorCode {
     switch (this) {
       case LeaveType.emergency:
@@ -152,14 +119,8 @@ extension LeaveTypeExtension on LeaveType {
         return '#F44336'; // Red
       case LeaveType.annual:
         return '#2196F3'; // Blue
-      case LeaveType.maternity:
-        return '#E91E63'; // Pink
-      case LeaveType.paternity:
-        return '#3F51B5'; // Indigo
-      case LeaveType.compensate:
-        return '#4CAF50'; // Green
-      case LeaveType.unpaid:
-        return '#9E9E9E'; // Grey
+      case LeaveType.local:
+        return '#4CAF50'; // Green (NEW)
     }
   }
 
@@ -196,7 +157,6 @@ extension LeaveStatusExtension on LeaveStatus {
     return toString().split('.').last;
   }
 
-  // Status color for UI
   String get colorCode {
     switch (this) {
       case LeaveStatus.pending:
@@ -243,6 +203,12 @@ class LeaveApplicationModel {
   final DateTime? createdAt;
   final DateTime? updatedAt;
 
+  final bool requiresCertificateReminder;
+  final DateTime? certificateReminderDate;
+  final bool certificateReminderSent;
+  final int certificateReminderCount;
+  final DateTime? certificateUploadedDate;
+
   const LeaveApplicationModel({
     this.id,
     required this.employeeId,
@@ -267,6 +233,12 @@ class LeaveApplicationModel {
     this.isSynced = false,
     this.createdAt,
     this.updatedAt,
+
+    this.requiresCertificateReminder = false,
+    this.certificateReminderDate,
+    this.certificateReminderSent = false,
+    this.certificateReminderCount = 0,
+    this.certificateUploadedDate,
   });
 
   // Create a copy with updated values
@@ -294,6 +266,12 @@ class LeaveApplicationModel {
     bool? isSynced,
     DateTime? createdAt,
     DateTime? updatedAt,
+
+    bool? requiresCertificateReminder,
+    DateTime? certificateReminderDate,
+    bool? certificateReminderSent,
+    int? certificateReminderCount,
+    DateTime? certificateUploadedDate,
   }) {
     return LeaveApplicationModel(
       id: id ?? this.id,
@@ -319,6 +297,12 @@ class LeaveApplicationModel {
       isSynced: isSynced ?? this.isSynced,
       createdAt: createdAt ?? this.createdAt,
       updatedAt: updatedAt ?? this.updatedAt,
+
+      requiresCertificateReminder: requiresCertificateReminder ?? this.requiresCertificateReminder,
+      certificateReminderDate: certificateReminderDate ?? this.certificateReminderDate,
+      certificateReminderSent: certificateReminderSent ?? this.certificateReminderSent,
+      certificateReminderCount: certificateReminderCount ?? this.certificateReminderCount,
+      certificateUploadedDate: certificateUploadedDate ?? this.certificateUploadedDate,
     );
   }
 
@@ -344,11 +328,17 @@ class LeaveApplicationModel {
       'reviewComments': reviewComments,
       'reviewedBy': reviewedBy,
       'isActive': isActive,
-      'isEmergencyLeave': leaveType == LeaveType.emergency, // ✅ NEW: Flag for emergency leave
-      'hasSpecialDeduction': leaveType.hasSpecialDeduction, // ✅ NEW: Flag for special deduction
-      'priorityLevel': leaveType.priorityLevel, // ✅ NEW: Priority level
+      'isEmergencyLeave': leaveType == LeaveType.emergency,
+      'hasSpecialDeduction': leaveType.hasSpecialDeduction,
+      'priorityLevel': leaveType.priorityLevel,
       'createdAt': createdAt != null ? Timestamp.fromDate(createdAt!) : FieldValue.serverTimestamp(),
       'updatedAt': FieldValue.serverTimestamp(),
+
+      'requiresCertificateReminder': requiresCertificateReminder,
+      'certificateReminderDate': certificateReminderDate != null ? Timestamp.fromDate(certificateReminderDate!) : null,
+      'certificateReminderSent': certificateReminderSent,
+      'certificateReminderCount': certificateReminderCount,
+      'certificateUploadedDate': certificateUploadedDate != null ? Timestamp.fromDate(certificateUploadedDate!) : null,
     };
   }
 
@@ -376,11 +366,17 @@ class LeaveApplicationModel {
       'reviewed_by': reviewedBy,
       'is_active': isActive ? 1 : 0,
       'is_synced': isSynced ? 1 : 0,
-      'is_emergency_leave': leaveType == LeaveType.emergency ? 1 : 0, // ✅ NEW
-      'has_special_deduction': leaveType.hasSpecialDeduction ? 1 : 0, // ✅ NEW
-      'priority_level': leaveType.priorityLevel, // ✅ NEW
+      'is_emergency_leave': leaveType == LeaveType.emergency ? 1 : 0,
+      'has_special_deduction': leaveType.hasSpecialDeduction ? 1 : 0,
+      'priority_level': leaveType.priorityLevel,
       'created_at': createdAt?.toIso8601String() ?? DateTime.now().toIso8601String(),
       'updated_at': updatedAt?.toIso8601String(),
+
+      'requires_certificate_reminder': requiresCertificateReminder ? 1 : 0,
+      'certificate_reminder_date': certificateReminderDate?.toIso8601String(),
+      'certificate_reminder_sent': certificateReminderSent ? 1 : 0,
+      'certificate_reminder_count': certificateReminderCount,
+      'certificate_uploaded_date': certificateUploadedDate?.toIso8601String(),
     };
   }
 
@@ -409,9 +405,15 @@ class LeaveApplicationModel {
       reviewComments: data['reviewComments'],
       reviewedBy: data['reviewedBy'],
       isActive: data['isActive'] ?? true,
-      isSynced: true, // Firestore data is always synced
+      isSynced: true,
       createdAt: data['createdAt'] != null ? (data['createdAt'] as Timestamp).toDate() : null,
       updatedAt: data['updatedAt'] != null ? (data['updatedAt'] as Timestamp).toDate() : null,
+
+      requiresCertificateReminder: data['requiresCertificateReminder'] ?? false,
+      certificateReminderDate: data['certificateReminderDate'] != null ? (data['certificateReminderDate'] as Timestamp).toDate() : null,
+      certificateReminderSent: data['certificateReminderSent'] ?? false,
+      certificateReminderCount: data['certificateReminderCount'] ?? 0,
+      certificateUploadedDate: data['certificateUploadedDate'] != null ? (data['certificateUploadedDate'] as Timestamp).toDate() : null,
     );
   }
 
@@ -441,6 +443,12 @@ class LeaveApplicationModel {
       isSynced: (map['is_synced'] ?? 0) == 1,
       createdAt: map['created_at'] != null ? DateTime.parse(map['created_at']) : null,
       updatedAt: map['updated_at'] != null ? DateTime.parse(map['updated_at']) : null,
+
+      requiresCertificateReminder: (map['requires_certificate_reminder'] ?? 0) == 1,
+      certificateReminderDate: map['certificate_reminder_date'] != null ? DateTime.parse(map['certificate_reminder_date']) : null,
+      certificateReminderSent: (map['certificate_reminder_sent'] ?? 0) == 1,
+      certificateReminderCount: map['certificate_reminder_count'] ?? 0,
+      certificateUploadedDate: map['certificate_uploaded_date'] != null ? DateTime.parse(map['certificate_uploaded_date']) : null,
     );
   }
 
@@ -450,13 +458,26 @@ class LeaveApplicationModel {
     return '${formatter.format(startDate)} - ${formatter.format(endDate)}';
   }
 
-  // Short date range for UI
-  String get shortDateRange {
-    final formatter = DateFormat('dd MMM');
-    if (startDate.year == endDate.year && startDate.month == endDate.month) {
-      return '${formatter.format(startDate)} - ${endDate.day} ${DateFormat('MMM yyyy').format(endDate)}';
-    }
-    return '${formatter.format(startDate)} - ${formatter.format(endDate)} ${endDate.year}';
+  bool get needsCertificateReminder {
+    return leaveType == LeaveType.sick &&
+        !isAlreadyTaken &&
+        status == LeaveStatus.approved &&
+        certificateUrl == null &&
+        requiresCertificateReminder;
+  }
+
+  bool get shouldSendReminderToday {
+    if (!needsCertificateReminder || certificateReminderDate == null) return false;
+
+    final today = DateTime.now();
+    final reminderDate = DateTime(
+        certificateReminderDate!.year,
+        certificateReminderDate!.month,
+        certificateReminderDate!.day
+    );
+    final todayDate = DateTime(today.year, today.month, today.day);
+
+    return todayDate.isAtSameMomentAs(reminderDate) || todayDate.isAfter(reminderDate);
   }
 
   // Check if the application can be cancelled
@@ -469,100 +490,39 @@ class LeaveApplicationModel {
     return status == LeaveStatus.pending && isActive;
   }
 
-  // Get days until leave starts
-  int get daysUntilLeave {
-    final today = DateTime.now();
-    final todayOnly = DateTime(today.year, today.month, today.day);
-    final startDateOnly = DateTime(startDate.year, startDate.month, startDate.day);
-
-    if (startDateOnly.isBefore(todayOnly)) {
-      return 0; // Leave has already started or passed
-    }
-
-    return startDateOnly.difference(todayOnly).inDays;
-  }
-
-  // Check if leave is upcoming
-  bool get isUpcoming {
-    return status == LeaveStatus.approved && daysUntilLeave > 0;
-  }
-
-  // Check if leave is current
-  bool get isCurrent {
-    final today = DateTime.now();
-    final todayOnly = DateTime(today.year, today.month, today.day);
-    final startDateOnly = DateTime(startDate.year, startDate.month, startDate.day);
-    final endDateOnly = DateTime(endDate.year, endDate.month, endDate.day);
-
-    return status == LeaveStatus.approved &&
-        !todayOnly.isBefore(startDateOnly) &&
-        !todayOnly.isAfter(endDateOnly);
-  }
-
-  // Get application age in days
-  int get applicationAgeInDays {
-    final now = DateTime.now();
-    return now.difference(applicationDate).inDays;
-  }
-
-  // Check if application is urgent (pending for more than 3 days, or emergency leave)
-  bool get isUrgent {
-    return (status == LeaveStatus.pending && applicationAgeInDays > 3) ||
-        leaveType == LeaveType.emergency; // ✅ UPDATED: Emergency leaves are always urgent
-  }
-
-  // ✅ UPDATED: Check if certificate is required for this specific application
-  bool get isCertificateRequiredForThisApplication {
-    return leaveType.isCertificateRequired(isAlreadyTaken);
-  }
-
-  // ✅ UPDATED: Get certificate requirement message for this application
-  String get certificateRequirementMessage {
-    return leaveType.getCertificateRequirement(isAlreadyTaken);
-  }
-
-  // ✅ NEW: Check if this is an emergency leave
+  // Check if this is an emergency leave
   bool get isEmergencyLeave {
     return leaveType == LeaveType.emergency;
   }
 
-  // ✅ NEW: Check if this leave has special deduction rules
+  // Check if this leave has special deduction rules
   bool get hasSpecialDeduction {
     return leaveType.hasSpecialDeduction;
   }
 
-  // ✅ NEW: Get deduction description for this application
+  // Get deduction description for this application
   String get deductionDescription {
     return leaveType.deductionDescription;
   }
 
-  // ✅ NEW: Get priority level for this application
+  // Get priority level for this application
   String get priorityLevel {
     return leaveType.priorityLevel;
   }
 
-  // ✅ NEW: Get formatted application summary
-  String get applicationSummary {
-    final statusEmoji = status == LeaveStatus.approved ? '✅' :
-    status == LeaveStatus.rejected ? '❌' :
-    status == LeaveStatus.cancelled ? '🚫' : '⏳';
-
-    final emergencyFlag = isEmergencyLeave ? '🚨 ' : '';
-
-    return '$emergencyFlag$statusEmoji $employeeName - ${leaveType.displayName} ($totalDays days)';
+  // Check if certificate is required for this specific application
+  bool get isCertificateRequiredForThisApplication {
+    return leaveType.isCertificateRequired(isAlreadyTaken);
   }
 
-  // ✅ NEW: Get notification message for managers
-  String get managerNotificationMessage {
-    final urgentFlag = isUrgent ? '🚨 URGENT: ' : '';
-    final emergencyFlag = isEmergencyLeave ? 'EMERGENCY ' : '';
-
-    return '${urgentFlag}New ${emergencyFlag}leave application from $employeeName for ${leaveType.displayName} ($totalDays days)';
+  // Get certificate requirement message for this application
+  String get certificateRequirementMessage {
+    return leaveType.getCertificateRequirement(isAlreadyTaken);
   }
 
   @override
   String toString() {
-    return 'LeaveApplicationModel(id: $id, employeeName: $employeeName, leaveType: ${leaveType.displayName}, status: ${status.displayName}, isEmergency: $isEmergencyLeave)';
+    return 'LeaveApplicationModel(id: $id, employeeName: $employeeName, leaveType: ${leaveType.displayName}, status: ${status.displayName})';
   }
 
   @override

@@ -1,16 +1,16 @@
-// lib/leave/leave_history_view.dart - MODERN UI/UX DESIGN WITH OVERFLOW FIXES
+// lib/leave/leave_history_view.dart - COMPLETE FIXED IMPLEMENTATION
 
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:face_auth/model/leave_application_model.dart';
-import 'package:face_auth/model/leave_balance_model.dart';
-import 'package:face_auth/services/leave_application_service.dart';
-import 'package:face_auth/services/service_locator.dart';
-import 'package:face_auth/repositories/leave_application_repository.dart';
-import 'package:face_auth/services/connectivity_service.dart';
-import 'package:face_auth/common/utils/custom_snackbar.dart';
-import 'package:face_auth/leave/apply_leave_view.dart';
+import 'package:face_auth_compatible/model/leave_application_model.dart';
+import 'package:face_auth_compatible/model/leave_balance_model.dart';
+import 'package:face_auth_compatible/services/leave_application_service.dart';
+import 'package:face_auth_compatible/services/service_locator.dart';
+import 'package:face_auth_compatible/repositories/leave_application_repository.dart';
+import 'package:face_auth_compatible/services/connectivity_service.dart';
+import 'package:face_auth_compatible/common/utils/custom_snackbar.dart';
+import 'package:face_auth_compatible/leave/apply_leave_view.dart';
 
 class LeaveHistoryView extends StatefulWidget {
   final String employeeId;
@@ -63,12 +63,12 @@ class _LeaveHistoryViewState extends State<LeaveHistoryView>
   bool get isSmallScreen => screenWidth < 360;
 
   EdgeInsets get responsivePadding => EdgeInsets.symmetric(
-    horizontal: isTablet ? 24.0 : (isSmallScreen ? 12.0 : 16.0),
-    vertical: isTablet ? 20.0 : (isSmallScreen ? 12.0 : 16.0),
+    horizontal: isTablet ? 20.0 : 16.0,
+    vertical: isTablet ? 16.0 : 12.0,
   );
 
   double get responsiveFontSize {
-    if (isTablet) return 1.2;
+    if (isTablet) return 1.1;
     if (isSmallScreen) return 0.9;
     return 1.0;
   }
@@ -85,7 +85,7 @@ class _LeaveHistoryViewState extends State<LeaveHistoryView>
 
   void _initializeAnimations() {
     _animationController = AnimationController(
-      duration: const Duration(milliseconds: 1200),
+      duration: const Duration(milliseconds: 800),
       vsync: this,
     );
 
@@ -103,7 +103,7 @@ class _LeaveHistoryViewState extends State<LeaveHistoryView>
     ));
 
     _slideAnimation = Tween<double>(
-      begin: 30.0,
+      begin: 20.0,
       end: 0.0,
     ).animate(CurvedAnimation(
       parent: _animationController,
@@ -112,7 +112,7 @@ class _LeaveHistoryViewState extends State<LeaveHistoryView>
 
     _pulseAnimation = Tween<double>(
       begin: 1.0,
-      end: 1.05,
+      end: 1.03,
     ).animate(CurvedAnimation(
       parent: _pulseController,
       curve: Curves.easeInOut,
@@ -195,17 +195,17 @@ class _LeaveHistoryViewState extends State<LeaveHistoryView>
     }
   }
 
-  // Modern Theme Builders (same as dashboard)
+  // Modern Theme Builders
   ThemeData _buildLightTheme() {
     return ThemeData(
       useMaterial3: true,
       colorScheme: ColorScheme.fromSeed(
-        seedColor: const Color(0xFF6366F1),
+        seedColor: const Color(0xFF2563EB),
         brightness: Brightness.light,
       ),
       cardTheme: CardTheme(
         elevation: 0,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
         color: Colors.white,
       ),
       appBarTheme: const AppBarTheme(
@@ -220,12 +220,12 @@ class _LeaveHistoryViewState extends State<LeaveHistoryView>
     return ThemeData(
       useMaterial3: true,
       colorScheme: ColorScheme.fromSeed(
-        seedColor: const Color(0xFF6366F1),
+        seedColor: const Color(0xFF2563EB),
         brightness: Brightness.dark,
       ),
       cardTheme: CardTheme(
         elevation: 0,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
         color: const Color(0xFF1E293B),
       ),
       appBarTheme: const AppBarTheme(
@@ -236,7 +236,7 @@ class _LeaveHistoryViewState extends State<LeaveHistoryView>
     );
   }
 
-  // Loading Screen (same as dashboard)
+  // Loading Screen
   Widget _buildLoadingScreen() {
     return Container(
       decoration: BoxDecoration(
@@ -244,8 +244,8 @@ class _LeaveHistoryViewState extends State<LeaveHistoryView>
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
           colors: _isDarkMode
-              ? [const Color(0xFF0A0E1A), const Color(0xFF1E293B)]
-              : [const Color(0xFF6366F1), const Color(0xFF8B5CF6)],
+              ? [const Color(0xFF0F172A), const Color(0xFF1E293B)]
+              : [const Color(0xFF2563EB), const Color(0xFF3B82F6)],
         ),
       ),
       child: Center(
@@ -256,20 +256,18 @@ class _LeaveHistoryViewState extends State<LeaveHistoryView>
               padding: const EdgeInsets.all(20),
               decoration: BoxDecoration(
                 color: Colors.white.withOpacity(0.1),
-                borderRadius: BorderRadius.circular(20),
+                borderRadius: BorderRadius.circular(16),
                 border: Border.all(
                   color: Colors.white.withOpacity(0.2),
                   width: 1,
                 ),
               ),
-              child: CircularProgressIndicator(
-                valueColor: AlwaysStoppedAnimation<Color>(
-                  _isDarkMode ? Colors.white : Colors.white,
-                ),
+              child: const CircularProgressIndicator(
+                valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
                 strokeWidth: 3,
               ),
             ),
-            const SizedBox(height: 24),
+            const SizedBox(height: 20),
             Text(
               'Loading leave history...',
               style: TextStyle(
@@ -284,204 +282,180 @@ class _LeaveHistoryViewState extends State<LeaveHistoryView>
     );
   }
 
-  // Modern Header
-  Widget _buildModernHeader() {
-    int totalApplications = _statistics['totalApplications'] ?? 0;
-    int totalDaysApproved = _statistics['totalDaysApproved'] ?? 0;
-
+  // Clean Header Section
+  Widget _buildHeader() {
     return Container(
-      margin: responsivePadding,
-      padding: EdgeInsets.all(isTablet ? 24.0 : 20.0),
+      padding: responsivePadding,
       decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(24),
-        gradient: LinearGradient(
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-          colors: _isDarkMode
-              ? [const Color(0xFF2D3748), const Color(0xFF4A5568)]
-              : [const Color(0xFF667EEA), const Color(0xFF764BA2)],
-        ),
+        color: _isDarkMode ? const Color(0xFF1E293B) : Colors.white,
         boxShadow: [
           BoxShadow(
-            color: _isDarkMode ? Colors.black.withOpacity(0.3) : const Color(0xFF667EEA).withOpacity(0.3),
-            blurRadius: 20,
-            offset: const Offset(0, 10),
-            spreadRadius: 0,
+            color: _isDarkMode ? Colors.black.withOpacity(0.2) : Colors.grey.withOpacity(0.1),
+            blurRadius: 4,
+            offset: const Offset(0, 2),
           ),
         ],
       ),
-      child: Container(
-        decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(24),
-          border: Border.all(
-            color: Colors.white.withOpacity(0.2),
-            width: 1,
-          ),
-        ),
-        child: Padding(
-          padding: EdgeInsets.all(isTablet ? 28 : 24),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              // Header
-              Row(
+      child: SafeArea(
+        child: Row(
+          children: [
+            Material(
+              color: Colors.transparent,
+              child: InkWell(
+                onTap: () => Navigator.pop(context),
+                borderRadius: BorderRadius.circular(8),
+                child: Container(
+                  padding: const EdgeInsets.all(8),
+                  decoration: BoxDecoration(
+                    color: _isDarkMode ? Colors.white.withOpacity(0.1) : const Color(0xFFF1F5F9),
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: Icon(
+                    Icons.arrow_back,
+                    color: _isDarkMode ? Colors.white : Colors.black87,
+                    size: 20,
+                  ),
+                ),
+              ),
+            ),
+            const SizedBox(width: 16),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Container(
-                    padding: const EdgeInsets.all(12),
-                    decoration: BoxDecoration(
-                      color: Colors.white.withOpacity(0.2),
-                      borderRadius: BorderRadius.circular(16),
-                      border: Border.all(
-                        color: Colors.white.withOpacity(0.3),
-                      ),
-                    ),
-                    child: Icon(
-                      Icons.history,
-                      color: Colors.white,
-                      size: isTablet ? 32 : 28,
+                  Text(
+                    'Leave History',
+                    style: TextStyle(
+                      fontSize: 20 * responsiveFontSize,
+                      fontWeight: FontWeight.w600,
+                      color: _isDarkMode ? Colors.white : const Color(0xFF1E293B),
                     ),
                   ),
-                  SizedBox(width: isTablet ? 20 : 16),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          "Leave Management",
-                          style: TextStyle(
-                            color: Colors.white.withOpacity(0.8),
-                            fontSize: (isTablet ? 18 : 16) * responsiveFontSize,
-                            fontWeight: FontWeight.w500,
-                          ),
-                        ),
-                        const SizedBox(height: 8),
-                        Text(
-                          "Track Your Applications",
-                          style: TextStyle(
-                            color: Colors.white,
-                            fontSize: (isTablet ? 32 : 28) * responsiveFontSize,
-                            fontWeight: FontWeight.bold,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                  // Refresh button
-                  Material(
-                    color: Colors.transparent,
-                    child: InkWell(
-                      onTap: _isRefreshing ? null : _refreshData,
-                      borderRadius: BorderRadius.circular(12),
-                      child: Container(
-                        padding: EdgeInsets.all(isTablet ? 12 : 10),
-                        decoration: BoxDecoration(
-                          color: Colors.white.withOpacity(0.2),
-                          borderRadius: BorderRadius.circular(12),
-                          border: Border.all(
-                            color: Colors.white.withOpacity(0.3),
-                          ),
-                        ),
-                        child: _isRefreshing
-                            ? SizedBox(
-                          width: isTablet ? 24 : 20,
-                          height: isTablet ? 24 : 20,
-                          child: CircularProgressIndicator(
-                            color: Colors.white,
-                            strokeWidth: 2,
-                          ),
-                        )
-                            : Icon(
-                          Icons.refresh,
-                          color: Colors.white,
-                          size: isTablet ? 24 : 20,
-                        ),
-                      ),
+                  Text(
+                    'Track your leave applications',
+                    style: TextStyle(
+                      fontSize: 14 * responsiveFontSize,
+                      color: _isDarkMode ? Colors.grey.shade400 : const Color(0xFF64748B),
                     ),
                   ),
                 ],
               ),
-
-              SizedBox(height: isTablet ? 24 : 20),
-
-              // Stats Row
-              Row(
-                children: [
-                  Expanded(
-                    child: _buildStatCard(
-                      icon: Icons.description_outlined,
-                      value: totalApplications.toString(),
-                      label: "Applications",
-                      color: Colors.blue,
-                    ),
+            ),
+            Material(
+              color: Colors.transparent,
+              child: InkWell(
+                onTap: _isRefreshing ? null : _refreshData,
+                borderRadius: BorderRadius.circular(8),
+                child: Container(
+                  padding: const EdgeInsets.all(8),
+                  decoration: BoxDecoration(
+                    color: _isDarkMode ? Colors.white.withOpacity(0.1) : const Color(0xFFF1F5F9),
+                    borderRadius: BorderRadius.circular(8),
                   ),
-                  SizedBox(width: isTablet ? 16 : 12),
-                  Expanded(
-                    child: _buildStatCard(
-                      icon: Icons.check_circle_outline,
-                      value: totalDaysApproved.toString(),
-                      label: "Days Approved",
-                      color: Colors.green,
+                  child: _isRefreshing
+                      ? const SizedBox(
+                    width: 20,
+                    height: 20,
+                    child: CircularProgressIndicator(
+                      strokeWidth: 2,
+                      valueColor: AlwaysStoppedAnimation<Color>(Color(0xFF2563EB)),
                     ),
+                  )
+                      : Icon(
+                    Icons.refresh,
+                    color: _isDarkMode ? Colors.white : Colors.black87,
+                    size: 20,
                   ),
-                  SizedBox(width: isTablet ? 16 : 12),
-                  Expanded(
-                    child: _buildStatCard(
-                      icon: Icons.pending_actions,
-                      value: _pendingApplications.length.toString(),
-                      label: "Pending",
-                      color: Colors.orange,
-                    ),
-                  ),
-                ],
+                ),
               ),
-            ],
-          ),
+            ),
+          ],
         ),
       ),
     );
   }
 
-  Widget _buildStatCard({
+  // Quick Stats Section - More Compact
+  Widget _buildQuickStats() {
+    int totalApplications = _statistics['totalApplications'] ?? 0;
+    int totalDaysApproved = _statistics['totalDaysApproved'] ?? 0;
+
+    return Container(
+      margin: responsivePadding,
+      padding: const EdgeInsets.all(12), // Reduced from 16
+      decoration: BoxDecoration(
+        gradient: const LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [Color(0xFF2563EB), Color(0xFF3B82F6)],
+        ),
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: IntrinsicHeight(
+        child: Row(
+          children: [
+            Expanded(
+              child: _buildStatItem(
+                icon: Icons.description,
+                value: totalApplications.toString(),
+                label: "Total",
+              ),
+            ),
+            Container(
+              width: 1,
+              color: Colors.white.withOpacity(0.3),
+            ),
+            Expanded(
+              child: _buildStatItem(
+                icon: Icons.check_circle,
+                value: totalDaysApproved.toString(),
+                label: "Approved",
+              ),
+            ),
+            Container(
+              width: 1,
+              color: Colors.white.withOpacity(0.3),
+            ),
+            Expanded(
+              child: _buildStatItem(
+                icon: Icons.pending,
+                value: _pendingApplications.length.toString(),
+                label: "Pending",
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildStatItem({
     required IconData icon,
     required String value,
     required String label,
-    required Color color,
   }) {
     return Container(
-      padding: EdgeInsets.all(isTablet ? 16 : 12),
-      decoration: BoxDecoration(
-        color: Colors.white.withOpacity(0.1),
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(
-          color: Colors.white.withOpacity(0.2),
-        ),
-      ),
+      padding: const EdgeInsets.symmetric(vertical: 6, horizontal: 2), // Reduced padding
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Container(
-            padding: const EdgeInsets.all(8),
-            decoration: BoxDecoration(
-              color: color.withOpacity(0.3),
-              borderRadius: BorderRadius.circular(8),
-            ),
-            child: Icon(icon, color: Colors.white, size: 16),
-          ),
-          const SizedBox(height: 8),
+          Icon(icon, color: Colors.white, size: 16), // Reduced from 18
+          const SizedBox(height: 4), // Reduced from 6
           Text(
             value,
             style: TextStyle(
               color: Colors.white,
-              fontSize: (isTablet ? 20 : 16) * responsiveFontSize,
+              fontSize: 14 * responsiveFontSize, // Reduced from 16
               fontWeight: FontWeight.bold,
             ),
           ),
           Text(
             label,
             style: TextStyle(
-              color: Colors.white.withOpacity(0.7),
-              fontSize: (isTablet ? 12 : 10) * responsiveFontSize,
+              color: Colors.white.withOpacity(0.8),
+              fontSize: 9 * responsiveFontSize, // Reduced from 10
             ),
+            textAlign: TextAlign.center,
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
           ),
@@ -490,15 +464,15 @@ class _LeaveHistoryViewState extends State<LeaveHistoryView>
     );
   }
 
-  // Leave Balance Card with modern design
+  // Leave Balance Card - Fixed Grid Overflow
   Widget _buildLeaveBalanceCard() {
     if (_leaveBalance == null) {
       return Container(
         margin: responsivePadding,
-        padding: EdgeInsets.all(isTablet ? 24 : 20),
+        padding: const EdgeInsets.all(20),
         decoration: BoxDecoration(
           color: _isDarkMode ? const Color(0xFF1E293B) : Colors.white,
-          borderRadius: BorderRadius.circular(20),
+          borderRadius: BorderRadius.circular(12),
           border: Border.all(
             color: _isDarkMode ? Colors.white.withOpacity(0.1) : Colors.grey.withOpacity(0.1),
           ),
@@ -508,7 +482,7 @@ class _LeaveHistoryViewState extends State<LeaveHistoryView>
             'Unable to load leave balance',
             style: TextStyle(
               color: _isDarkMode ? Colors.grey.shade400 : Colors.grey.shade600,
-              fontSize: (isTablet ? 16 : 14) * responsiveFontSize,
+              fontSize: 14 * responsiveFontSize,
             ),
           ),
         ),
@@ -516,509 +490,162 @@ class _LeaveHistoryViewState extends State<LeaveHistoryView>
     }
 
     final summary = _leaveBalance!.getSummary();
-    final displayTypes = ['annual', 'sick', 'emergency', 'maternity', 'paternity', 'compensate'];
+    // Show only 4 leave types as per your requirement
+    final displayTypes = ['annual', 'sick', 'local', 'emergency'];
 
-    return AnimatedBuilder(
-      animation: _slideAnimation,
-      builder: (context, child) {
-        return Transform.translate(
-          offset: Offset(0, _slideAnimation.value),
-          child: Container(
-            margin: responsivePadding,
-            decoration: BoxDecoration(
-              borderRadius: BorderRadius.circular(24),
-              gradient: LinearGradient(
-                begin: Alignment.topLeft,
-                end: Alignment.bottomRight,
-                colors: [
-                  Colors.green.shade400,
-                  Colors.teal.shade500,
-                ],
-              ),
-              boxShadow: [
-                BoxShadow(
-                  color: Colors.green.withOpacity(0.3),
-                  blurRadius: 20,
-                  offset: const Offset(0, 10),
-                  spreadRadius: 0,
-                ),
-              ],
-            ),
-            child: Container(
-              decoration: BoxDecoration(
-                borderRadius: BorderRadius.circular(24),
-                border: Border.all(
-                  color: Colors.white.withOpacity(0.2),
-                  width: 1,
-                ),
-              ),
-              child: Padding(
-                padding: EdgeInsets.all(isTablet ? 28 : 24),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      'Leave Balance (${DateTime.now().year})',
-                      style: TextStyle(
-                        color: Colors.white,
-                        fontSize: (isTablet ? 22 : 18) * responsiveFontSize,
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-                    SizedBox(height: isTablet ? 20 : 16),
-                    GridView.builder(
-                      shrinkWrap: true,
-                      physics: const NeverScrollableScrollPhysics(),
-                      gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-                        crossAxisCount: isTablet ? 3 : 2,
-                        childAspectRatio: isTablet ? 2.2 : 2.0,
-                        crossAxisSpacing: isTablet ? 16 : 12,
-                        mainAxisSpacing: isTablet ? 16 : 12,
-                      ),
-                      itemCount: displayTypes.length,
-                      itemBuilder: (context, index) {
-                        final type = displayTypes[index];
-                        final balance = summary[type];
-                        final remaining = balance?['remaining'] ?? 0;
-                        final total = balance?['total'] ?? 0;
-                        final pending = balance?['pending'] ?? 0;
-
-                        return Container(
-                          padding: EdgeInsets.all(isTablet ? 16 : 12),
-                          decoration: BoxDecoration(
-                            color: Colors.white.withOpacity(0.15),
-                            borderRadius: BorderRadius.circular(isTablet ? 16 : 12),
-                            border: Border.all(color: Colors.white.withOpacity(0.2)),
-                          ),
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              Text(
-                                type.toUpperCase(),
-                                style: TextStyle(
-                                  color: Colors.white,
-                                  fontSize: (isTablet ? 12 : 10) * responsiveFontSize,
-                                  fontWeight: FontWeight.bold,
-                                ),
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                              ),
-                              const Spacer(),
-                              Text(
-                                '$remaining/$total',
-                                style: TextStyle(
-                                  color: Colors.white,
-                                  fontSize: (isTablet ? 18 : 16) * responsiveFontSize,
-                                  fontWeight: FontWeight.bold,
-                                ),
-                              ),
-                              Text(
-                                pending > 0 ? '($pending pending)' : 'available',
-                                style: TextStyle(
-                                  color: Colors.white70,
-                                  fontSize: (isTablet ? 11 : 9) * responsiveFontSize,
-                                ),
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                              ),
-                            ],
-                          ),
-                        );
-                      },
-                    ),
-                  ],
-                ),
-              ),
-            ),
-          ),
-        );
-      },
-    );
-  }
-
-  // Modern Tab Bar
-  Widget _buildModernTabBar() {
     return Container(
       margin: responsivePadding,
       decoration: BoxDecoration(
         color: _isDarkMode ? const Color(0xFF1E293B) : Colors.white,
-        borderRadius: BorderRadius.circular(16),
+        borderRadius: BorderRadius.circular(12),
         border: Border.all(
           color: _isDarkMode ? Colors.white.withOpacity(0.1) : Colors.grey.withOpacity(0.1),
         ),
-        boxShadow: [
-          BoxShadow(
-            color: _isDarkMode ? Colors.black.withOpacity(0.2) : Colors.grey.withOpacity(0.1),
-            blurRadius: 8,
-            offset: const Offset(0, 4),
-          ),
-        ],
       ),
-      child: TabBar(
-        controller: _tabController,
-        indicator: BoxDecoration(
-          color: Theme.of(context).colorScheme.primary,
-          borderRadius: BorderRadius.circular(12),
-        ),
-        indicatorPadding: EdgeInsets.all(isTablet ? 8 : 6),
-        labelColor: Colors.white,
-        unselectedLabelColor: _isDarkMode ? Colors.grey.shade400 : Colors.grey.shade600,
-        labelStyle: TextStyle(
-          fontSize: (isTablet ? 14 : 12) * responsiveFontSize,
-          fontWeight: FontWeight.w600,
-        ),
-        unselectedLabelStyle: TextStyle(
-          fontSize: (isTablet ? 14 : 12) * responsiveFontSize,
-          fontWeight: FontWeight.w500,
-        ),
-        isScrollable: !isTablet,
-        tabs: [
-          Tab(
-            child: Container(
-              padding: EdgeInsets.symmetric(
-                horizontal: isTablet ? 16 : 12,
-                vertical: isTablet ? 12 : 8,
-              ),
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Icon(Icons.dashboard_outlined, size: isTablet ? 20 : 16),
-                  if (isTablet) ...[
-                    const SizedBox(width: 8),
-                    Text('Overview'),
-                  ],
-                ],
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Padding(
+            padding: const EdgeInsets.all(16),
+            child: Text(
+              'Leave Balance (${DateTime.now().year})',
+              style: TextStyle(
+                fontSize: 16 * responsiveFontSize,
+                fontWeight: FontWeight.w600,
+                color: _isDarkMode ? Colors.white : Colors.black87,
               ),
             ),
           ),
-          Tab(
-            child: Container(
-              padding: EdgeInsets.symmetric(
-                horizontal: isTablet ? 16 : 12,
-                vertical: isTablet ? 12 : 8,
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+            child: GridView.builder(
+              shrinkWrap: true,
+              physics: const NeverScrollableScrollPhysics(),
+              gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+                crossAxisCount: 2,
+                childAspectRatio: isSmallScreen ? 2.8 : 2.5, // Increased aspect ratio
+                crossAxisSpacing: 12,
+                mainAxisSpacing: 12,
               ),
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Icon(Icons.pending_outlined, size: isTablet ? 20 : 16),
-                  if (isTablet) ...[
-                    const SizedBox(width: 8),
-                    Text('Pending (${_pendingApplications.length})'),
-                  ] else ...[
-                    const SizedBox(width: 4),
-                    Text('${_pendingApplications.length}'),
-                  ],
-                ],
-              ),
-            ),
-          ),
-          Tab(
-            child: Container(
-              padding: EdgeInsets.symmetric(
-                horizontal: isTablet ? 16 : 12,
-                vertical: isTablet ? 12 : 8,
-              ),
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Icon(Icons.check_circle_outline, size: isTablet ? 20 : 16),
-                  if (isTablet) ...[
-                    const SizedBox(width: 8),
-                    Text('Approved (${_approvedApplications.length})'),
-                  ] else ...[
-                    const SizedBox(width: 4),
-                    Text('${_approvedApplications.length}'),
-                  ],
-                ],
-              ),
-            ),
-          ),
-          Tab(
-            child: Container(
-              padding: EdgeInsets.symmetric(
-                horizontal: isTablet ? 16 : 12,
-                vertical: isTablet ? 12 : 8,
-              ),
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Icon(Icons.cancel_outlined, size: isTablet ? 20 : 16),
-                  if (isTablet) ...[
-                    const SizedBox(width: 8),
-                    Text('Rejected (${_rejectedApplications.length})'),
-                  ] else ...[
-                    const SizedBox(width: 4),
-                    Text('${_rejectedApplications.length}'),
-                  ],
-                ],
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
+              itemCount: displayTypes.length,
+              itemBuilder: (context, index) {
+                final type = displayTypes[index];
+                final balance = summary[type];
+                final remaining = balance?['remaining'] ?? 0;
+                final total = balance?['total'] ?? 0;
+                final pending = balance?['pending'] ?? 0;
 
-  // Modern Application Card
-  Widget _buildApplicationCard(LeaveApplicationModel application, bool canCancel) {
-    return AnimatedBuilder(
-      animation: _slideAnimation,
-      builder: (context, child) {
-        return Transform.translate(
-          offset: Offset(0, _slideAnimation.value),
-          child: Container(
-            margin: EdgeInsets.only(bottom: isTablet ? 16 : 12),
-            decoration: BoxDecoration(
-              color: _isDarkMode ? const Color(0xFF1E293B) : Colors.white,
-              borderRadius: BorderRadius.circular(20),
-              border: Border.all(
-                color: _isDarkMode ? Colors.white.withOpacity(0.1) : Colors.grey.withOpacity(0.1),
-              ),
-              boxShadow: [
-                BoxShadow(
-                  color: _isDarkMode ? Colors.black.withOpacity(0.2) : Colors.grey.withOpacity(0.1),
-                  blurRadius: 8,
-                  offset: const Offset(0, 4),
-                ),
-              ],
-            ),
-            child: Padding(
-              padding: EdgeInsets.all(isTablet ? 20 : 16),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  // Header
-                  Row(
+                return Container(
+                  padding: const EdgeInsets.all(8), // Reduced padding
+                  decoration: BoxDecoration(
+                    color: _isDarkMode ? Colors.white.withOpacity(0.05) : const Color(0xFFF8FAFC),
+                    borderRadius: BorderRadius.circular(8),
+                    border: Border.all(
+                      color: _isDarkMode ? Colors.white.withOpacity(0.1) : Colors.grey.withOpacity(0.1),
+                    ),
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisAlignment: MainAxisAlignment.spaceEvenly, // Changed to spaceEvenly
                     children: [
-                      Container(
-                        padding: const EdgeInsets.all(12),
-                        decoration: BoxDecoration(
-                          color: _getStatusColor(application.status).withOpacity(0.1),
-                          borderRadius: BorderRadius.circular(12),
-                          border: Border.all(
-                            color: _getStatusColor(application.status).withOpacity(0.3),
-                          ),
-                        ),
-                        child: Icon(
-                          _getStatusIcon(application.status),
-                          color: _getStatusColor(application.status),
-                          size: isTablet ? 24 : 20,
-                        ),
-                      ),
-                      SizedBox(width: isTablet ? 16 : 12),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              application.leaveType.displayName,
-                              style: TextStyle(
-                                fontSize: (isTablet ? 20 : 18) * responsiveFontSize,
-                                fontWeight: FontWeight.bold,
-                                color: _isDarkMode ? Colors.white : Colors.black87,
-                              ),
-                            ),
-                            const SizedBox(height: 4),
-                            Text(
-                              application.dateRange,
-                              style: TextStyle(
-                                color: _isDarkMode ? Colors.grey.shade400 : Colors.grey.shade600,
-                                fontSize: (isTablet ? 16 : 14) * responsiveFontSize,
-                                fontWeight: FontWeight.w500,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                      Container(
-                        padding: EdgeInsets.symmetric(
-                          horizontal: isTablet ? 12 : 10,
-                          vertical: isTablet ? 6 : 4,
-                        ),
-                        decoration: BoxDecoration(
-                          color: _getStatusColor(application.status).withOpacity(0.1),
-                          borderRadius: BorderRadius.circular(12),
-                          border: Border.all(color: _getStatusColor(application.status).withOpacity(0.3)),
-                        ),
+                      Flexible(
+                        flex: 1,
                         child: Text(
-                          application.status.displayName.toUpperCase(),
+                          type.toUpperCase(),
                           style: TextStyle(
-                            color: _getStatusColor(application.status),
-                            fontSize: (isTablet ? 12 : 10) * responsiveFontSize,
-                            fontWeight: FontWeight.bold,
+                            color: _isDarkMode ? Colors.grey.shade400 : Colors.grey.shade600,
+                            fontSize: (isSmallScreen ? 8 : 9) * responsiveFontSize,
+                            fontWeight: FontWeight.w600,
                           ),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                      Flexible(
+                        flex: 2,
+                        child: FittedBox(
+                          fit: BoxFit.scaleDown,
+                          child: Text(
+                            '$remaining/$total',
+                            style: TextStyle(
+                              color: _isDarkMode ? Colors.white : Colors.black87,
+                              fontSize: (isSmallScreen ? 14 : 16) * responsiveFontSize,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                        ),
+                      ),
+                      Flexible(
+                        flex: 1,
+                        child: Text(
+                          pending > 0 ? '($pending pending)' : 'available',
+                          style: TextStyle(
+                            color: _isDarkMode ? Colors.grey.shade500 : Colors.grey.shade500,
+                            fontSize: (isSmallScreen ? 7 : 8) * responsiveFontSize,
+                          ),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
                         ),
                       ),
                     ],
                   ),
+                );
+              },
+            ),
+          ),
+        ],
+      ),
+    );
+  }
 
-                  SizedBox(height: isTablet ? 20 : 16),
-
-                  // Details Section
-                  Container(
-                    padding: EdgeInsets.all(isTablet ? 16 : 14),
-                    decoration: BoxDecoration(
-                      color: _isDarkMode ? Colors.white.withOpacity(0.05) : Colors.grey.withOpacity(0.05),
-                      borderRadius: BorderRadius.circular(16),
-                    ),
-                    child: Column(
-                      children: [
-                        Row(
-                          children: [
-                            Icon(
-                              Icons.access_time,
-                              size: 16,
-                              color: Theme.of(context).colorScheme.primary,
-                            ),
-                            const SizedBox(width: 12),
-                            Expanded(
-                              child: Text(
-                                '${application.totalDays} days',
-                                style: TextStyle(
-                                  fontSize: (isTablet ? 16 : 14) * responsiveFontSize,
-                                  fontWeight: FontWeight.w600,
-                                  color: _isDarkMode ? Colors.white : Colors.black87,
-                                ),
-                              ),
-                            ),
-                            Text(
-                              'Applied: ${DateFormat('dd/MM/yyyy').format(application.applicationDate)}',
-                              style: TextStyle(
-                                color: _isDarkMode ? Colors.grey.shade400 : Colors.grey.shade600,
-                                fontSize: (isTablet ? 14 : 12) * responsiveFontSize,
-                              ),
-                            ),
-                          ],
-                        ),
-                        if (application.certificateUrl != null) ...[
-                          const SizedBox(height: 12),
-                          Row(
-                            children: [
-                              Icon(
-                                Icons.attachment,
-                                size: 16,
-                                color: Colors.green.shade600,
-                              ),
-                              const SizedBox(width: 12),
-                              Text(
-                                'Certificate attached',
-                                style: TextStyle(
-                                  color: Colors.green.shade600,
-                                  fontSize: (isTablet ? 14 : 12) * responsiveFontSize,
-                                  fontWeight: FontWeight.w500,
-                                ),
-                              ),
-                            ],
-                          ),
-                        ],
-                      ],
-                    ),
-                  ),
-
-                  SizedBox(height: isTablet ? 16 : 12),
-
-                  // Reason
-                  Text(
-                    'Reason:',
-                    style: TextStyle(
-                      fontSize: (isTablet ? 16 : 14) * responsiveFontSize,
-                      fontWeight: FontWeight.bold,
-                      color: _isDarkMode ? Colors.white : Colors.black87,
-                    ),
-                  ),
-                  const SizedBox(height: 8),
-                  Text(
-                    application.reason,
-                    style: TextStyle(
-                      fontSize: (isTablet ? 16 : 14) * responsiveFontSize,
-                      color: _isDarkMode ? Colors.grey.shade300 : Colors.grey.shade700,
-                      height: 1.4,
-                    ),
-                    maxLines: 3,
-                    overflow: TextOverflow.ellipsis,
-                  ),
-
-                  // Manager Comments
-                  if (application.reviewComments != null && application.reviewComments!.isNotEmpty) ...[
-                    SizedBox(height: isTablet ? 16 : 12),
-                    Container(
-                      padding: EdgeInsets.all(isTablet ? 16 : 12),
-                      decoration: BoxDecoration(
-                        color: application.status == LeaveStatus.approved
-                            ? Colors.green.withOpacity(0.1)
-                            : Colors.red.withOpacity(0.1),
-                        borderRadius: BorderRadius.circular(12),
-                        border: Border.all(
-                          color: application.status == LeaveStatus.approved
-                              ? Colors.green.withOpacity(0.3)
-                              : Colors.red.withOpacity(0.3),
-                        ),
-                      ),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Row(
-                            children: [
-                              Icon(
-                                Icons.comment,
-                                size: 16,
-                                color: application.status == LeaveStatus.approved
-                                    ? Colors.green.shade700
-                                    : Colors.red.shade700,
-                              ),
-                              const SizedBox(width: 8),
-                              Text(
-                                'Manager Comments:',
-                                style: TextStyle(
-                                  fontSize: (isTablet ? 14 : 12) * responsiveFontSize,
-                                  fontWeight: FontWeight.bold,
-                                  color: application.status == LeaveStatus.approved
-                                      ? Colors.green.shade700
-                                      : Colors.red.shade700,
-                                ),
-                              ),
-                            ],
-                          ),
-                          const SizedBox(height: 8),
-                          Text(
-                            application.reviewComments!,
-                            style: TextStyle(
-                              fontSize: (isTablet ? 14 : 12) * responsiveFontSize,
-                              color: application.status == LeaveStatus.approved
-                                  ? Colors.green.shade600
-                                  : Colors.red.shade600,
-                              height: 1.4,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ],
-
-                  // Cancel button for pending applications
-                  if (canCancel && application.status == LeaveStatus.pending) ...[
-                    SizedBox(height: isTablet ? 20 : 16),
-                    SizedBox(
-                      width: double.infinity,
-                      height: isTablet ? 50 : 44,
-                      child: OutlinedButton.icon(
-                        onPressed: () => _showCancelDialog(application),
-                        icon: Icon(
-                          Icons.cancel_outlined,
-                          size: isTablet ? 20 : 16,
-                        ),
-                        label: Text(
-                          'Cancel Application',
-                          style: TextStyle(fontSize: (isTablet ? 16 : 14) * responsiveFontSize),
-                        ),
-                        style: OutlinedButton.styleFrom(
-                          foregroundColor: Colors.red,
-                          side: const BorderSide(color: Colors.red),
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(12),
-                          ),
-                        ),
+  // Tab Bar - Fixed Overflow Issues
+  Widget _buildTabBar() {
+    return Container(
+      margin: responsivePadding,
+      height: 50, // Fixed height to prevent overflow
+      decoration: BoxDecoration(
+        color: _isDarkMode ? const Color(0xFF1E293B) : Colors.white,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(
+          color: _isDarkMode ? Colors.white.withOpacity(0.1) : Colors.grey.withOpacity(0.1),
+        ),
+      ),
+      child: TabBar(
+        controller: _tabController,
+        indicator: BoxDecoration(
+          color: const Color(0xFF2563EB),
+          borderRadius: BorderRadius.circular(8),
+        ),
+        indicatorPadding: const EdgeInsets.all(4),
+        labelColor: Colors.white,
+        unselectedLabelColor: _isDarkMode ? Colors.grey.shade400 : Colors.grey.shade600,
+        labelStyle: TextStyle(
+          fontSize: (isSmallScreen ? 9 : 10) * responsiveFontSize,
+          fontWeight: FontWeight.w600,
+        ),
+        unselectedLabelStyle: TextStyle(
+          fontSize: (isSmallScreen ? 9 : 10) * responsiveFontSize,
+          fontWeight: FontWeight.w500,
+        ),
+        isScrollable: false,
+        dividerColor: Colors.transparent,
+        tabs: [
+          // Overview Tab
+          Tab(
+            child: Container(
+              constraints: const BoxConstraints(minWidth: 0), // Allow flexible width
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Icon(Icons.dashboard, size: isSmallScreen ? 14 : 16),
+                  if (screenWidth > 380) ...[
+                    const SizedBox(height: 2),
+                    Flexible(
+                      child: Text(
+                        'Overview',
+                        style: TextStyle(fontSize: 8 * responsiveFontSize),
+                        overflow: TextOverflow.ellipsis,
                       ),
                     ),
                   ],
@@ -1026,45 +653,343 @@ class _LeaveHistoryViewState extends State<LeaveHistoryView>
               ),
             ),
           ),
-        );
-      },
+          // Pending Tab
+          Tab(
+            child: Container(
+              constraints: const BoxConstraints(minWidth: 0),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(Icons.pending, size: isSmallScreen ? 14 : 16),
+                      const SizedBox(width: 2),
+                      Text(
+                        '${_pendingApplications.length}',
+                        style: TextStyle(fontSize: (isSmallScreen ? 9 : 10) * responsiveFontSize),
+                      ),
+                    ],
+                  ),
+                  if (screenWidth > 380) ...[
+                    const SizedBox(height: 2),
+                    Flexible(
+                      child: Text(
+                        'Pending',
+                        style: TextStyle(fontSize: 8 * responsiveFontSize),
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
+                  ],
+                ],
+              ),
+            ),
+          ),
+          // Approved Tab
+          Tab(
+            child: Container(
+              constraints: const BoxConstraints(minWidth: 0),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(Icons.check_circle, size: isSmallScreen ? 14 : 16),
+                      const SizedBox(width: 2),
+                      Text(
+                        '${_approvedApplications.length}',
+                        style: TextStyle(fontSize: (isSmallScreen ? 9 : 10) * responsiveFontSize),
+                      ),
+                    ],
+                  ),
+                  if (screenWidth > 380) ...[
+                    const SizedBox(height: 2),
+                    Flexible(
+                      child: Text(
+                        'Approved',
+                        style: TextStyle(fontSize: 8 * responsiveFontSize),
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
+                  ],
+                ],
+              ),
+            ),
+          ),
+          // Rejected Tab
+          Tab(
+            child: Container(
+              constraints: const BoxConstraints(minWidth: 0),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(Icons.cancel, size: isSmallScreen ? 14 : 16),
+                      const SizedBox(width: 2),
+                      Text(
+                        '${_rejectedApplications.length}',
+                        style: TextStyle(fontSize: (isSmallScreen ? 9 : 10) * responsiveFontSize),
+                      ),
+                    ],
+                  ),
+                  if (screenWidth > 380) ...[
+                    const SizedBox(height: 2),
+                    Flexible(
+                      child: Text(
+                        'Rejected',
+                        style: TextStyle(fontSize: 8 * responsiveFontSize),
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
+                  ],
+                ],
+              ),
+            ),
+          ),
+        ],
+      ),
     );
   }
 
-  // Applications List with proper overflow handling
+  // Compact Application Card - Much Smaller Version
+  Widget _buildApplicationCard(LeaveApplicationModel application, bool canCancel) {
+    return Container(
+      margin: const EdgeInsets.only(bottom: 8), // Reduced from 12
+      decoration: BoxDecoration(
+        color: _isDarkMode ? const Color(0xFF1E293B) : Colors.white,
+        borderRadius: BorderRadius.circular(8), // Reduced from 12
+        border: Border.all(
+          color: _isDarkMode ? Colors.white.withOpacity(0.1) : Colors.grey.withOpacity(0.1),
+        ),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.all(12), // Reduced from 16
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // Header Row - More Compact
+            Row(
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(6), // Reduced from 8
+                  decoration: BoxDecoration(
+                    color: _getStatusColor(application.status).withOpacity(0.1),
+                    borderRadius: BorderRadius.circular(6), // Reduced from 8
+                  ),
+                  child: Icon(
+                    _getStatusIcon(application.status),
+                    color: _getStatusColor(application.status),
+                    size: 14, // Reduced from 16
+                  ),
+                ),
+                const SizedBox(width: 8), // Reduced from 12
+                Expanded(
+                  flex: 3,
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        application.leaveType.displayName,
+                        style: TextStyle(
+                          fontSize: 14 * responsiveFontSize, // Reduced from 16
+                          fontWeight: FontWeight.w600,
+                          color: _isDarkMode ? Colors.white : Colors.black87,
+                        ),
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                      Text(
+                        application.dateRange,
+                        style: TextStyle(
+                          color: _isDarkMode ? Colors.grey.shade400 : Colors.grey.shade600,
+                          fontSize: 10 * responsiveFontSize, // Reduced from 12
+                        ),
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(width: 4),
+                Flexible(
+                  flex: 1,
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2), // Reduced
+                    decoration: BoxDecoration(
+                      color: _getStatusColor(application.status).withOpacity(0.1),
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: Text(
+                      application.status.displayName.toUpperCase(),
+                      style: TextStyle(
+                        color: _getStatusColor(application.status),
+                        fontSize: 8 * responsiveFontSize, // Reduced from 9
+                        fontWeight: FontWeight.bold,
+                      ),
+                      textAlign: TextAlign.center,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+
+            const SizedBox(height: 8), // Reduced from 12
+
+            // Details Row - More Compact
+            Row(
+              children: [
+                Icon(
+                  Icons.calendar_today,
+                  size: 12, // Reduced from 14
+                  color: _isDarkMode ? Colors.grey.shade400 : Colors.grey.shade600,
+                ),
+                const SizedBox(width: 6), // Reduced from 8
+                Expanded(
+                  child: Text(
+                    '${application.totalDays} days',
+                    style: TextStyle(
+                      color: _isDarkMode ? Colors.white : Colors.black87,
+                      fontSize: 12 * responsiveFontSize, // Reduced from 14
+                      fontWeight: FontWeight.w500,
+                    ),
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ),
+                if (application.certificateUrl != null) ...[
+                  Icon(
+                    Icons.attachment,
+                    size: 12, // Reduced from 14
+                    color: Colors.green.shade600,
+                  ),
+                  const SizedBox(width: 2),
+                  Text(
+                    'Cert',
+                    style: TextStyle(
+                      color: Colors.green.shade600,
+                      fontSize: 8 * responsiveFontSize, // Reduced from 10
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
+                ],
+              ],
+            ),
+
+            const SizedBox(height: 6), // Reduced from 8
+
+            // Reason - More Compact
+            Text(
+              'Reason: ${application.reason}',
+              style: TextStyle(
+                color: _isDarkMode ? Colors.grey.shade300 : Colors.grey.shade700,
+                fontSize: 10 * responsiveFontSize, // Reduced from 12
+              ),
+              maxLines: 1, // Reduced from 2
+              overflow: TextOverflow.ellipsis,
+            ),
+
+            // Manager Comments - More Compact
+            if (application.reviewComments != null && application.reviewComments!.isNotEmpty) ...[
+              const SizedBox(height: 6), // Reduced from 8
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.all(6), // Reduced from 8
+                decoration: BoxDecoration(
+                  color: application.status == LeaveStatus.approved
+                      ? Colors.green.withOpacity(0.1)
+                      : Colors.red.withOpacity(0.1),
+                  borderRadius: BorderRadius.circular(6), // Reduced from 8
+                ),
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Icon(
+                      Icons.comment,
+                      size: 12, // Reduced from 14
+                      color: application.status == LeaveStatus.approved
+                          ? Colors.green.shade700
+                          : Colors.red.shade700,
+                    ),
+                    const SizedBox(width: 6), // Reduced from 8
+                    Expanded(
+                      child: Text(
+                        application.reviewComments!,
+                        style: TextStyle(
+                          fontSize: 9 * responsiveFontSize, // Reduced from 11
+                          color: application.status == LeaveStatus.approved
+                              ? Colors.green.shade700
+                              : Colors.red.shade700,
+                        ),
+                        maxLines: 1, // Reduced from 2
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+
+            // Cancel button for pending applications - More Compact
+            if (canCancel && application.status == LeaveStatus.pending) ...[
+              const SizedBox(height: 8), // Reduced from 12
+              SizedBox(
+                width: double.infinity,
+                height: 32, // Reduced from 36
+                child: OutlinedButton.icon(
+                  onPressed: () => _showCancelDialog(application),
+                  icon: const Icon(Icons.cancel, size: 14), // Reduced from 16
+                  label: Text(
+                    'Cancel',
+                    style: TextStyle(fontSize: 10 * responsiveFontSize), // Reduced from 12
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                  style: OutlinedButton.styleFrom(
+                    foregroundColor: Colors.red,
+                    side: const BorderSide(color: Colors.red),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(6), // Reduced from 8
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+
+  // Applications List
   Widget _buildApplicationsList(List<LeaveApplicationModel> applications, bool canCancel) {
     if (applications.isEmpty) {
       return Center(
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Container(
-              padding: EdgeInsets.all(isTablet ? 32 : 24),
-              decoration: BoxDecoration(
-                color: _isDarkMode ? Colors.white.withOpacity(0.05) : Colors.grey.withOpacity(0.1),
-                shape: BoxShape.circle,
-              ),
-              child: Icon(
-                Icons.event_available,
-                size: isTablet ? 80 : 64,
-                color: _isDarkMode ? Colors.grey.shade600 : Colors.grey.shade400,
-              ),
+            Icon(
+              Icons.event_available,
+              size: 64,
+              color: _isDarkMode ? Colors.grey.shade600 : Colors.grey.shade400,
             ),
-            SizedBox(height: isTablet ? 24 : 20),
+            const SizedBox(height: 16),
             Text(
               'No Applications Found',
               style: TextStyle(
-                fontSize: (isTablet ? 24 : 20) * responsiveFontSize,
-                fontWeight: FontWeight.bold,
+                fontSize: 18 * responsiveFontSize,
+                fontWeight: FontWeight.w600,
                 color: _isDarkMode ? Colors.white : Colors.black87,
               ),
             ),
-            SizedBox(height: isTablet ? 12 : 8),
+            const SizedBox(height: 8),
             Text(
               'Your leave applications will appear here',
               style: TextStyle(
                 color: _isDarkMode ? Colors.grey.shade400 : Colors.grey.shade600,
-                fontSize: (isTablet ? 16 : 14) * responsiveFontSize,
+                fontSize: 14 * responsiveFontSize,
               ),
               textAlign: TextAlign.center,
             ),
@@ -1075,10 +1000,15 @@ class _LeaveHistoryViewState extends State<LeaveHistoryView>
 
     return RefreshIndicator(
       onRefresh: _refreshData,
-      color: Theme.of(context).colorScheme.primary,
+      color: const Color(0xFF2563EB),
       child: ListView.builder(
         physics: const BouncingScrollPhysics(),
-        padding: EdgeInsets.symmetric(horizontal: responsivePadding.horizontal, vertical: 16),
+        padding: EdgeInsets.fromLTRB(
+          responsivePadding.horizontal,
+          8,
+          responsivePadding.horizontal,
+          100, // Extra padding for FAB
+        ),
         itemCount: applications.length,
         itemBuilder: (context, index) {
           final application = applications[index];
@@ -1088,50 +1018,79 @@ class _LeaveHistoryViewState extends State<LeaveHistoryView>
     );
   }
 
-  // Overview Tab
+  // Overview Tab - More Compact and Better Organized
   Widget _buildOverviewTab() {
-    final recentApplications = _allApplications.take(3).toList();
+    final recentApplications = _allApplications.take(3).toList(); // Show only 3 instead of 5
 
     return RefreshIndicator(
       onRefresh: _refreshData,
-      color: Theme.of(context).colorScheme.primary,
+      color: const Color(0xFF2563EB),
       child: SingleChildScrollView(
         physics: const BouncingScrollPhysics(),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            SizedBox(height: responsivePadding.vertical),
+            const SizedBox(height: 4), // Reduced from 8
 
-            // Leave Balance Card
+            // Quick Stats - More Compact
+            _buildQuickStats(),
+
+            const SizedBox(height: 8), // Reduced spacing
+
+            // Leave Balance Card - More Compact
             _buildLeaveBalanceCard(),
 
-            SizedBox(height: responsivePadding.vertical),
+            const SizedBox(height: 8), // Reduced spacing
 
             // Recent Applications Section
             if (recentApplications.isNotEmpty) ...[
               Padding(
-                padding: EdgeInsets.symmetric(horizontal: responsivePadding.horizontal),
-                child: Text(
-                  'Recent Applications',
-                  style: TextStyle(
-                    fontSize: (isTablet ? 24 : 20) * responsiveFontSize,
-                    fontWeight: FontWeight.bold,
-                    color: _isDarkMode ? Colors.white : Colors.black87,
-                  ),
+                padding: EdgeInsets.symmetric(
+                  horizontal: responsivePadding.horizontal,
+                  vertical: 4, // Reduced from default
+                ),
+                child: Row(
+                  children: [
+                    Text(
+                      'Recent Applications',
+                      style: TextStyle(
+                        fontSize: 16 * responsiveFontSize, // Reduced from 18
+                        fontWeight: FontWeight.w600,
+                        color: _isDarkMode ? Colors.white : Colors.black87,
+                      ),
+                    ),
+                    const Spacer(),
+                    Text(
+                      '${recentApplications.length} of ${_allApplications.length}',
+                      style: TextStyle(
+                        fontSize: 12 * responsiveFontSize,
+                        color: _isDarkMode ? Colors.grey.shade400 : Colors.grey.shade600,
+                      ),
+                    ),
+                  ],
                 ),
               ),
-              SizedBox(height: responsivePadding.vertical),
-              ...recentApplications.map((app) => Padding(
+              const SizedBox(height: 8),
+              // Recent Applications List - More Compact
+              Padding(
                 padding: EdgeInsets.symmetric(horizontal: responsivePadding.horizontal),
-                child: _buildApplicationCard(app, app.status == LeaveStatus.pending),
-              )),
+                child: Column(
+                  children: recentApplications.map((app) =>
+                      _buildApplicationCard(app, app.status == LeaveStatus.pending)
+                  ).toList(),
+                ),
+              ),
             ] else ...[
+              // Empty State - More Compact
               Container(
-                margin: responsivePadding,
-                padding: EdgeInsets.all(isTablet ? 40 : 32),
+                margin: EdgeInsets.symmetric(
+                  horizontal: responsivePadding.horizontal,
+                  vertical: 8,
+                ),
+                padding: const EdgeInsets.all(24), // Reduced from 32
                 decoration: BoxDecoration(
                   color: _isDarkMode ? const Color(0xFF1E293B) : Colors.white,
-                  borderRadius: BorderRadius.circular(20),
+                  borderRadius: BorderRadius.circular(12),
                   border: Border.all(
                     color: _isDarkMode ? Colors.white.withOpacity(0.1) : Colors.grey.withOpacity(0.1),
                   ),
@@ -1141,16 +1100,24 @@ class _LeaveHistoryViewState extends State<LeaveHistoryView>
                     children: [
                       Icon(
                         Icons.event_available,
-                        size: isTablet ? 80 : 64,
+                        size: 48, // Reduced from 64
                         color: _isDarkMode ? Colors.grey.shade600 : Colors.grey.shade400,
                       ),
-                      SizedBox(height: isTablet ? 20 : 16),
+                      const SizedBox(height: 12), // Reduced from 16
                       Text(
                         'No leave applications yet',
                         style: TextStyle(
                           color: _isDarkMode ? Colors.grey.shade400 : Colors.grey.shade600,
-                          fontSize: (isTablet ? 18 : 16) * responsiveFontSize,
+                          fontSize: 14 * responsiveFontSize, // Reduced from 16
                           fontWeight: FontWeight.w500,
+                        ),
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        'Tap the + button to apply for leave',
+                        style: TextStyle(
+                          color: _isDarkMode ? Colors.grey.shade500 : Colors.grey.shade500,
+                          fontSize: 12 * responsiveFontSize,
                         ),
                       ),
                     ],
@@ -1159,7 +1126,7 @@ class _LeaveHistoryViewState extends State<LeaveHistoryView>
               ),
             ],
 
-            const SizedBox(height: 100), // Space for FAB
+            const SizedBox(height: 80), // Space for FAB - Reduced from 100
           ],
         ),
       ),
@@ -1188,129 +1155,97 @@ class _LeaveHistoryViewState extends State<LeaveHistoryView>
   Future<void> _showCancelDialog(LeaveApplicationModel application) async {
     final confirmed = await showDialog<bool>(
       context: context,
-      builder: (context) => Dialog(
-        backgroundColor: Colors.transparent,
-        child: Container(
-          decoration: BoxDecoration(
-            color: _isDarkMode ? const Color(0xFF1E293B) : Colors.white,
-            borderRadius: BorderRadius.circular(20),
-            boxShadow: [
-              BoxShadow(
-                color: Colors.black.withOpacity(0.3),
-                blurRadius: 20,
-                offset: const Offset(0, 10),
+      builder: (context) => AlertDialog(
+        backgroundColor: _isDarkMode ? const Color(0xFF1E293B) : Colors.white,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+        title: Row(
+          children: [
+            Icon(
+              Icons.warning_amber_rounded,
+              color: Colors.orange,
+              size: 24,
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Text(
+                'Cancel Application',
+                style: TextStyle(
+                  fontSize: 18 * responsiveFontSize,
+                  color: _isDarkMode ? Colors.white : Colors.black87,
+                ),
               ),
-            ],
-          ),
-          child: Padding(
-            padding: EdgeInsets.all(isTablet ? 24 : 20),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Icon(
-                  Icons.warning_amber_rounded,
-                  color: Colors.orange,
-                  size: isTablet ? 64 : 48,
-                ),
-                SizedBox(height: isTablet ? 20 : 16),
-                Text(
-                  'Cancel Leave Application',
-                  style: TextStyle(
-                    fontSize: (isTablet ? 22 : 20) * responsiveFontSize,
-                    fontWeight: FontWeight.bold,
-                    color: _isDarkMode ? Colors.white : Colors.black87,
-                  ),
-                ),
-                SizedBox(height: isTablet ? 16 : 12),
-                Text(
-                  'Are you sure you want to cancel this leave application?',
-                  style: TextStyle(
-                    fontSize: (isTablet ? 16 : 14) * responsiveFontSize,
-                    color: _isDarkMode ? Colors.grey.shade300 : Colors.grey.shade700,
-                  ),
-                  textAlign: TextAlign.center,
-                ),
-                SizedBox(height: isTablet ? 20 : 16),
-                Container(
-                  padding: EdgeInsets.all(isTablet ? 16 : 12),
-                  decoration: BoxDecoration(
-                    color: _isDarkMode ? Colors.white.withOpacity(0.05) : Colors.grey.shade50,
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        'Leave Type: ${application.leaveType.displayName}',
-                        style: TextStyle(
-                          fontSize: (isTablet ? 14 : 12) * responsiveFontSize,
-                          color: _isDarkMode ? Colors.white : Colors.black87,
-                        ),
-                      ),
-                      Text(
-                        'Dates: ${application.dateRange}',
-                        style: TextStyle(
-                          fontSize: (isTablet ? 14 : 12) * responsiveFontSize,
-                          color: _isDarkMode ? Colors.white : Colors.black87,
-                        ),
-                      ),
-                      Text(
-                        'Days: ${application.totalDays}',
-                        style: TextStyle(
-                          fontSize: (isTablet ? 14 : 12) * responsiveFontSize,
-                          color: _isDarkMode ? Colors.white : Colors.black87,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-                SizedBox(height: isTablet ? 24 : 20),
-                Row(
-                  children: [
-                    Expanded(
-                      child: OutlinedButton(
-                        onPressed: () => Navigator.pop(context, false),
-                        style: OutlinedButton.styleFrom(
-                          foregroundColor: _isDarkMode ? Colors.grey.shade300 : Colors.grey.shade700,
-                          side: BorderSide(
-                            color: _isDarkMode ? Colors.grey.shade600 : Colors.grey.shade300,
-                          ),
-                          padding: EdgeInsets.symmetric(vertical: isTablet ? 16 : 12),
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(12),
-                          ),
-                        ),
-                        child: Text(
-                          'No',
-                          style: TextStyle(fontSize: (isTablet ? 16 : 14) * responsiveFontSize),
-                        ),
-                      ),
+            ),
+          ],
+        ),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              'Are you sure you want to cancel this leave application?',
+              style: TextStyle(
+                fontSize: 14 * responsiveFontSize,
+                color: _isDarkMode ? Colors.grey.shade300 : Colors.grey.shade700,
+              ),
+            ),
+            const SizedBox(height: 12),
+            Container(
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: _isDarkMode ? Colors.white.withOpacity(0.05) : Colors.grey.shade50,
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'Leave Type: ${application.leaveType.displayName}',
+                    style: TextStyle(
+                      fontSize: 12 * responsiveFontSize,
+                      color: _isDarkMode ? Colors.white : Colors.black87,
                     ),
-                    SizedBox(width: isTablet ? 16 : 12),
-                    Expanded(
-                      child: ElevatedButton(
-                        onPressed: () => Navigator.pop(context, true),
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: Colors.red,
-                          foregroundColor: Colors.white,
-                          padding: EdgeInsets.symmetric(vertical: isTablet ? 16 : 12),
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(12),
-                          ),
-                          elevation: 0,
-                        ),
-                        child: Text(
-                          'Yes, Cancel',
-                          style: TextStyle(fontSize: (isTablet ? 16 : 14) * responsiveFontSize),
-                        ),
-                      ),
+                  ),
+                  Text(
+                    'Dates: ${application.dateRange}',
+                    style: TextStyle(
+                      fontSize: 12 * responsiveFontSize,
+                      color: _isDarkMode ? Colors.white : Colors.black87,
                     ),
-                  ],
-                ),
-              ],
+                  ),
+                  Text(
+                    'Days: ${application.totalDays}',
+                    style: TextStyle(
+                      fontSize: 12 * responsiveFontSize,
+                      color: _isDarkMode ? Colors.white : Colors.black87,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: Text(
+              'No',
+              style: TextStyle(
+                color: _isDarkMode ? Colors.grey.shade300 : Colors.grey.shade700,
+              ),
             ),
           ),
-        ),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(context, true),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.red,
+              foregroundColor: Colors.white,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(8),
+              ),
+            ),
+            child: const Text('Yes, Cancel'),
+          ),
+        ],
       ),
     );
 
@@ -1324,30 +1259,23 @@ class _LeaveHistoryViewState extends State<LeaveHistoryView>
       showDialog(
         context: context,
         barrierDismissible: false,
-        builder: (context) => Dialog(
-          backgroundColor: Colors.transparent,
-          child: Container(
-            padding: EdgeInsets.all(isTablet ? 24 : 20),
-            decoration: BoxDecoration(
-              color: _isDarkMode ? const Color(0xFF1E293B) : Colors.white,
-              borderRadius: BorderRadius.circular(16),
-            ),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                CircularProgressIndicator(
-                  color: Theme.of(context).colorScheme.primary,
+        builder: (context) => AlertDialog(
+          backgroundColor: _isDarkMode ? const Color(0xFF1E293B) : Colors.white,
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const CircularProgressIndicator(
+                valueColor: AlwaysStoppedAnimation<Color>(Color(0xFF2563EB)),
+              ),
+              const SizedBox(height: 16),
+              Text(
+                'Cancelling application...',
+                style: TextStyle(
+                  fontSize: 14 * responsiveFontSize,
+                  color: _isDarkMode ? Colors.white : Colors.black87,
                 ),
-                SizedBox(height: isTablet ? 20 : 16),
-                Text(
-                  'Cancelling application...',
-                  style: TextStyle(
-                    fontSize: (isTablet ? 16 : 14) * responsiveFontSize,
-                    color: _isDarkMode ? Colors.white : Colors.black87,
-                  ),
-                ),
-              ],
-            ),
+              ),
+            ],
           ),
         ),
       );
@@ -1407,7 +1335,7 @@ class _LeaveHistoryViewState extends State<LeaveHistoryView>
     return Theme(
       data: _isDarkMode ? _buildDarkTheme() : _buildLightTheme(),
       child: Scaffold(
-        backgroundColor: _isDarkMode ? const Color(0xFF0A0E1A) : const Color(0xFFF8FAFC),
+        backgroundColor: _isDarkMode ? const Color(0xFF0F172A) : const Color(0xFFF8FAFC),
         body: _isLoading
             ? _buildLoadingScreen()
             : AnimatedBuilder(
@@ -1415,64 +1343,29 @@ class _LeaveHistoryViewState extends State<LeaveHistoryView>
           builder: (context, child) {
             return FadeTransition(
               opacity: _fadeAnimation,
-              child: SafeArea(
-                child: Column(
-                  children: [
-                    // Back button
-                    Padding(
-                      padding: responsivePadding,
-                      child: Row(
-                        children: [
-                          Material(
-                            color: Colors.transparent,
-                            child: InkWell(
-                              onTap: () => Navigator.pop(context),
-                              borderRadius: BorderRadius.circular(12),
-                              child: Container(
-                                padding: EdgeInsets.all(isTablet ? 12 : 10),
-                                decoration: BoxDecoration(
-                                  color: _isDarkMode ? const Color(0xFF1E293B) : Colors.white,
-                                  borderRadius: BorderRadius.circular(12),
-                                  border: Border.all(
-                                    color: _isDarkMode ? Colors.white.withOpacity(0.1) : Colors.grey.withOpacity(0.2),
-                                  ),
-                                ),
-                                child: Icon(
-                                  Icons.arrow_back,
-                                  color: _isDarkMode ? Colors.white : Colors.black87,
-                                  size: isTablet ? 24 : 20,
-                                ),
-                              ),
-                            ),
-                          ),
-                        ],
-                      ),
+              child: Column(
+                children: [
+                  // Header
+                  _buildHeader(),
+
+                  // Tab Bar
+                  _buildTabBar(),
+
+                  const SizedBox(height: 8),
+
+                  // Tab Views
+                  Expanded(
+                    child: TabBarView(
+                      controller: _tabController,
+                      children: [
+                        _buildOverviewTab(),
+                        _buildApplicationsList(_pendingApplications, true),
+                        _buildApplicationsList(_approvedApplications, false),
+                        _buildApplicationsList(_rejectedApplications, false),
+                      ],
                     ),
-
-                    // Header
-                    _buildModernHeader(),
-
-                    SizedBox(height: responsivePadding.vertical),
-
-                    // Tab Bar
-                    _buildModernTabBar(),
-
-                    SizedBox(height: responsivePadding.vertical),
-
-                    // Tab Views
-                    Expanded(
-                      child: TabBarView(
-                        controller: _tabController,
-                        children: [
-                          _buildOverviewTab(),
-                          _buildApplicationsList(_pendingApplications, true),
-                          _buildApplicationsList(_approvedApplications, false),
-                          _buildApplicationsList(_rejectedApplications, false),
-                        ],
-                      ),
-                    ),
-                  ],
-                ),
+                  ),
+                ],
               ),
             );
           },
@@ -1484,17 +1377,14 @@ class _LeaveHistoryViewState extends State<LeaveHistoryView>
               scale: _pulseAnimation.value,
               child: FloatingActionButton.extended(
                 onPressed: _navigateToApplyLeave,
-                backgroundColor: Theme.of(context).colorScheme.primary,
+                backgroundColor: const Color(0xFF2563EB),
                 foregroundColor: Colors.white,
-                elevation: 8,
-                icon: Icon(
-                  Icons.add,
-                  size: isTablet ? 24 : 20,
-                ),
+                elevation: 4,
+                icon: const Icon(Icons.add, size: 20),
                 label: Text(
                   'Apply Leave',
                   style: TextStyle(
-                    fontSize: (isTablet ? 16 : 14) * responsiveFontSize,
+                    fontSize: 14 * responsiveFontSize,
                     fontWeight: FontWeight.w600,
                   ),
                 ),
@@ -1506,3 +1396,6 @@ class _LeaveHistoryViewState extends State<LeaveHistoryView>
     );
   }
 }
+
+
+

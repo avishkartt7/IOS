@@ -19,6 +19,28 @@ class LocationModel {
     required this.isActive,
   });
 
+  // Add this method to your LocationModel class in lib/model/location_model.dart
+
+  LocationModel copyWith({
+    String? id,
+    String? name,
+    String? address,
+    double? latitude,
+    double? longitude,
+    double? radius,
+    bool? isActive,
+  }) {
+    return LocationModel(
+      id: id ?? this.id,
+      name: name ?? this.name,
+      address: address ?? this.address,
+      latitude: latitude ?? this.latitude,
+      longitude: longitude ?? this.longitude,
+      radius: radius ?? this.radius,
+      isActive: isActive ?? this.isActive,
+    );
+  }
+
   factory LocationModel.fromJson(Map<String, dynamic> json) {
     return LocationModel(
       id: json['id'],

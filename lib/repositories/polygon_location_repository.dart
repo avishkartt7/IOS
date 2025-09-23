@@ -2,9 +2,9 @@
 
 import 'dart:convert';
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:face_auth/model/polygon_location_model.dart';
-import 'package:face_auth/services/database_helper.dart';
-import 'package:face_auth/services/connectivity_service.dart';
+import 'package:face_auth_compatible/model/polygon_location_model.dart';
+import 'package:face_auth_compatible/services/database_helper.dart';
+import 'package:face_auth_compatible/services/connectivity_service.dart';
 import 'package:geodesy/geodesy.dart';
 import 'package:flutter/foundation.dart';
 
@@ -209,3 +209,6 @@ class PolygonLocationRepository {
     }
   }
 }
+
+
+

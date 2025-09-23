@@ -1,12 +1,11 @@
-// lib/pin_entry/app_password_entry_view.dart - UPDATED TO USE MAIN DASHBOARD
+// lib/pin_entry/app_password_entry_view.dart - Update navigate to dashboard
 
-import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:face_auth/common/utils/custom_snackbar.dart';
-import 'package:face_auth/constants/theme.dart';
-import 'package:face_auth/dashboard/dashboard_view.dart'; // ✅ CHANGED: Use main DashboardView
+import 'package:face_auth_compatible/common/utils/custom_snackbar.dart';
+import 'package:face_auth_compatible/constants/theme.dart';
+import 'package:face_auth_compatible/dashboard/dashboard_view.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 class AppPasswordEntryView extends StatefulWidget {
@@ -68,7 +67,7 @@ class _AppPasswordEntryViewState extends State<AppPasswordEntryView> {
       setState(() => _isLoading = false);
 
       if (querySnapshot.docs.isEmpty) {
-        CustomSnackBar.errorSnackBar("Invalid app password. Please try again.");
+        CustomSnackBar.errorSnackBar(context, 'Invalid app password. Please try again.');
         _clearPassword();
         return;
       }
@@ -77,28 +76,20 @@ class _AppPasswordEntryViewState extends State<AppPasswordEntryView> {
       final DocumentSnapshot employeeDoc = querySnapshot.docs.first;
       final String employeeId = employeeDoc.id;
 
-      print("✅ App password verified for employee: $employeeId");
-
       // Save authenticated user ID to SharedPreferences
       final SharedPreferences prefs = await SharedPreferences.getInstance();
       await prefs.setString('authenticated_user_id', employeeId);
-      await prefs.setBool('is_authenticated', true);
-      await prefs.setInt('authentication_timestamp', DateTime.now().millisecondsSinceEpoch);
-
-      // Save employee data locally
-      Map<String, dynamic> employeeData = employeeDoc.data() as Map<String, dynamic>;
-      await prefs.setString('user_data_$employeeId', json.encode(employeeData));
 
       if (mounted) {
         Navigator.of(context).pushReplacement(
           MaterialPageRoute(
-            builder: (context) => DashboardView(employeeId: employeeId), // ✅ CHANGED: Use main DashboardView
+            builder: (context) => DashboardView(employeeId: employeeId),
           ),
         );
       }
     } catch (e) {
       setState(() => _isLoading = false);
-      CustomSnackBar.errorSnackBar("Error verifying password: $e");
+      CustomSnackBar.errorSnackBar(context, 'Error verifying password: $e');
     }
   }
 
@@ -125,9 +116,6 @@ class _AppPasswordEntryViewState extends State<AppPasswordEntryView> {
 
   @override
   Widget build(BuildContext context) {
-    // Set CustomSnackBar context
-    CustomSnackBar.context = context;
-    
     return Scaffold(
       body: Container(
         width: double.infinity,
@@ -151,8 +139,11 @@ class _AppPasswordEntryViewState extends State<AppPasswordEntryView> {
                 children: [
                   const SizedBox(height: 40),
 
-                  // Authentication SVG Image (with fallback)
-                  _buildAuthIcon(),
+                  // Authentication SVG Image
+                  SvgPicture.asset(
+                    'assets/images/authentication.svg',
+                    height: 200,
+                  ),
 
                   const SizedBox(height: 40),
 
@@ -168,7 +159,7 @@ class _AppPasswordEntryViewState extends State<AppPasswordEntryView> {
                       ],
                     ),
                     child: const Text(
-                      "🔐 Enter App Password",
+                      "Enter App Password",
                       style: TextStyle(
                         color: Colors.white,
                         fontSize: 28,
@@ -219,53 +210,11 @@ class _AppPasswordEntryViewState extends State<AppPasswordEntryView> {
                     )
                   else if (_isPasswordComplete)
                     _buildVerifyButton(),
-
-                  const SizedBox(height: 20),
-                  
-                  // Feature indicator
-                  Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                    decoration: BoxDecoration(
-                      color: Colors.blue.withOpacity(0.2),
-                      borderRadius: BorderRadius.circular(20),
-                      border: Border.all(color: Colors.blue.withOpacity(0.3)),
-                    ),
-                    child: const Text(
-                      "🚀 Full Featured Dashboard Access",
-                      style: TextStyle(
-                        color: Colors.blue,
-                        fontSize: 12,
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
-                  ),
                 ],
               ),
             ),
           ),
         ),
-      ),
-    );
-  }
-
-  Widget _buildAuthIcon() {
-    // Fallback icon if SVG fails to load
-    return Container(
-      width: 200,
-      height: 200,
-      decoration: BoxDecoration(
-        gradient: LinearGradient(
-          colors: [
-            Colors.blue.withOpacity(0.3),
-            Colors.purple.withOpacity(0.3),
-          ],
-        ),
-        shape: BoxShape.circle,
-      ),
-      child: const Icon(
-        Icons.security,
-        size: 100,
-        color: Colors.white,
       ),
     );
   }
@@ -346,7 +295,7 @@ class _AppPasswordEntryViewState extends State<AppPasswordEntryView> {
           ),
         ),
         child: const Text(
-          "🚀 Access Dashboard",
+          "Verify",
           style: TextStyle(
             fontSize: 18,
             fontWeight: FontWeight.bold,
@@ -358,3 +307,6 @@ class _AppPasswordEntryViewState extends State<AppPasswordEntryView> {
     );
   }
 }
+
+
+

@@ -2,10 +2,10 @@
 
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
-import 'package:face_auth/constants/theme.dart';
-import 'package:face_auth/model/overtime_request_model.dart';
-import 'package:face_auth/common/utils/custom_snackbar.dart';
-import 'package:face_auth/overtime/overtime_request_details.dart';
+import 'package:face_auth_compatible/constants/theme.dart';
+import 'package:face_auth_compatible/model/overtime_request_model.dart';
+import 'package:face_auth_compatible/common/utils/custom_snackbar.dart';
+import 'package:face_auth_compatible/overtime/overtime_request_details.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 
 class PendingOvertimeView extends StatefulWidget {
@@ -39,6 +39,63 @@ class _PendingOvertimeViewState extends State<PendingOvertimeView> {
         _errorMessage = null;
       });
 
+      debugPrint("=== LOADING PENDING REQUESTS FOR APPROVER (FIXED) ===");
+      debugPrint("Approver ID: ${widget.approverId}");
+
+      // ✅ STEP 1: Get user data to find PIN
+      String? userPin;
+      try {
+        DocumentSnapshot userDoc = await FirebaseFirestore.instance
+            .collection('employees')
+            .doc(widget.approverId)
+            .get();
+
+        if (userDoc.exists) {
+          Map<String, dynamic> userData = userDoc.data() as Map<String, dynamic>;
+          userPin = userData['pin']?.toString();
+          debugPrint("📋 Found user PIN: $userPin");
+        }
+      } catch (e) {
+        debugPrint("⚠️ Could not fetch user data: $e");
+      }
+
+      // ✅ STEP 2: Build comprehensive list of possible approver IDs
+      Set<String> possibleApproverIds = {};
+
+      // Add main employee ID
+      possibleApproverIds.add(widget.approverId);
+
+      // Add PIN-based variations
+      if (userPin != null && userPin.isNotEmpty) {
+        possibleApproverIds.add(userPin);
+        possibleApproverIds.add('EMP$userPin');
+
+        // Handle padded PIN (like EMP3576 vs EMP03576)
+        if (!userPin.startsWith('EMP')) {
+          int pinNumber = int.tryParse(userPin) ?? 0;
+          if (pinNumber > 0) {
+            possibleApproverIds.add('EMP${pinNumber.toString().padLeft(4, '0')}');
+            possibleApproverIds.add('EMP$pinNumber');
+          }
+        }
+      }
+
+      // Add variations of existing employee ID
+      if (widget.approverId.startsWith('EMP')) {
+        String numPart = widget.approverId.substring(3);
+        possibleApproverIds.add(numPart);
+        int num = int.tryParse(numPart) ?? 0;
+        if (num > 0) {
+          possibleApproverIds.add(num.toString());
+          possibleApproverIds.add('EMP${num.toString().padLeft(4, '0')}');
+        }
+      } else {
+        possibleApproverIds.add('EMP${widget.approverId}');
+      }
+
+      debugPrint("🔍 Will search for requests with approver IDs: $possibleApproverIds");
+
+      // ✅ STEP 3: Get all pending requests
       QuerySnapshot snapshot = await FirebaseFirestore.instance
           .collection('overtime_requests')
           .where('status', isEqualTo: 'pending')
@@ -46,45 +103,116 @@ class _PendingOvertimeViewState extends State<PendingOvertimeView> {
           .get();
 
       List<OvertimeRequest> requests = [];
+      debugPrint("📊 Found ${snapshot.docs.length} total pending requests in database");
 
+      // ✅ STEP 4: Check each request against our possible IDs
       for (var doc in snapshot.docs) {
         try {
           Map<String, dynamic> data = doc.data() as Map<String, dynamic>;
           String docApproverId = data['approverEmpId']?.toString() ?? '';
 
-          bool isMatch = docApproverId == widget.approverId ||
-              docApproverId == widget.approverId.replaceAll('EMP', '') ||
-              docApproverId == 'EMP${widget.approverId}' ||
-              widget.approverId == docApproverId.replaceAll('EMP', '') ||
-              widget.approverId == 'EMP$docApproverId';
+          debugPrint("🔍 Checking request ${doc.id}: approverEmpId='$docApproverId'");
+
+          // ✅ ENHANCED: Check if docApproverId matches any of our possible IDs
+          bool isMatch = possibleApproverIds.contains(docApproverId);
 
           if (isMatch) {
-            // ✅ NEW: Use enhanced fromMap that handles multi-project format
-            // ✅ CORRECT - parameters in correct order
+            debugPrint("✅ MATCH FOUND for request ${doc.id} - approverEmpId '$docApproverId' matches our ID set");
             OvertimeRequest request = OvertimeRequest.fromMap(doc.id, data);
             requests.add(request);
+          } else {
+            debugPrint("❌ No match for request ${doc.id}: '$docApproverId' not in our possible IDs: $possibleApproverIds");
           }
         } catch (e) {
-          print("Error parsing request ${doc.id}: $e");
+          debugPrint("❌ Error parsing request ${doc.id}: $e");
           continue;
         }
       }
 
-      setState(() {
-        _pendingRequests = requests;
-        _isLoading = false;
-      });
-
-    } catch (e) {
-      setState(() {
-        _isLoading = false;
-        _errorMessage = "Error loading requests: $e";
-      });
+      debugPrint("🎯 Final result: ${requests.length} matching requests found");
 
       if (mounted) {
+        setState(() {
+          _pendingRequests = requests;
+          _isLoading = false;
+        });
+      }
+
+    } catch (e) {
+      debugPrint("❌ Error in _loadPendingRequests: $e");
+      if (mounted) {
+        setState(() {
+          _isLoading = false;
+          _errorMessage = "Error loading requests: $e";
+        });
+
         CustomSnackBar.errorSnackBar("Error loading requests: $e");
       }
     }
+  }
+
+  bool _isApproverMatch(String firestoreApproverId, String currentApproverId) {
+    // Direct match
+    if (firestoreApproverId == currentApproverId) {
+      debugPrint("  ✅ Direct match: '$firestoreApproverId' == '$currentApproverId'");
+      return true;
+    }
+
+    // Create variations of both IDs
+    Set<String> firestoreVariations = _createIdVariations(firestoreApproverId);
+    Set<String> currentVariations = _createIdVariations(currentApproverId);
+
+    debugPrint("  🔄 Firestore variations: $firestoreVariations");
+    debugPrint("  🔄 Current variations: $currentVariations");
+
+    // Check if any variation from Firestore matches any variation of current
+    for (String firestoreVar in firestoreVariations) {
+      for (String currentVar in currentVariations) {
+        if (firestoreVar == currentVar && firestoreVar.isNotEmpty) {
+          debugPrint("  ✅ Variation match: '$firestoreVar' == '$currentVar'");
+          return true;
+        }
+      }
+    }
+
+    debugPrint("  ❌ No match found between variations");
+    return false;
+  }
+
+  Set<String> _createIdVariations(String originalId) {
+    Set<String> variations = {};
+
+    if (originalId.isEmpty) return variations;
+
+    // Add original
+    variations.add(originalId);
+
+    // If starts with EMP, add without EMP
+    if (originalId.startsWith('EMP')) {
+      String withoutEmp = originalId.substring(3);
+      variations.add(withoutEmp);
+
+      // Try to parse as number and add padded/unpadded versions
+      int? number = int.tryParse(withoutEmp);
+      if (number != null) {
+        variations.add(number.toString()); // Unpadded: 3576
+        variations.add('EMP${number.toString()}'); // EMP3576
+        variations.add('EMP${number.toString().padLeft(4, '0')}'); // EMP3576
+      }
+    } else {
+      // If doesn't start with EMP, add EMP version
+      variations.add('EMP$originalId');
+
+      // Try to parse as number
+      int? number = int.tryParse(originalId);
+      if (number != null) {
+        variations.add(number.toString()); // Unpadded
+        variations.add('EMP${number.toString()}'); // EMP + unpadded
+        variations.add('EMP${number.toString().padLeft(4, '0')}'); // EMP + padded
+      }
+    }
+
+    return variations;
   }
 
   String _getFormattedDate(DateTime dateTime) {
@@ -1076,3 +1204,6 @@ class _PendingOvertimeViewState extends State<PendingOvertimeView> {
     );
   }
 }
+
+
+

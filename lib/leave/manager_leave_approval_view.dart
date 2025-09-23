@@ -1,15 +1,15 @@
-// lib/leave/manager_leave_approval_view.dart - MODERN UI/UX DESIGN
+// lib/leave/manager_leave_approval_view.dart - COMPACT UI DESIGN
 
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:face_auth/model/leave_application_model.dart';
-import 'package:face_auth/services/leave_application_service.dart';
-import 'package:face_auth/services/service_locator.dart';
-import 'package:face_auth/repositories/leave_application_repository.dart';
-import 'package:face_auth/services/connectivity_service.dart';
-import 'package:face_auth/common/utils/custom_snackbar.dart';
+import 'package:face_auth_compatible/model/leave_application_model.dart';
+import 'package:face_auth_compatible/services/leave_application_service.dart';
+import 'package:face_auth_compatible/services/service_locator.dart';
+import 'package:face_auth_compatible/repositories/leave_application_repository.dart';
+import 'package:face_auth_compatible/services/connectivity_service.dart';
+import 'package:face_auth_compatible/common/utils/custom_snackbar.dart';
 
 class ManagerLeaveApprovalView extends StatefulWidget {
   final String managerId;
@@ -47,12 +47,12 @@ class _ManagerLeaveApprovalViewState extends State<ManagerLeaveApprovalView>
   bool get isSmallScreen => screenWidth < 360;
 
   EdgeInsets get responsivePadding => EdgeInsets.symmetric(
-    horizontal: isTablet ? 24.0 : (isSmallScreen ? 12.0 : 16.0),
-    vertical: isTablet ? 20.0 : (isSmallScreen ? 12.0 : 16.0),
+    horizontal: isTablet ? 20.0 : 16.0,
+    vertical: isTablet ? 16.0 : 12.0,
   );
 
   double get responsiveFontSize {
-    if (isTablet) return 1.2;
+    if (isTablet) return 1.1;
     if (isSmallScreen) return 0.9;
     return 1.0;
   }
@@ -68,7 +68,7 @@ class _ManagerLeaveApprovalViewState extends State<ManagerLeaveApprovalView>
 
   void _initializeAnimations() {
     _animationController = AnimationController(
-      duration: const Duration(milliseconds: 1200),
+      duration: const Duration(milliseconds: 800),
       vsync: this,
     );
 
@@ -81,7 +81,7 @@ class _ManagerLeaveApprovalViewState extends State<ManagerLeaveApprovalView>
     ));
 
     _slideAnimation = Tween<double>(
-      begin: 30.0,
+      begin: 20.0,
       end: 0.0,
     ).animate(CurvedAnimation(
       parent: _animationController,
@@ -148,17 +148,17 @@ class _ManagerLeaveApprovalViewState extends State<ManagerLeaveApprovalView>
     }
   }
 
-  // Modern Theme Builders (same as dashboard)
+  // Modern Theme Builders
   ThemeData _buildLightTheme() {
     return ThemeData(
       useMaterial3: true,
       colorScheme: ColorScheme.fromSeed(
-        seedColor: const Color(0xFF6366F1),
+        seedColor: const Color(0xFF2563EB),
         brightness: Brightness.light,
       ),
       cardTheme: CardTheme(
         elevation: 0,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
         color: Colors.white,
       ),
       appBarTheme: const AppBarTheme(
@@ -173,12 +173,12 @@ class _ManagerLeaveApprovalViewState extends State<ManagerLeaveApprovalView>
     return ThemeData(
       useMaterial3: true,
       colorScheme: ColorScheme.fromSeed(
-        seedColor: const Color(0xFF6366F1),
+        seedColor: const Color(0xFF2563EB),
         brightness: Brightness.dark,
       ),
       cardTheme: CardTheme(
         elevation: 0,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
         color: const Color(0xFF1E293B),
       ),
       appBarTheme: const AppBarTheme(
@@ -189,7 +189,7 @@ class _ManagerLeaveApprovalViewState extends State<ManagerLeaveApprovalView>
     );
   }
 
-  // Loading Screen (same as dashboard)
+  // Loading Screen
   Widget _buildLoadingScreen() {
     return Container(
       decoration: BoxDecoration(
@@ -197,8 +197,8 @@ class _ManagerLeaveApprovalViewState extends State<ManagerLeaveApprovalView>
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
           colors: _isDarkMode
-              ? [const Color(0xFF0A0E1A), const Color(0xFF1E293B)]
-              : [const Color(0xFF6366F1), const Color(0xFF8B5CF6)],
+              ? [const Color(0xFF0F172A), const Color(0xFF1E293B)]
+              : [const Color(0xFF2563EB), const Color(0xFF3B82F6)],
         ),
       ),
       child: Center(
@@ -209,20 +209,18 @@ class _ManagerLeaveApprovalViewState extends State<ManagerLeaveApprovalView>
               padding: const EdgeInsets.all(20),
               decoration: BoxDecoration(
                 color: Colors.white.withOpacity(0.1),
-                borderRadius: BorderRadius.circular(20),
+                borderRadius: BorderRadius.circular(16),
                 border: Border.all(
                   color: Colors.white.withOpacity(0.2),
                   width: 1,
                 ),
               ),
-              child: CircularProgressIndicator(
-                valueColor: AlwaysStoppedAnimation<Color>(
-                  _isDarkMode ? Colors.white : Colors.white,
-                ),
+              child: const CircularProgressIndicator(
+                valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
                 strokeWidth: 3,
               ),
             ),
-            const SizedBox(height: 24),
+            const SizedBox(height: 20),
             Text(
               'Loading leave applications...',
               style: TextStyle(
@@ -237,523 +235,462 @@ class _ManagerLeaveApprovalViewState extends State<ManagerLeaveApprovalView>
     );
   }
 
-  // Modern Header Section
-  Widget _buildModernHeader() {
-    int totalDays = _pendingApplications.fold<int>(0, (sum, app) => sum + app.totalDays);
-    int withCertificates = _pendingApplications.where((app) => app.certificateUrl != null).length;
-
+  // Clean Header Section
+  Widget _buildHeader() {
     return Container(
-      margin: responsivePadding,
-      padding: EdgeInsets.all(isTablet ? 24.0 : 20.0),
+      padding: responsivePadding,
       decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(24),
-        gradient: LinearGradient(
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-          colors: _isDarkMode
-              ? [const Color(0xFF2D3748), const Color(0xFF4A5568)]
-              : [const Color(0xFF667EEA), const Color(0xFF764BA2)],
-        ),
+        color: _isDarkMode ? const Color(0xFF1E293B) : Colors.white,
         boxShadow: [
           BoxShadow(
-            color: _isDarkMode ? Colors.black.withOpacity(0.3) : const Color(0xFF667EEA).withOpacity(0.3),
-            blurRadius: 20,
-            offset: const Offset(0, 10),
-            spreadRadius: 0,
+            color: _isDarkMode ? Colors.black.withOpacity(0.2) : Colors.grey.withOpacity(0.1),
+            blurRadius: 4,
+            offset: const Offset(0, 2),
           ),
         ],
       ),
-      child: Container(
-        decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(24),
-          border: Border.all(
-            color: Colors.white.withOpacity(0.2),
-            width: 1,
-          ),
-        ),
-        child: Padding(
-          padding: EdgeInsets.all(isTablet ? 28 : 24),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              // Header
-              Row(
+      child: SafeArea(
+        child: Row(
+          children: [
+            Material(
+              color: Colors.transparent,
+              child: InkWell(
+                onTap: () => Navigator.pop(context),
+                borderRadius: BorderRadius.circular(8),
+                child: Container(
+                  padding: const EdgeInsets.all(8),
+                  decoration: BoxDecoration(
+                    color: _isDarkMode ? Colors.white.withOpacity(0.1) : const Color(0xFFF1F5F9),
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: Icon(
+                    Icons.arrow_back,
+                    color: _isDarkMode ? Colors.white : Colors.black87,
+                    size: 20,
+                  ),
+                ),
+              ),
+            ),
+            const SizedBox(width: 16),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Container(
-                    padding: const EdgeInsets.all(12),
-                    decoration: BoxDecoration(
-                      color: Colors.white.withOpacity(0.2),
-                      borderRadius: BorderRadius.circular(16),
-                      border: Border.all(
-                        color: Colors.white.withOpacity(0.3),
-                      ),
-                    ),
-                    child: Icon(
-                      Icons.approval,
-                      color: Colors.white,
-                      size: isTablet ? 32 : 28,
+                  Text(
+                    'Leave Approvals',
+                    style: TextStyle(
+                      fontSize: 20 * responsiveFontSize,
+                      fontWeight: FontWeight.w600,
+                      color: _isDarkMode ? Colors.white : const Color(0xFF1E293B),
                     ),
                   ),
-                  SizedBox(width: isTablet ? 20 : 16),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          "Leave Approvals",
-                          style: TextStyle(
-                            color: Colors.white.withOpacity(0.8),
-                            fontSize: (isTablet ? 18 : 16) * responsiveFontSize,
-                            fontWeight: FontWeight.w500,
-                          ),
-                        ),
-                        const SizedBox(height: 8),
-                        Text(
-                          "${_pendingApplications.length} Pending",
-                          style: TextStyle(
-                            color: Colors.white,
-                            fontSize: (isTablet ? 32 : 28) * responsiveFontSize,
-                            fontWeight: FontWeight.bold,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                  // Refresh button
-                  Material(
-                    color: Colors.transparent,
-                    child: InkWell(
-                      onTap: _isRefreshing ? null : _refreshApplications,
-                      borderRadius: BorderRadius.circular(12),
-                      child: Container(
-                        padding: EdgeInsets.all(isTablet ? 12 : 10),
-                        decoration: BoxDecoration(
-                          color: Colors.white.withOpacity(0.2),
-                          borderRadius: BorderRadius.circular(12),
-                          border: Border.all(
-                            color: Colors.white.withOpacity(0.3),
-                          ),
-                        ),
-                        child: _isRefreshing
-                            ? SizedBox(
-                          width: isTablet ? 24 : 20,
-                          height: isTablet ? 24 : 20,
-                          child: CircularProgressIndicator(
-                            color: Colors.white,
-                            strokeWidth: 2,
-                          ),
-                        )
-                            : Icon(
-                          Icons.refresh,
-                          color: Colors.white,
-                          size: isTablet ? 24 : 20,
-                        ),
-                      ),
+                  Text(
+                    '${_pendingApplications.length} pending applications',
+                    style: TextStyle(
+                      fontSize: 14 * responsiveFontSize,
+                      color: _isDarkMode ? Colors.grey.shade400 : const Color(0xFF64748B),
                     ),
                   ),
                 ],
               ),
-
-              SizedBox(height: isTablet ? 24 : 20),
-
-              // Stats Row
-              Row(
-                children: [
-                  Expanded(
-                    child: _buildStatCard(
-                      icon: Icons.pending_actions,
-                      value: _pendingApplications.length.toString(),
-                      label: "Applications",
-                      color: Colors.orange,
-                    ),
+            ),
+            Material(
+              color: Colors.transparent,
+              child: InkWell(
+                onTap: _isRefreshing ? null : _refreshApplications,
+                borderRadius: BorderRadius.circular(8),
+                child: Container(
+                  padding: const EdgeInsets.all(8),
+                  decoration: BoxDecoration(
+                    color: _isDarkMode ? Colors.white.withOpacity(0.1) : const Color(0xFFF1F5F9),
+                    borderRadius: BorderRadius.circular(8),
                   ),
-                  SizedBox(width: isTablet ? 16 : 12),
-                  Expanded(
-                    child: _buildStatCard(
-                      icon: Icons.calendar_today,
-                      value: totalDays.toString(),
-                      label: "Total Days",
-                      color: Colors.blue,
+                  child: _isRefreshing
+                      ? const SizedBox(
+                    width: 20,
+                    height: 20,
+                    child: CircularProgressIndicator(
+                      strokeWidth: 2,
+                      valueColor: AlwaysStoppedAnimation<Color>(Color(0xFF2563EB)),
                     ),
+                  )
+                      : Icon(
+                    Icons.refresh,
+                    color: _isDarkMode ? Colors.white : Colors.black87,
+                    size: 20,
                   ),
-                  SizedBox(width: isTablet ? 16 : 12),
-                  Expanded(
-                    child: _buildStatCard(
-                      icon: Icons.attachment,
-                      value: withCertificates.toString(),
-                      label: "Certificates",
-                      color: Colors.green,
-                    ),
-                  ),
-                ],
+                ),
               ),
-            ],
-          ),
+            ),
+          ],
         ),
       ),
     );
   }
 
-  Widget _buildStatCard({
+  // Quick Stats Section
+  Widget _buildQuickStats() {
+    int totalDays = _pendingApplications.fold<int>(0, (sum, app) => sum + app.totalDays);
+    int withCertificates = _pendingApplications.where((app) => app.certificateUrl != null).length;
+
+    return Container(
+      margin: responsivePadding,
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        gradient: const LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [Color(0xFF2563EB), Color(0xFF3B82F6)],
+        ),
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: IntrinsicHeight(
+        child: Row(
+          children: [
+            Expanded(
+              child: _buildStatItem(
+                icon: Icons.pending_actions,
+                value: _pendingApplications.length.toString(),
+                label: "Pending",
+              ),
+            ),
+            Container(
+              width: 1,
+              color: Colors.white.withOpacity(0.3),
+            ),
+            Expanded(
+              child: _buildStatItem(
+                icon: Icons.calendar_today,
+                value: totalDays.toString(),
+                label: "Total Days",
+              ),
+            ),
+            Container(
+              width: 1,
+              color: Colors.white.withOpacity(0.3),
+            ),
+            Expanded(
+              child: _buildStatItem(
+                icon: Icons.attachment,
+                value: withCertificates.toString(),
+                label: "Certificates",
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildStatItem({
     required IconData icon,
     required String value,
     required String label,
-    required Color color,
   }) {
     return Container(
-      padding: EdgeInsets.all(isTablet ? 16 : 12),
-      decoration: BoxDecoration(
-        color: Colors.white.withOpacity(0.1),
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(
-          color: Colors.white.withOpacity(0.2),
-        ),
-      ),
+      padding: const EdgeInsets.symmetric(vertical: 6, horizontal: 2),
       child: Column(
+        mainAxisSize: MainAxisSize.min,
         children: [
-          Container(
-            padding: const EdgeInsets.all(8),
-            decoration: BoxDecoration(
-              color: color.withOpacity(0.3),
-              borderRadius: BorderRadius.circular(8),
-            ),
-            child: Icon(icon, color: Colors.white, size: 16),
-          ),
-          const SizedBox(height: 8),
+          Icon(icon, color: Colors.white, size: 16),
+          const SizedBox(height: 4),
           Text(
             value,
             style: TextStyle(
               color: Colors.white,
-              fontSize: (isTablet ? 24 : 20) * responsiveFontSize,
+              fontSize: 14 * responsiveFontSize,
               fontWeight: FontWeight.bold,
             ),
           ),
           Text(
             label,
             style: TextStyle(
-              color: Colors.white.withOpacity(0.7),
-              fontSize: (isTablet ? 14 : 12) * responsiveFontSize,
+              color: Colors.white.withOpacity(0.8),
+              fontSize: 9 * responsiveFontSize,
             ),
+            textAlign: TextAlign.center,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
           ),
         ],
       ),
     );
   }
 
-  // Modern Application Card
+  // Compact Application Card
   Widget _buildApplicationCard(LeaveApplicationModel application) {
-    return AnimatedBuilder(
-      animation: _slideAnimation,
-      builder: (context, child) {
-        return Transform.translate(
-          offset: Offset(0, _slideAnimation.value),
-          child: Container(
-            margin: EdgeInsets.only(bottom: isTablet ? 16 : 12),
-            decoration: BoxDecoration(
-              color: _isDarkMode ? const Color(0xFF1E293B) : Colors.white,
-              borderRadius: BorderRadius.circular(20),
-              border: Border.all(
-                color: _isDarkMode ? Colors.white.withOpacity(0.1) : Colors.grey.withOpacity(0.1),
-              ),
-              boxShadow: [
-                BoxShadow(
-                  color: _isDarkMode ? Colors.black.withOpacity(0.2) : Colors.grey.withOpacity(0.1),
-                  blurRadius: 8,
-                  offset: const Offset(0, 4),
+    return Container(
+      margin: const EdgeInsets.only(bottom: 8),
+      decoration: BoxDecoration(
+        color: _isDarkMode ? const Color(0xFF1E293B) : Colors.white,
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(
+          color: _isDarkMode ? Colors.white.withOpacity(0.1) : Colors.grey.withOpacity(0.1),
+        ),
+      ),
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          onTap: () => _showApprovalDialog(application),
+          borderRadius: BorderRadius.circular(8),
+          child: Padding(
+            padding: const EdgeInsets.all(12),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                // Header Row - Compact
+                Row(
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.all(6),
+                      decoration: BoxDecoration(
+                        color: _getLeaveTypeColor(application.leaveType).withOpacity(0.1),
+                        borderRadius: BorderRadius.circular(6),
+                      ),
+                      child: Icon(
+                        _getLeaveTypeIcon(application.leaveType),
+                        color: _getLeaveTypeColor(application.leaveType),
+                        size: 14,
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      flex: 3,
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            application.employeeName,
+                            style: TextStyle(
+                              fontSize: 14 * responsiveFontSize,
+                              fontWeight: FontWeight.w600,
+                              color: _isDarkMode ? Colors.white : Colors.black87,
+                            ),
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                          Text(
+                            application.leaveType.displayName,
+                            style: TextStyle(
+                              color: _isDarkMode ? Colors.grey.shade400 : Colors.grey.shade600,
+                              fontSize: 10 * responsiveFontSize,
+                            ),
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(width: 4),
+                    Column(
+                      crossAxisAlignment: CrossAxisAlignment.end,
+                      children: [
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                          decoration: BoxDecoration(
+                            color: Colors.orange.withOpacity(0.1),
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                          child: Text(
+                            'PENDING',
+                            style: TextStyle(
+                              color: Colors.orange.shade800,
+                              fontSize: 8 * responsiveFontSize,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                        ),
+                        // ✅ FIXED: Show certificate status properly
+                        if (application.certificateUrl != null && application.certificateUrl!.isNotEmpty) ...[
+                          const SizedBox(height: 4),
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 1),
+                            decoration: BoxDecoration(
+                              color: Colors.green.withOpacity(0.1),
+                              borderRadius: BorderRadius.circular(6),
+                            ),
+                            child: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Icon(
+                                  Icons.attachment,
+                                  size: 10,
+                                  color: Colors.green.shade700,
+                                ),
+                                const SizedBox(width: 2),
+                                Text(
+                                  'Cert',
+                                  style: TextStyle(
+                                    color: Colors.green.shade700,
+                                    fontSize: 7 * responsiveFontSize,
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ],
+                      ],
+                    ),
+                  ],
+                ),
+
+                const SizedBox(height: 8),
+
+                // ✅ FIXED: Details Row with proper date formatting
+                Row(
+                  children: [
+                    Icon(
+                      Icons.calendar_today,
+                      size: 12,
+                      color: _isDarkMode ? Colors.grey.shade400 : Colors.grey.shade600,
+                    ),
+                    const SizedBox(width: 6),
+                    Expanded(
+                      child: Text(
+                        application.dateRange, // This now shows properly formatted dates
+                        style: TextStyle(
+                          color: _isDarkMode ? Colors.white : Colors.black87,
+                          fontSize: 12 * responsiveFontSize,
+                          fontWeight: FontWeight.w500,
+                        ),
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFF2563EB).withOpacity(0.1),
+                        borderRadius: BorderRadius.circular(6),
+                      ),
+                      child: Text(
+                        '${application.totalDays} days',
+                        style: TextStyle(
+                          color: const Color(0xFF2563EB),
+                          fontSize: 10 * responsiveFontSize,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+
+                const SizedBox(height: 6),
+
+                // ✅ FIXED: Reason display
+                Text(
+                  'Reason: ${application.reason.isNotEmpty ? application.reason : "No specific reason provided"}',
+                  style: TextStyle(
+                    color: _isDarkMode ? Colors.grey.shade300 : Colors.grey.shade700,
+                    fontSize: 10 * responsiveFontSize,
+                  ),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+
+                // ✅ FIXED: Already taken indicator
+                if (application.isAlreadyTaken) ...[
+                  const SizedBox(height: 6),
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
+                    decoration: BoxDecoration(
+                      color: Colors.orange.withOpacity(0.1),
+                      borderRadius: BorderRadius.circular(6),
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(
+                          Icons.info_outline,
+                          size: 12,
+                          color: Colors.orange.shade700,
+                        ),
+                        const SizedBox(width: 4),
+                        Text(
+                          'Already taken leave',
+                          style: TextStyle(
+                            color: Colors.orange.shade700,
+                            fontSize: 9 * responsiveFontSize,
+                            fontWeight: FontWeight.w500,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+
+                const SizedBox(height: 8),
+
+                // Action buttons
+                Row(
+                  children: [
+                    Expanded(
+                      child: OutlinedButton(
+                        onPressed: () => _processDecision(application, false, ''),
+                        style: OutlinedButton.styleFrom(
+                          foregroundColor: Colors.red,
+                          side: const BorderSide(color: Colors.red),
+                          padding: const EdgeInsets.symmetric(vertical: 8),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(6),
+                          ),
+                          minimumSize: Size.zero,
+                        ),
+                        child: Text(
+                          'Reject',
+                          style: TextStyle(fontSize: 10 * responsiveFontSize),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: ElevatedButton(
+                        onPressed: () => _processDecision(application, true, ''),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: Colors.green,
+                          foregroundColor: Colors.white,
+                          padding: const EdgeInsets.symmetric(vertical: 8),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(6),
+                          ),
+                          elevation: 0,
+                          minimumSize: Size.zero,
+                        ),
+                        child: Text(
+                          'Approve',
+                          style: TextStyle(fontSize: 10 * responsiveFontSize),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: ElevatedButton(
+                        onPressed: () => _showApprovalDialog(application),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: const Color(0xFF2563EB),
+                          foregroundColor: Colors.white,
+                          padding: const EdgeInsets.symmetric(vertical: 8),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(6),
+                          ),
+                          elevation: 0,
+                          minimumSize: Size.zero,
+                        ),
+                        child: Text(
+                          'Review',
+                          style: TextStyle(fontSize: 10 * responsiveFontSize),
+                        ),
+                      ),
+                    ),
+                  ],
                 ),
               ],
             ),
-            child: Material(
-              color: Colors.transparent,
-              child: InkWell(
-                onTap: () => _showApprovalDialog(application),
-                borderRadius: BorderRadius.circular(20),
-                child: Padding(
-                  padding: EdgeInsets.all(isTablet ? 20 : 16),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      // Header
-                      Row(
-                        children: [
-                          Container(
-                            padding: const EdgeInsets.all(12),
-                            decoration: BoxDecoration(
-                              color: _getLeaveTypeColor(application.leaveType).withOpacity(0.1),
-                              borderRadius: BorderRadius.circular(12),
-                              border: Border.all(
-                                color: _getLeaveTypeColor(application.leaveType).withOpacity(0.3),
-                              ),
-                            ),
-                            child: Icon(
-                              _getLeaveTypeIcon(application.leaveType),
-                              color: _getLeaveTypeColor(application.leaveType),
-                              size: isTablet ? 24 : 20,
-                            ),
-                          ),
-                          SizedBox(width: isTablet ? 16 : 12),
-                          Expanded(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text(
-                                  application.employeeName,
-                                  style: TextStyle(
-                                    fontSize: (isTablet ? 20 : 18) * responsiveFontSize,
-                                    fontWeight: FontWeight.bold,
-                                    color: _isDarkMode ? Colors.white : Colors.black87,
-                                  ),
-                                ),
-                                const SizedBox(height: 4),
-                                Text(
-                                  application.leaveType.displayName,
-                                  style: TextStyle(
-                                    color: _isDarkMode ? Colors.grey.shade400 : Colors.grey.shade600,
-                                    fontSize: (isTablet ? 16 : 14) * responsiveFontSize,
-                                    fontWeight: FontWeight.w500,
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
-                          // Status badges
-                          Column(
-                            children: [
-                              Container(
-                                padding: EdgeInsets.symmetric(
-                                  horizontal: isTablet ? 12 : 10,
-                                  vertical: isTablet ? 6 : 4,
-                                ),
-                                decoration: BoxDecoration(
-                                  color: Colors.orange.withOpacity(0.1),
-                                  borderRadius: BorderRadius.circular(12),
-                                  border: Border.all(color: Colors.orange.withOpacity(0.3)),
-                                ),
-                                child: Text(
-                                  'PENDING',
-                                  style: TextStyle(
-                                    color: Colors.orange.shade800,
-                                    fontSize: (isTablet ? 12 : 10) * responsiveFontSize,
-                                    fontWeight: FontWeight.bold,
-                                  ),
-                                ),
-                              ),
-                              if (application.certificateUrl != null) ...[
-                                const SizedBox(height: 8),
-                                Container(
-                                  padding: EdgeInsets.symmetric(
-                                    horizontal: isTablet ? 8 : 6,
-                                    vertical: isTablet ? 4 : 2,
-                                  ),
-                                  decoration: BoxDecoration(
-                                    color: Colors.green.withOpacity(0.1),
-                                    borderRadius: BorderRadius.circular(8),
-                                    border: Border.all(color: Colors.green.withOpacity(0.3)),
-                                  ),
-                                  child: Row(
-                                    mainAxisSize: MainAxisSize.min,
-                                    children: [
-                                      Icon(
-                                        Icons.attachment,
-                                        size: isTablet ? 14 : 12,
-                                        color: Colors.green.shade700,
-                                      ),
-                                      SizedBox(width: isTablet ? 4 : 2),
-                                      Text(
-                                        'Certificate',
-                                        style: TextStyle(
-                                          color: Colors.green.shade700,
-                                          fontSize: (isTablet ? 10 : 8) * responsiveFontSize,
-                                          fontWeight: FontWeight.bold,
-                                        ),
-                                      ),
-                                    ],
-                                  ),
-                                ),
-                              ],
-                            ],
-                          ),
-                        ],
-                      ),
-
-                      SizedBox(height: isTablet ? 20 : 16),
-
-                      // Details Section
-                      Container(
-                        padding: EdgeInsets.all(isTablet ? 16 : 14),
-                        decoration: BoxDecoration(
-                          color: _isDarkMode ? Colors.white.withOpacity(0.05) : Colors.grey.withOpacity(0.05),
-                          borderRadius: BorderRadius.circular(16),
-                        ),
-                        child: Column(
-                          children: [
-                            Row(
-                              children: [
-                                Icon(
-                                  Icons.calendar_today,
-                                  size: 16,
-                                  color: Theme.of(context).colorScheme.primary,
-                                ),
-                                const SizedBox(width: 12),
-                                Expanded(
-                                  child: Text(
-                                    application.dateRange,
-                                    style: TextStyle(
-                                      fontSize: (isTablet ? 16 : 14) * responsiveFontSize,
-                                      fontWeight: FontWeight.w600,
-                                      color: _isDarkMode ? Colors.white : Colors.black87,
-                                    ),
-                                  ),
-                                ),
-                                Container(
-                                  padding: EdgeInsets.symmetric(
-                                    horizontal: isTablet ? 12 : 10,
-                                    vertical: isTablet ? 6 : 4,
-                                  ),
-                                  decoration: BoxDecoration(
-                                    color: Theme.of(context).colorScheme.primary.withOpacity(0.1),
-                                    borderRadius: BorderRadius.circular(8),
-                                  ),
-                                  child: Text(
-                                    '${application.totalDays} days',
-                                    style: TextStyle(
-                                      color: Theme.of(context).colorScheme.primary,
-                                      fontSize: (isTablet ? 14 : 12) * responsiveFontSize,
-                                      fontWeight: FontWeight.bold,
-                                    ),
-                                  ),
-                                ),
-                              ],
-                            ),
-                            const SizedBox(height: 12),
-                            Row(
-                              children: [
-                                Icon(
-                                  Icons.schedule,
-                                  size: 16,
-                                  color: _isDarkMode ? Colors.grey.shade400 : Colors.grey.shade600,
-                                ),
-                                const SizedBox(width: 12),
-                                Text(
-                                  'Applied: ${DateFormat('dd/MM/yyyy').format(application.applicationDate)}',
-                                  style: TextStyle(
-                                    color: _isDarkMode ? Colors.grey.shade400 : Colors.grey.shade600,
-                                    fontSize: (isTablet ? 14 : 12) * responsiveFontSize,
-                                  ),
-                                ),
-                              ],
-                            ),
-                            if (application.isAlreadyTaken) ...[
-                              const SizedBox(height: 12),
-                              Row(
-                                children: [
-                                  Icon(
-                                    Icons.info_outline,
-                                    size: 16,
-                                    color: Colors.orange.shade600,
-                                  ),
-                                  const SizedBox(width: 12),
-                                  Text(
-                                    'Already taken leave',
-                                    style: TextStyle(
-                                      color: Colors.orange.shade600,
-                                      fontSize: (isTablet ? 14 : 12) * responsiveFontSize,
-                                      fontWeight: FontWeight.w500,
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            ],
-                          ],
-                        ),
-                      ),
-
-                      SizedBox(height: isTablet ? 16 : 12),
-
-                      // Reason
-                      Text(
-                        'Reason:',
-                        style: TextStyle(
-                          fontSize: (isTablet ? 16 : 14) * responsiveFontSize,
-                          fontWeight: FontWeight.bold,
-                          color: _isDarkMode ? Colors.white : Colors.black87,
-                        ),
-                      ),
-                      const SizedBox(height: 8),
-                      Text(
-                        application.reason,
-                        style: TextStyle(
-                          fontSize: (isTablet ? 16 : 14) * responsiveFontSize,
-                          color: _isDarkMode ? Colors.grey.shade300 : Colors.grey.shade700,
-                          height: 1.4,
-                        ),
-                        maxLines: 3,
-                        overflow: TextOverflow.ellipsis,
-                      ),
-
-                      SizedBox(height: isTablet ? 20 : 16),
-
-                      // Action buttons
-                      Row(
-                        children: [
-                          Expanded(
-                            child: OutlinedButton.icon(
-                              onPressed: () => _processDecision(application, false, ''),
-                              icon: Icon(
-                                Icons.close,
-                                size: isTablet ? 20 : 16,
-                              ),
-                              label: Text(
-                                'Reject',
-                                style: TextStyle(fontSize: (isTablet ? 16 : 14) * responsiveFontSize),
-                              ),
-                              style: OutlinedButton.styleFrom(
-                                foregroundColor: Colors.red,
-                                side: const BorderSide(color: Colors.red),
-                                padding: EdgeInsets.symmetric(vertical: isTablet ? 12 : 10),
-                                shape: RoundedRectangleBorder(
-                                  borderRadius: BorderRadius.circular(12),
-                                ),
-                              ),
-                            ),
-                          ),
-                          SizedBox(width: isTablet ? 16 : 12),
-                          Expanded(
-                            child: ElevatedButton.icon(
-                              onPressed: () => _showApprovalDialog(application),
-                              icon: Icon(
-                                Icons.visibility,
-                                size: isTablet ? 20 : 16,
-                              ),
-                              label: Text(
-                                'Review',
-                                style: TextStyle(fontSize: (isTablet ? 16 : 14) * responsiveFontSize),
-                              ),
-                              style: ElevatedButton.styleFrom(
-                                backgroundColor: Theme.of(context).colorScheme.primary,
-                                foregroundColor: Colors.white,
-                                padding: EdgeInsets.symmetric(vertical: isTablet ? 12 : 10),
-                                shape: RoundedRectangleBorder(
-                                  borderRadius: BorderRadius.circular(12),
-                                ),
-                                elevation: 0,
-                              ),
-                            ),
-                          ),
-                        ],
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-            ),
           ),
-        );
-      },
+        ),
+      ),
     );
   }
 
-  // Enhanced approval dialog with modern design
+  // Enhanced approval dialog - Compact
   Future<void> _showApprovalDialog(LeaveApplicationModel application) async {
     final TextEditingController commentsController = TextEditingController();
     bool? approved;
@@ -765,13 +702,13 @@ class _ManagerLeaveApprovalViewState extends State<ManagerLeaveApprovalView>
         backgroundColor: Colors.transparent,
         elevation: 0,
         child: Container(
-          width: isTablet ? 600 : double.maxFinite,
+          width: isTablet ? 500 : double.maxFinite,
           constraints: BoxConstraints(
-            maxHeight: screenHeight * 0.85,
+            maxHeight: screenHeight * 0.8,
           ),
           decoration: BoxDecoration(
             color: _isDarkMode ? const Color(0xFF1E293B) : Colors.white,
-            borderRadius: BorderRadius.circular(24),
+            borderRadius: BorderRadius.circular(16),
             boxShadow: [
               BoxShadow(
                 color: Colors.black.withOpacity(0.3),
@@ -783,41 +720,38 @@ class _ManagerLeaveApprovalViewState extends State<ManagerLeaveApprovalView>
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              // Header
+              // Header - Compact
               Container(
-                padding: EdgeInsets.all(isTablet ? 24 : 20),
+                padding: const EdgeInsets.all(16),
                 decoration: BoxDecoration(
-                  gradient: LinearGradient(
+                  gradient: const LinearGradient(
                     begin: Alignment.topLeft,
                     end: Alignment.bottomRight,
-                    colors: [
-                      Theme.of(context).colorScheme.primary,
-                      Theme.of(context).colorScheme.secondary,
-                    ],
+                    colors: [Color(0xFF2563EB), Color(0xFF3B82F6)],
                   ),
-                  borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
+                  borderRadius: const BorderRadius.vertical(top: Radius.circular(16)),
                 ),
                 child: Row(
                   children: [
                     Container(
-                      padding: const EdgeInsets.all(8),
+                      padding: const EdgeInsets.all(6),
                       decoration: BoxDecoration(
                         color: Colors.white.withOpacity(0.2),
-                        borderRadius: BorderRadius.circular(8),
+                        borderRadius: BorderRadius.circular(6),
                       ),
-                      child: Icon(
+                      child: const Icon(
                         Icons.approval,
                         color: Colors.white,
-                        size: isTablet ? 24 : 20,
+                        size: 18,
                       ),
                     ),
-                    SizedBox(width: isTablet ? 16 : 12),
+                    const SizedBox(width: 12),
                     Expanded(
                       child: Text(
                         'Review Leave Application',
                         style: TextStyle(
                           color: Colors.white,
-                          fontSize: (isTablet ? 22 : 20) * responsiveFontSize,
+                          fontSize: 16 * responsiveFontSize,
                           fontWeight: FontWeight.bold,
                         ),
                       ),
@@ -826,19 +760,19 @@ class _ManagerLeaveApprovalViewState extends State<ManagerLeaveApprovalView>
                 ),
               ),
 
-              // Content
+              // Content - Compact
               Flexible(
                 child: SingleChildScrollView(
-                  padding: EdgeInsets.all(isTablet ? 24 : 20),
+                  padding: const EdgeInsets.all(16),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      // Employee info
+                      // Employee info - Compact
                       Container(
-                        padding: EdgeInsets.all(isTablet ? 16 : 14),
+                        padding: const EdgeInsets.all(12),
                         decoration: BoxDecoration(
                           color: _isDarkMode ? Colors.white.withOpacity(0.05) : Colors.grey.shade50,
-                          borderRadius: BorderRadius.circular(16),
+                          borderRadius: BorderRadius.circular(8),
                           border: Border.all(
                             color: _isDarkMode ? Colors.white.withOpacity(0.1) : Colors.grey.withOpacity(0.2),
                           ),
@@ -849,73 +783,73 @@ class _ManagerLeaveApprovalViewState extends State<ManagerLeaveApprovalView>
                             _buildDetailRow('Leave Type', application.leaveType.displayName),
                             _buildDetailRow('Dates', application.dateRange),
                             _buildDetailRow('Total Days', '${application.totalDays} days'),
-                            _buildDetailRow('Applied On', DateFormat('dd/MM/yyyy HH:mm').format(application.applicationDate)),
+                            _buildDetailRow('Applied On', DateFormat('dd/MM/yyyy').format(application.applicationDate)),
                           ],
                         ),
                       ),
 
-                      SizedBox(height: isTablet ? 20 : 16),
+                      const SizedBox(height: 12),
 
-                      // Reason section
+                      // Reason section - Compact
                       Text(
                         'Reason:',
                         style: TextStyle(
                           fontWeight: FontWeight.bold,
-                          fontSize: (isTablet ? 18 : 16) * responsiveFontSize,
+                          fontSize: 14 * responsiveFontSize,
                           color: _isDarkMode ? Colors.white : Colors.black87,
                         ),
                       ),
-                      SizedBox(height: isTablet ? 12 : 8),
+                      const SizedBox(height: 6),
                       Container(
                         width: double.infinity,
-                        padding: EdgeInsets.all(isTablet ? 16 : 14),
+                        padding: const EdgeInsets.all(12),
                         decoration: BoxDecoration(
-                          color: Theme.of(context).colorScheme.primary.withOpacity(0.1),
-                          borderRadius: BorderRadius.circular(12),
+                          color: const Color(0xFF2563EB).withOpacity(0.1),
+                          borderRadius: BorderRadius.circular(8),
                           border: Border.all(
-                            color: Theme.of(context).colorScheme.primary.withOpacity(0.3),
+                            color: const Color(0xFF2563EB).withOpacity(0.3),
                           ),
                         ),
                         child: Text(
                           application.reason,
                           style: TextStyle(
-                            fontSize: (isTablet ? 16 : 14) * responsiveFontSize,
+                            fontSize: 12 * responsiveFontSize,
                             color: _isDarkMode ? Colors.white : Colors.black87,
                             height: 1.4,
                           ),
                         ),
                       ),
 
-                      // Certificate section
+                      // Certificate section - Compact
                       if (application.certificateUrl != null) ...[
-                        SizedBox(height: isTablet ? 20 : 16),
+                        const SizedBox(height: 12),
                         _buildCertificateSection(application),
                       ],
 
-                      // Already taken notice
+                      // Already taken notice - Compact
                       if (application.isAlreadyTaken) ...[
-                        SizedBox(height: isTablet ? 16 : 12),
+                        const SizedBox(height: 12),
                         Container(
-                          padding: EdgeInsets.all(isTablet ? 16 : 12),
+                          padding: const EdgeInsets.all(12),
                           decoration: BoxDecoration(
                             color: Colors.orange.withOpacity(0.1),
-                            borderRadius: BorderRadius.circular(12),
+                            borderRadius: BorderRadius.circular(8),
                             border: Border.all(color: Colors.orange.withOpacity(0.3)),
                           ),
                           child: Row(
                             children: [
                               Icon(
                                 Icons.info_outline,
-                                size: isTablet ? 24 : 20,
+                                size: 18,
                                 color: Colors.orange.shade700,
                               ),
-                              SizedBox(width: isTablet ? 12 : 8),
+                              const SizedBox(width: 8),
                               Expanded(
                                 child: Text(
                                   'This is for leave already taken',
                                   style: TextStyle(
                                     color: Colors.orange.shade700,
-                                    fontSize: (isTablet ? 16 : 14) * responsiveFontSize,
+                                    fontSize: 12 * responsiveFontSize,
                                     fontWeight: FontWeight.w600,
                                   ),
                                 ),
@@ -925,40 +859,40 @@ class _ManagerLeaveApprovalViewState extends State<ManagerLeaveApprovalView>
                         ),
                       ],
 
-                      SizedBox(height: isTablet ? 20 : 16),
+                      const SizedBox(height: 12),
 
-                      // Comments section
+                      // Comments section - Compact
                       Text(
                         'Comments (Optional)',
                         style: TextStyle(
                           fontWeight: FontWeight.bold,
-                          fontSize: (isTablet ? 18 : 16) * responsiveFontSize,
+                          fontSize: 14 * responsiveFontSize,
                           color: _isDarkMode ? Colors.white : Colors.black87,
                         ),
                       ),
-                      SizedBox(height: isTablet ? 12 : 8),
+                      const SizedBox(height: 6),
                       Container(
                         decoration: BoxDecoration(
-                          borderRadius: BorderRadius.circular(12),
+                          borderRadius: BorderRadius.circular(8),
                           border: Border.all(
                             color: _isDarkMode ? Colors.white.withOpacity(0.2) : Colors.grey.withOpacity(0.3),
                           ),
                         ),
                         child: TextField(
                           controller: commentsController,
-                          maxLines: isTablet ? 4 : 3,
+                          maxLines: 3,
                           style: TextStyle(
-                            fontSize: (isTablet ? 16 : 14) * responsiveFontSize,
+                            fontSize: 12 * responsiveFontSize,
                             color: _isDarkMode ? Colors.white : Colors.black87,
                           ),
                           decoration: InputDecoration(
                             hintText: 'Add any comments about your decision...',
                             hintStyle: TextStyle(
-                              fontSize: (isTablet ? 14 : 12) * responsiveFontSize,
+                              fontSize: 11 * responsiveFontSize,
                               color: _isDarkMode ? Colors.grey.shade400 : Colors.grey.shade500,
                             ),
                             border: InputBorder.none,
-                            contentPadding: EdgeInsets.all(isTablet ? 16 : 14),
+                            contentPadding: const EdgeInsets.all(12),
                           ),
                         ),
                       ),
@@ -967,12 +901,12 @@ class _ManagerLeaveApprovalViewState extends State<ManagerLeaveApprovalView>
                 ),
               ),
 
-              // Action buttons
+              // Action buttons - Compact
               Container(
-                padding: EdgeInsets.all(isTablet ? 24 : 20),
+                padding: const EdgeInsets.all(16),
                 decoration: BoxDecoration(
                   color: _isDarkMode ? Colors.white.withOpacity(0.05) : Colors.grey.shade50,
-                  borderRadius: const BorderRadius.vertical(bottom: Radius.circular(24)),
+                  borderRadius: const BorderRadius.vertical(bottom: Radius.circular(16)),
                 ),
                 child: Row(
                   children: [
@@ -984,18 +918,18 @@ class _ManagerLeaveApprovalViewState extends State<ManagerLeaveApprovalView>
                           side: BorderSide(
                             color: _isDarkMode ? Colors.grey.shade600 : Colors.grey.shade300,
                           ),
-                          padding: EdgeInsets.symmetric(vertical: isTablet ? 16 : 12),
+                          padding: const EdgeInsets.symmetric(vertical: 12),
                           shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(12),
+                            borderRadius: BorderRadius.circular(8),
                           ),
                         ),
                         child: Text(
                           'Cancel',
-                          style: TextStyle(fontSize: (isTablet ? 16 : 14) * responsiveFontSize),
+                          style: TextStyle(fontSize: 12 * responsiveFontSize),
                         ),
                       ),
                     ),
-                    SizedBox(width: isTablet ? 16 : 12),
+                    const SizedBox(width: 12),
                     Expanded(
                       child: OutlinedButton(
                         onPressed: () {
@@ -1005,18 +939,18 @@ class _ManagerLeaveApprovalViewState extends State<ManagerLeaveApprovalView>
                         style: OutlinedButton.styleFrom(
                           foregroundColor: Colors.red,
                           side: const BorderSide(color: Colors.red),
-                          padding: EdgeInsets.symmetric(vertical: isTablet ? 16 : 12),
+                          padding: const EdgeInsets.symmetric(vertical: 12),
                           shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(12),
+                            borderRadius: BorderRadius.circular(8),
                           ),
                         ),
                         child: Text(
                           'Reject',
-                          style: TextStyle(fontSize: (isTablet ? 16 : 14) * responsiveFontSize),
+                          style: TextStyle(fontSize: 12 * responsiveFontSize),
                         ),
                       ),
                     ),
-                    SizedBox(width: isTablet ? 16 : 12),
+                    const SizedBox(width: 12),
                     Expanded(
                       child: ElevatedButton(
                         onPressed: () {
@@ -1026,15 +960,15 @@ class _ManagerLeaveApprovalViewState extends State<ManagerLeaveApprovalView>
                         style: ElevatedButton.styleFrom(
                           backgroundColor: Colors.green,
                           foregroundColor: Colors.white,
-                          padding: EdgeInsets.symmetric(vertical: isTablet ? 16 : 12),
+                          padding: const EdgeInsets.symmetric(vertical: 12),
                           shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(12),
+                            borderRadius: BorderRadius.circular(8),
                           ),
                           elevation: 0,
                         ),
                         child: Text(
                           'Approve',
-                          style: TextStyle(fontSize: (isTablet ? 16 : 14) * responsiveFontSize),
+                          style: TextStyle(fontSize: 12 * responsiveFontSize),
                         ),
                       ),
                     ),
@@ -1052,13 +986,13 @@ class _ManagerLeaveApprovalViewState extends State<ManagerLeaveApprovalView>
     }
   }
 
-  // Certificate section with modern design
+  // Certificate section - Compact
   Widget _buildCertificateSection(LeaveApplicationModel application) {
     return Container(
-      padding: EdgeInsets.all(isTablet ? 16 : 14),
+      padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
         color: Colors.green.withOpacity(0.1),
-        borderRadius: BorderRadius.circular(16),
+        borderRadius: BorderRadius.circular(8),
         border: Border.all(color: Colors.green.withOpacity(0.3)),
       ),
       child: Column(
@@ -1067,18 +1001,18 @@ class _ManagerLeaveApprovalViewState extends State<ManagerLeaveApprovalView>
           Row(
             children: [
               Container(
-                padding: const EdgeInsets.all(8),
+                padding: const EdgeInsets.all(6),
                 decoration: BoxDecoration(
                   color: Colors.green.withOpacity(0.2),
-                  borderRadius: BorderRadius.circular(8),
+                  borderRadius: BorderRadius.circular(6),
                 ),
                 child: Icon(
                   Icons.attachment,
-                  size: isTablet ? 20 : 16,
+                  size: 16,
                   color: Colors.green.shade700,
                 ),
               ),
-              SizedBox(width: isTablet ? 12 : 8),
+              const SizedBox(width: 8),
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
@@ -1087,17 +1021,29 @@ class _ManagerLeaveApprovalViewState extends State<ManagerLeaveApprovalView>
                       'Certificate Attached',
                       style: TextStyle(
                         color: Colors.green.shade700,
-                        fontSize: (isTablet ? 16 : 14) * responsiveFontSize,
+                        fontSize: 12 * responsiveFontSize,
                         fontWeight: FontWeight.bold,
                       ),
                     ),
-                    if (application.certificateFileName != null) ...[
-                      const SizedBox(height: 4),
+                    // ✅ FIXED: Show certificate filename if available
+                    if (application.certificateFileName != null && application.certificateFileName!.isNotEmpty) ...[
+                      const SizedBox(height: 2),
                       Text(
                         application.certificateFileName!,
                         style: TextStyle(
                           color: Colors.green.shade600,
-                          fontSize: (isTablet ? 14 : 12) * responsiveFontSize,
+                          fontSize: 10 * responsiveFontSize,
+                          fontStyle: FontStyle.italic,
+                        ),
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ] else ...[
+                      const SizedBox(height: 2),
+                      Text(
+                        'Certificate file available',
+                        style: TextStyle(
+                          color: Colors.green.shade600,
+                          fontSize: 10 * responsiveFontSize,
                           fontStyle: FontStyle.italic,
                         ),
                       ),
@@ -1107,52 +1053,46 @@ class _ManagerLeaveApprovalViewState extends State<ManagerLeaveApprovalView>
               ),
             ],
           ),
-
-          SizedBox(height: isTablet ? 16 : 12),
-
+          const SizedBox(height: 8),
           Row(
             children: [
               Expanded(
                 child: ElevatedButton.icon(
                   onPressed: () => _viewCertificate(application.certificateUrl!),
-                  icon: Icon(
-                    Icons.visibility,
-                    size: isTablet ? 18 : 16,
-                  ),
+                  icon: const Icon(Icons.visibility, size: 14),
                   label: Text(
                     'View Certificate',
-                    style: TextStyle(fontSize: (isTablet ? 14 : 12) * responsiveFontSize),
+                    style: TextStyle(fontSize: 10 * responsiveFontSize),
                   ),
                   style: ElevatedButton.styleFrom(
                     backgroundColor: Colors.blue,
                     foregroundColor: Colors.white,
-                    padding: EdgeInsets.symmetric(vertical: isTablet ? 12 : 10),
+                    padding: const EdgeInsets.symmetric(vertical: 8),
                     shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(12),
+                      borderRadius: BorderRadius.circular(6),
                     ),
                     elevation: 0,
+                    minimumSize: Size.zero,
                   ),
                 ),
               ),
-              SizedBox(width: isTablet ? 12 : 8),
+              const SizedBox(width: 8),
               Expanded(
                 child: OutlinedButton.icon(
                   onPressed: () => _downloadCertificate(application.certificateUrl!, application.certificateFileName),
-                  icon: Icon(
-                    Icons.download,
-                    size: isTablet ? 18 : 16,
-                  ),
+                  icon: const Icon(Icons.download, size: 14),
                   label: Text(
                     'Download',
-                    style: TextStyle(fontSize: (isTablet ? 14 : 12) * responsiveFontSize),
+                    style: TextStyle(fontSize: 10 * responsiveFontSize),
                   ),
                   style: OutlinedButton.styleFrom(
                     foregroundColor: Colors.green.shade700,
                     side: BorderSide(color: Colors.green.shade400),
-                    padding: EdgeInsets.symmetric(vertical: isTablet ? 12 : 10),
+                    padding: const EdgeInsets.symmetric(vertical: 8),
                     shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(12),
+                      borderRadius: BorderRadius.circular(6),
                     ),
+                    minimumSize: Size.zero,
                   ),
                 ),
               ),
@@ -1165,18 +1105,18 @@ class _ManagerLeaveApprovalViewState extends State<ManagerLeaveApprovalView>
 
   Widget _buildDetailRow(String label, String value) {
     return Padding(
-      padding: EdgeInsets.symmetric(vertical: isTablet ? 8 : 6),
+      padding: const EdgeInsets.symmetric(vertical: 4),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           SizedBox(
-            width: isTablet ? 120 : 100,
+            width: 80,
             child: Text(
               '$label:',
               style: TextStyle(
                 fontWeight: FontWeight.w600,
                 color: _isDarkMode ? Colors.grey.shade400 : Colors.grey.shade700,
-                fontSize: (isTablet ? 14 : 12) * responsiveFontSize,
+                fontSize: 10 * responsiveFontSize,
               ),
             ),
           ),
@@ -1185,7 +1125,7 @@ class _ManagerLeaveApprovalViewState extends State<ManagerLeaveApprovalView>
               value,
               style: TextStyle(
                 fontWeight: FontWeight.w600,
-                fontSize: (isTablet ? 14 : 12) * responsiveFontSize,
+                fontSize: 10 * responsiveFontSize,
                 color: _isDarkMode ? Colors.white : Colors.black87,
               ),
             ),
@@ -1195,62 +1135,85 @@ class _ManagerLeaveApprovalViewState extends State<ManagerLeaveApprovalView>
     );
   }
 
-  // Empty state with modern design
+  // Applications List
+  Widget _buildApplicationsList() {
+    if (_pendingApplications.isEmpty) {
+      return _buildEmptyState();
+    }
+
+    return RefreshIndicator(
+      onRefresh: _refreshApplications,
+      color: const Color(0xFF2563EB),
+      child: ListView.builder(
+        physics: const BouncingScrollPhysics(),
+        padding: EdgeInsets.fromLTRB(
+          responsivePadding.horizontal,
+          8,
+          responsivePadding.horizontal,
+          20,
+        ),
+        itemCount: _pendingApplications.length,
+        itemBuilder: (context, index) {
+          final application = _pendingApplications[index];
+          return _buildApplicationCard(application);
+        },
+      ),
+    );
+  }
+
+  // Empty state - Compact
   Widget _buildEmptyState() {
     return Center(
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
           Container(
-            padding: EdgeInsets.all(isTablet ? 32 : 24),
+            padding: const EdgeInsets.all(24),
             decoration: BoxDecoration(
               color: _isDarkMode ? Colors.white.withOpacity(0.05) : Colors.grey.withOpacity(0.1),
               shape: BoxShape.circle,
             ),
             child: Icon(
               Icons.check_circle_outline,
-              size: isTablet ? 80 : 64,
+              size: 48,
               color: _isDarkMode ? Colors.grey.shade600 : Colors.grey.shade400,
             ),
           ),
-          SizedBox(height: isTablet ? 24 : 20),
+          const SizedBox(height: 16),
           Text(
             'All Caught Up!',
             style: TextStyle(
-              fontSize: (isTablet ? 24 : 20) * responsiveFontSize,
+              fontSize: 18 * responsiveFontSize,
               fontWeight: FontWeight.bold,
               color: _isDarkMode ? Colors.white : Colors.black87,
             ),
           ),
-          SizedBox(height: isTablet ? 12 : 8),
+          const SizedBox(height: 8),
           Text(
             'No pending leave applications to review',
             style: TextStyle(
               color: _isDarkMode ? Colors.grey.shade400 : Colors.grey.shade600,
-              fontSize: (isTablet ? 16 : 14) * responsiveFontSize,
+              fontSize: 14 * responsiveFontSize,
             ),
             textAlign: TextAlign.center,
           ),
-          SizedBox(height: isTablet ? 32 : 24),
+          const SizedBox(height: 20),
           ElevatedButton.icon(
             onPressed: _refreshApplications,
-            icon: Icon(
-              Icons.refresh,
-              size: isTablet ? 24 : 20,
-            ),
+            icon: const Icon(Icons.refresh, size: 18),
             label: Text(
               'Refresh',
-              style: TextStyle(fontSize: (isTablet ? 16 : 14) * responsiveFontSize),
+              style: TextStyle(fontSize: 12 * responsiveFontSize),
             ),
             style: ElevatedButton.styleFrom(
-              backgroundColor: Theme.of(context).colorScheme.primary,
+              backgroundColor: const Color(0xFF2563EB),
               foregroundColor: Colors.white,
-              padding: EdgeInsets.symmetric(
-                horizontal: isTablet ? 32 : 24,
-                vertical: isTablet ? 16 : 12,
+              padding: const EdgeInsets.symmetric(
+                horizontal: 20,
+                vertical: 10,
               ),
               shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(16),
+                borderRadius: BorderRadius.circular(8),
               ),
               elevation: 0,
             ),
@@ -1300,22 +1263,22 @@ class _ManagerLeaveApprovalViewState extends State<ManagerLeaveApprovalView>
         builder: (context) => Dialog(
           backgroundColor: Colors.transparent,
           child: Container(
-            padding: EdgeInsets.all(isTablet ? 24 : 20),
+            padding: const EdgeInsets.all(20),
             decoration: BoxDecoration(
               color: _isDarkMode ? const Color(0xFF1E293B) : Colors.white,
-              borderRadius: BorderRadius.circular(16),
+              borderRadius: BorderRadius.circular(12),
             ),
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
-                CircularProgressIndicator(
-                  color: Theme.of(context).colorScheme.primary,
+                const CircularProgressIndicator(
+                  valueColor: AlwaysStoppedAnimation<Color>(Color(0xFF2563EB)),
                 ),
-                SizedBox(height: isTablet ? 20 : 16),
+                const SizedBox(height: 16),
                 Text(
                   'Processing decision...',
                   style: TextStyle(
-                    fontSize: (isTablet ? 16 : 14) * responsiveFontSize,
+                    fontSize: 14 * responsiveFontSize,
                     color: _isDarkMode ? Colors.white : Colors.black87,
                   ),
                 ),
@@ -1359,41 +1322,31 @@ class _ManagerLeaveApprovalViewState extends State<ManagerLeaveApprovalView>
     }
   }
 
+  // Leave type color mapping for 4 types
   Color _getLeaveTypeColor(LeaveType type) {
     switch (type) {
       case LeaveType.annual:
         return Colors.blue;
       case LeaveType.sick:
         return Colors.red;
-      case LeaveType.maternity:
-        return Colors.pink;
-      case LeaveType.paternity:
-        return Colors.indigo;
+      case LeaveType.local:
+        return Colors.green;
       case LeaveType.emergency:
         return Colors.orange;
-      case LeaveType.compensate:
-        return Colors.green;
-      case LeaveType.unpaid:
-        return Colors.grey;
     }
   }
 
+  // Leave type icon mapping for 4 types
   IconData _getLeaveTypeIcon(LeaveType type) {
     switch (type) {
       case LeaveType.annual:
         return Icons.beach_access;
       case LeaveType.sick:
         return Icons.local_hospital;
-      case LeaveType.maternity:
-        return Icons.child_care;
-      case LeaveType.paternity:
-        return Icons.family_restroom;
+      case LeaveType.local:
+        return Icons.location_on;
       case LeaveType.emergency:
         return Icons.emergency;
-      case LeaveType.compensate:
-        return Icons.schedule;
-      case LeaveType.unpaid:
-        return Icons.money_off;
     }
   }
 
@@ -1407,7 +1360,7 @@ class _ManagerLeaveApprovalViewState extends State<ManagerLeaveApprovalView>
     return Theme(
       data: _isDarkMode ? _buildDarkTheme() : _buildLightTheme(),
       child: Scaffold(
-        backgroundColor: _isDarkMode ? const Color(0xFF0A0E1A) : const Color(0xFFF8FAFC),
+        backgroundColor: _isDarkMode ? const Color(0xFF0F172A) : const Color(0xFFF8FAFC),
         body: _isLoading
             ? _buildLoadingScreen()
             : AnimatedBuilder(
@@ -1415,65 +1368,22 @@ class _ManagerLeaveApprovalViewState extends State<ManagerLeaveApprovalView>
           builder: (context, child) {
             return FadeTransition(
               opacity: _fadeAnimation,
-              child: SafeArea(
-                child: Column(
-                  children: [
-                    // Back button
-                    Padding(
-                      padding: responsivePadding,
-                      child: Row(
-                        children: [
-                          Material(
-                            color: Colors.transparent,
-                            child: InkWell(
-                              onTap: () => Navigator.pop(context),
-                              borderRadius: BorderRadius.circular(12),
-                              child: Container(
-                                padding: EdgeInsets.all(isTablet ? 12 : 10),
-                                decoration: BoxDecoration(
-                                  color: _isDarkMode ? const Color(0xFF1E293B) : Colors.white,
-                                  borderRadius: BorderRadius.circular(12),
-                                  border: Border.all(
-                                    color: _isDarkMode ? Colors.white.withOpacity(0.1) : Colors.grey.withOpacity(0.2),
-                                  ),
-                                ),
-                                child: Icon(
-                                  Icons.arrow_back,
-                                  color: _isDarkMode ? Colors.white : Colors.black87,
-                                  size: isTablet ? 24 : 20,
-                                ),
-                              ),
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
+              child: Column(
+                children: [
+                  // Header
+                  _buildHeader(),
 
-                    // Header
-                    _buildModernHeader(),
-
-                    SizedBox(height: responsivePadding.vertical),
-
-                    // Applications list
-                    Expanded(
-                      child: _pendingApplications.isEmpty
-                          ? _buildEmptyState()
-                          : RefreshIndicator(
-                        onRefresh: _refreshApplications,
-                        color: Theme.of(context).colorScheme.primary,
-                        child: ListView.builder(
-                          physics: const BouncingScrollPhysics(),
-                          padding: EdgeInsets.symmetric(horizontal: responsivePadding.horizontal),
-                          itemCount: _pendingApplications.length,
-                          itemBuilder: (context, index) {
-                            final application = _pendingApplications[index];
-                            return _buildApplicationCard(application);
-                          },
-                        ),
-                      ),
-                    ),
+                  // Quick Stats (only show if there are applications)
+                  if (_pendingApplications.isNotEmpty) ...[
+                    _buildQuickStats(),
+                    const SizedBox(height: 8),
                   ],
-                ),
+
+                  // Applications list
+                  Expanded(
+                    child: _buildApplicationsList(),
+                  ),
+                ],
               ),
             );
           },
@@ -1482,3 +1392,6 @@ class _ManagerLeaveApprovalViewState extends State<ManagerLeaveApprovalView>
     );
   }
 }
+
+
+

@@ -1,7 +1,7 @@
 import 'dart:async';
 import 'dart:math';
 
-import 'package:face_auth/common/utils/extensions/size_extension.dart';
+import 'package:face_auth_compatible/common/utils/extensions/size_extension.dart';
 import 'package:flutter/material.dart';
 
 import 'animated_circle.dart';
@@ -84,3 +84,6 @@ class _AnimatedViewState extends State<AnimatedView>
     );
   }
 }
+
+
+

@@ -1,4 +1,4 @@
-// lib/register_face/register_face_view.dart - Production Ready
+// lib/register_face/register_face_view.dart - Clean Production Ready
 
 import 'dart:convert';
 import 'dart:typed_data';
@@ -33,8 +33,10 @@ class RegisterFaceView extends StatefulWidget {
   State<RegisterFaceView> createState() => _RegisterFaceViewState();
 }
 
-class _RegisterFaceViewState extends State<RegisterFaceView> {
-  // ================ CORE SERVICES ================
+class _RegisterFaceViewState extends State<RegisterFaceView>
+    with TickerProviderStateMixin {
+  
+  // Core Services
   final FaceDetector _faceDetector = FaceDetector(
     options: FaceDetectorOptions(
       enableLandmarks: true,
@@ -46,672 +48,472 @@ class _RegisterFaceViewState extends State<RegisterFaceView> {
     ),
   );
 
-  // ================ STATE VARIABLES ================
+  // State Variables
   String? _image;
   FaceFeatures? _faceFeatures;
   bool _isRegistering = false;
   bool _isOfflineMode = false;
   File? _imageFile;
+  bool _isProcessing = false;
   final ImagePicker _imagePicker = ImagePicker();
 
-  // ================ DEBUG STATE ================
-  List<String> _debugLogs = [];
-  Map<String, dynamic> _registrationDebugData = {};
-  bool _showDebugInfo = false;
-  bool _showAdvancedOptions = false;
+  // Animation Controllers
+  late AnimationController _pulseController;
+  late AnimationController _successController;
+  late Animation<double> _pulseAnimation;
+  late Animation<double> _successAnimation;
+  late Animation<Color?> _colorAnimation;
 
   @override
   void initState() {
     super.initState();
-    print("🚀 RegisterFaceView initialized for employee: ${widget.employeeId}");
-    _addDebugLog("🚀 Registration view initialized");
+    _initializeAnimations();
     _checkConnectivity();
+  }
+
+  void _initializeAnimations() {
+    _pulseController = AnimationController(
+      duration: const Duration(seconds: 2),
+      vsync: this,
+    );
+
+    _successController = AnimationController(
+      duration: const Duration(milliseconds: 800),
+      vsync: this,
+    );
+
+    _pulseAnimation = Tween<double>(
+      begin: 1.0,
+      end: 1.1,
+    ).animate(CurvedAnimation(
+      parent: _pulseController,
+      curve: Curves.easeInOut,
+    ));
+
+    _successAnimation = Tween<double>(
+      begin: 1.0,
+      end: 1.2,
+    ).animate(CurvedAnimation(
+      parent: _successController,
+      curve: Curves.elasticOut,
+    ));
+
+    _colorAnimation = ColorTween(
+      begin: Colors.white.withOpacity(0.3),
+      end: Colors.green.withOpacity(0.8),
+    ).animate(CurvedAnimation(
+      parent: _successController,
+      curve: Curves.easeInOut,
+    ));
   }
 
   @override
   void dispose() {
     _faceDetector.close();
+    _pulseController.dispose();
+    _successController.dispose();
     super.dispose();
   }
 
-  // ================ DEBUG LOGGING ================
-  void _addDebugLog(String message) {
-    String timestampedMessage = "${DateTime.now().toIso8601String().substring(11, 19)} - $message";
-    setState(() {
-      _debugLogs.add(timestampedMessage);
-      if (_debugLogs.length > 50) _debugLogs.removeAt(0);
-    });
-    print("REG_DEBUG: $timestampedMessage");
-  }
-
-  // ================ CONNECTIVITY CHECK ================
   Future<void> _checkConnectivity() async {
     try {
       var connectivityResult = await (Connectivity().checkConnectivity());
       setState(() {
         _isOfflineMode = connectivityResult == ConnectivityResult.none;
       });
-      _addDebugLog("📶 Connectivity status: ${_isOfflineMode ? 'Offline' : 'Online'}");
     } catch (e) {
       setState(() {
         _isOfflineMode = true;
       });
-      _addDebugLog("⚠️ Connectivity check failed, assuming offline: $e");
     }
   }
 
-  // ================ UI BUILD ================
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      extendBodyBehindAppBar: true,
+      backgroundColor: const Color(0xFF0A0E1A),
       appBar: AppBar(
-        centerTitle: true,
-        backgroundColor: appBarColor,
-        title: const Text("🔐 Face Registration"),
+        backgroundColor: Colors.transparent,
         elevation: 0,
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back_ios, color: Colors.white),
+          onPressed: () => Navigator.of(context).pop(),
+        ),
+        title: const Text(
+          "Face Registration",
+          style: TextStyle(
+            color: Colors.white,
+            fontSize: 20,
+            fontWeight: FontWeight.w600,
+          ),
+        ),
+        centerTitle: true,
         actions: [
-          // Debug toggle
-          IconButton(
-            icon: Icon(
-              _showDebugInfo ? Icons.bug_report : Icons.bug_report_outlined,
-              color: _showDebugInfo ? Colors.yellow : Colors.white,
-            ),
-            onPressed: () {
-              setState(() {
-                _showDebugInfo = !_showDebugInfo;
-              });
-            },
-          ),
-          // Advanced options toggle
-          IconButton(
-            icon: Icon(
-              _showAdvancedOptions ? Icons.settings : Icons.settings_outlined,
-              color: _showAdvancedOptions ? Colors.blue : Colors.white,
-            ),
-            onPressed: () {
-              setState(() {
-                _showAdvancedOptions = !_showAdvancedOptions;
-              });
-            },
-          ),
-          // Connectivity indicator
           Container(
             margin: const EdgeInsets.only(right: 16),
-            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
             decoration: BoxDecoration(
               color: _isOfflineMode ? Colors.orange : Colors.green,
               borderRadius: BorderRadius.circular(12),
             ),
             child: Text(
               _isOfflineMode ? "Offline" : "Online",
-              style: const TextStyle(color: Colors.white, fontSize: 10),
+              style: const TextStyle(color: Colors.white, fontSize: 12),
             ),
           ),
         ],
       ),
       body: Container(
+        width: double.infinity,
+        height: double.infinity,
         decoration: const BoxDecoration(
           gradient: LinearGradient(
             begin: Alignment.topCenter,
             end: Alignment.bottomCenter,
             colors: [
-              scaffoldTopGradientClr,
-              scaffoldBottomGradientClr,
+              Color(0xFF0A0E1A),
+              Color(0xFF1E293B),
             ],
           ),
         ),
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.end,
-          children: [
-            Container(
-              height: 0.82.sh,
-              width: double.infinity,
-              padding: EdgeInsets.fromLTRB(0.05.sw, 0.025.sh, 0.05.sw, 0.04.sh),
-              decoration: BoxDecoration(
-                color: overlayContainerClr,
-                borderRadius: BorderRadius.only(
-                  topLeft: Radius.circular(0.03.sh),
-                  topRight: Radius.circular(0.03.sh),
-                ),
-              ),
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.start,
-                children: [
-                  // Debug panel (if enabled)
-                  if (_showDebugInfo) _buildDebugPanel(),
-
-                  // Advanced options panel (if enabled)
-                  if (_showAdvancedOptions) _buildAdvancedOptionsPanel(),
-
-                  // Camera section
-                  _buildCameraSection(),
-
-                  const Spacer(),
-
-                  // Status display
-                  _buildStatusSection(),
-
-                  // Action buttons
-                  _buildActionButtons(),
-                ],
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  // ================ DEBUG PANEL ================
-  Widget _buildDebugPanel() {
-    return Container(
-      margin: const EdgeInsets.only(bottom: 16),
-      padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        color: Colors.black.withOpacity(0.3),
-        borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: Colors.yellow.withOpacity(0.3)),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
+        child: SafeArea(
+          child: Column(
             children: [
-              const Icon(Icons.bug_report, color: Colors.yellow, size: 16),
-              const SizedBox(width: 8),
-              const Text(
-                "Registration Debug Panel",
-                style: TextStyle(color: Colors.yellow, fontSize: 14, fontWeight: FontWeight.bold),
-              ),
-              const Spacer(),
-              TextButton(
-                onPressed: () {
-                  setState(() {
-                    _debugLogs.clear();
-                    _registrationDebugData.clear();
-                  });
-                },
-                child: const Text("Clear", style: TextStyle(color: Colors.orange, fontSize: 12)),
-              ),
-            ],
-          ),
-          const SizedBox(height: 8),
-          Container(
-            height: 100,
-            decoration: BoxDecoration(
-              color: Colors.black.withOpacity(0.2),
-              borderRadius: BorderRadius.circular(4),
-            ),
-            child: ListView.builder(
-              padding: const EdgeInsets.all(4),
-              itemCount: _debugLogs.length,
-              itemBuilder: (context, index) {
-                return Text(
-                  _debugLogs[index],
-                  style: const TextStyle(
-                    color: Colors.white,
-                    fontSize: 10,
-                    fontFamily: 'monospace',
-                  ),
-                );
-              },
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  // ================ ADVANCED OPTIONS PANEL ================
-  Widget _buildAdvancedOptionsPanel() {
-    return Container(
-      margin: const EdgeInsets.only(bottom: 16),
-      padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        color: Colors.blue.withOpacity(0.1),
-        borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: Colors.blue.withOpacity(0.3)),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          const Row(
-            children: [
-              Icon(Icons.settings, color: Colors.blue, size: 16),
-              SizedBox(width: 8),
-              Text(
-                "Advanced Options",
-                style: TextStyle(color: Colors.blue, fontSize: 14, fontWeight: FontWeight.bold),
-              ),
-            ],
-          ),
-          const SizedBox(height: 8),
-          Row(
-            children: [
+              const SizedBox(height: 20),
+              
+              // Status Message
+              _buildStatusMessage(),
+              
+              const SizedBox(height: 30),
+              
+              // Camera Section
               Expanded(
-                child: ElevatedButton.icon(
-                  onPressed: _testMultipleFaceDetection,
-                  icon: const Icon(Icons.face_retouching_natural, size: 16),
-                  label: const Text("Test Detection", style: TextStyle(fontSize: 11)),
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: Colors.blue,
-                    padding: const EdgeInsets.symmetric(vertical: 8),
-                  ),
-                ),
+                child: _buildCameraSection(),
               ),
-              const SizedBox(width: 8),
-              Expanded(
-                child: ElevatedButton.icon(
-                  onPressed: _exportDebugData,
-                  icon: const Icon(Icons.download, size: 16),
-                  label: const Text("Export Debug", style: TextStyle(fontSize: 11)),
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: Colors.green,
-                    padding: const EdgeInsets.symmetric(vertical: 8),
-                  ),
-                ),
-              ),
+              
+              const SizedBox(height: 30),
+              
+              // Action Button
+              _buildActionButton(),
+              
+              const SizedBox(height: 30),
             ],
           ),
-        ],
+        ),
       ),
     );
   }
 
-  // ================ CAMERA SECTION ================
-  Widget _buildCameraSection() {
-    return Column(
-      children: [
-        Row(
-          mainAxisAlignment: MainAxisAlignment.end,
-          children: [
-            Icon(
-              Icons.camera_alt_outlined,
-              color: primaryWhite,
-              size: 0.038.sh,
-            ),
-          ],
-        ),
-        SizedBox(height: 0.025.sh),
-        Stack(
-          children: [
-            _imageFile != null
-                ? CircleAvatar(
-              radius: 0.15.sh,
-              backgroundColor: const Color(0xffD9D9D9),
-              backgroundImage: FileImage(_imageFile!),
-            )
-                : CircleAvatar(
-              radius: 0.15.sh,
-              backgroundColor: const Color(0xffD9D9D9),
-              child: Icon(
-                Icons.camera_alt,
-                size: 0.09.sh,
-                color: const Color(0xff2E2E2E),
-              ),
-            ),
-            // Quality indicator overlay
-            if (_imageFile != null && _faceFeatures != null)
-              Positioned(
-                top: 0,
-                right: 0,
-                child: Container(
-                  padding: const EdgeInsets.all(4),
-                  decoration: BoxDecoration(
-                    color: _getQualityColor(),
-                    shape: BoxShape.circle,
-                    border: Border.all(color: Colors.white, width: 2),
-                  ),
-                  child: Icon(
-                    _getQualityIcon(),
-                    color: Colors.white,
-                    size: 16,
-                  ),
-                ),
-              ),
-          ],
-        ),
-        GestureDetector(
-          onTap: _getImage,
-          child: Container(
-            width: 60,
-            height: 60,
-            margin: const EdgeInsets.only(top: 44, bottom: 20),
-            decoration: const BoxDecoration(
-              gradient: RadialGradient(
-                stops: [0.4, 0.65, 1],
-                colors: [
-                  Color(0xffD9D9D9),
-                  primaryWhite,
-                  Color(0xffD9D9D9),
-                ],
-              ),
-              shape: BoxShape.circle,
-            ),
-          ),
-        ),
-        Text(
-          _isRegistering ? "Processing..." : "📸 Click here to Capture",
-          style: TextStyle(
-            fontSize: 14,
-            color: primaryWhite.withOpacity(0.6),
-          ),
-        ),
-      ],
-    );
-  }
-
-  // ================ STATUS SECTION ================
-  Widget _buildStatusSection() {
-    if (_image != null && _faceFeatures != null) {
-      double qualityScore = getFaceFeatureQuality(_faceFeatures!);
-      int featuresDetected = _countDetectedLandmarks(_faceFeatures!);
-
-      Color statusColor = Colors.green;
-      IconData statusIcon = Icons.check_circle;
-      String statusText = "✅ Face detection successful!";
-
-      if (qualityScore < 0.4) {
-        statusColor = Colors.red;
-        statusIcon = Icons.error;
-        statusText = "❌ Face quality too low - please retake";
-      } else if (qualityScore < 0.6) {
-        statusColor = Colors.orange;
-        statusIcon = Icons.warning;
-        statusText = "⚠️ Face detected but quality could be improved";
-      } else if (qualityScore < 0.8) {
-        statusColor = Colors.blue;
-        statusIcon = Icons.info;
-        statusText = "ℹ️ Good face detection quality";
-      }
-
-      return Container(
-        margin: EdgeInsets.only(bottom: 0.02.sh),
-        padding: EdgeInsets.all(0.015.sh),
-        decoration: BoxDecoration(
-          color: statusColor.withOpacity(0.2),
-          borderRadius: BorderRadius.circular(8),
-        ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              children: [
-                Icon(statusIcon, color: statusColor, size: 20),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: Text(
-                    statusText,
-                    style: TextStyle(
-                      color: statusColor,
-                      fontSize: 14,
-                      fontWeight: FontWeight.w500,
-                    ),
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 8),
-            Text(
-              "📊 Quality: ${(qualityScore * 100).toStringAsFixed(1)}% • Features: $featuresDetected/10",
-              style: TextStyle(
-                color: statusColor.withOpacity(0.8),
-                fontSize: 12,
-              ),
-            ),
-            if (validateFaceFeatures(_faceFeatures!)) ...[
-              const SizedBox(height: 4),
-              Text(
-                "✅ Ready for registration (${_isOfflineMode ? 'Offline Mode' : 'Online Mode'})",
-                style: TextStyle(
-                  color: Colors.green,
-                  fontSize: 12,
-                  fontWeight: FontWeight.w500,
-                ),
-              ),
-            ],
-            // Show feature breakdown in debug mode
-            if (_showDebugInfo) ...[
-              const SizedBox(height: 8),
-              Text(
-                _getFeaturesBreakdown(_faceFeatures!),
-                style: TextStyle(
-                  color: statusColor.withOpacity(0.7),
-                  fontSize: 10,
-                  fontFamily: 'monospace',
-                ),
-              ),
-            ],
-          ],
-        ),
-      );
-    } else if (_image != null && _faceFeatures == null) {
-      return Container(
-        margin: EdgeInsets.only(bottom: 0.02.sh),
-        padding: EdgeInsets.all(0.015.sh),
-        decoration: BoxDecoration(
-          color: Colors.red.withOpacity(0.2),
-          borderRadius: BorderRadius.circular(8),
-        ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              children: [
-                const Icon(Icons.error, color: Colors.red, size: 20),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: Text(
-                    "❌ Face detection failed",
-                    style: TextStyle(
-                      color: Colors.red,
-                      fontSize: 14,
-                      fontWeight: FontWeight.w500,
-                    ),
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 8),
-            Text(
-              "Please retake with better lighting and ensure your face fills the frame properly",
-              style: TextStyle(
-                color: Colors.red.withOpacity(0.8),
-                fontSize: 12,
-              ),
-            ),
-            const SizedBox(height: 4),
-            GestureDetector(
-              onTap: _showFaceDetectionTips,
-              child: Text(
-                "💡 Tap here for face detection tips",
-                style: TextStyle(
-                  color: Colors.blue,
-                  fontSize: 12,
-                  decoration: TextDecoration.underline,
-                ),
-              ),
-            ),
-          ],
-        ),
-      );
+  Widget _buildStatusMessage() {
+    String message;
+    IconData icon;
+    Color color;
+    
+    if (_isProcessing) {
+      message = "Analyzing your face...";
+      icon = Icons.face_retouching_natural;
+      color = Colors.blue;
+    } else if (_faceFeatures != null && _validateFaceQuality()) {
+      message = "Perfect! Your face is ready for registration";
+      icon = Icons.verified;
+      color = Colors.green;
+    } else if (_imageFile != null) {
+      message = "Face not detected clearly. Please try again";
+      icon = Icons.warning;
+      color = Colors.orange;
     } else {
-      return Container(
-        margin: EdgeInsets.only(bottom: 0.02.sh),
-        padding: EdgeInsets.all(0.015.sh),
-        decoration: BoxDecoration(
-          color: Colors.blue.withOpacity(0.2),
-          borderRadius: BorderRadius.circular(8),
-        ),
-        child: Column(
-          children: [
-            Row(
-              children: [
-                const Icon(Icons.camera_alt, color: Colors.blue, size: 20),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: Text(
-                    "📸 Take a photo of your face to continue",
-                    style: TextStyle(
-                      color: Colors.blue,
-                      fontSize: 14,
-                      fontWeight: FontWeight.w500,
-                    ),
-                  ),
-                ),
-              ],
-            ),
-            if (_isOfflineMode) ...[
-              const SizedBox(height: 8),
-              Text(
-                "⚠️ Offline Mode: Face will be saved locally and synced when online",
-                style: TextStyle(
-                  color: Colors.orange,
-                  fontSize: 11,
-                ),
-              ),
-            ],
-          ],
-        ),
-      );
+      message = "Position your face in the circle below";
+      icon = Icons.face;
+      color = Colors.white70;
     }
+
+    return AnimatedContainer(
+      duration: const Duration(milliseconds: 300),
+      margin: const EdgeInsets.symmetric(horizontal: 20),
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        color: color.withOpacity(0.1),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: color.withOpacity(0.3)),
+      ),
+      child: Row(
+        children: [
+          Icon(icon, color: color, size: 24),
+          const SizedBox(width: 16),
+          Expanded(
+            child: Text(
+              message,
+              style: TextStyle(
+                color: color,
+                fontSize: 16,
+                fontWeight: FontWeight.w500,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
   }
 
-  // ================ ACTION BUTTONS ================
-  Widget _buildActionButtons() {
-    if (_isRegistering) {
-      return Container(
-        padding: EdgeInsets.all(0.02.sh),
-        child: Column(
-          children: [
-            const CircularProgressIndicator(color: accentColor),
-            SizedBox(height: 0.015.sh),
-            Text(
-              _isOfflineMode
-                  ? "🔐 Offline registration..."
-                  : "🔐 Face registration...",
-              style: const TextStyle(
-                color: Colors.white,
-                fontSize: 16,
-              ),
-            ),
-            if (_showDebugInfo && _debugLogs.isNotEmpty) ...[
-              const SizedBox(height: 8),
-              Text(
-                "Latest: ${_debugLogs.last}",
-                style: const TextStyle(
-                  color: Colors.white70,
-                  fontSize: 10,
-                  fontFamily: 'monospace',
-                ),
-              ),
-            ],
-          ],
-        ),
-      );
-    }
-
-    return Column(
-      children: [
-        // Test buttons (if advanced options enabled)
-        if (_showAdvancedOptions && _image != null) ...[
-          Row(
-            children: [
-              Expanded(
-                child: ElevatedButton.icon(
-                  onPressed: _testFaceQuality,
-                  icon: const Icon(Icons.science, size: 16),
-                  label: const Text("Test Quality", style: TextStyle(fontSize: 12)),
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: Colors.purple,
-                    padding: const EdgeInsets.symmetric(vertical: 8),
+  Widget _buildCameraSection() {
+    return Container(
+      margin: const EdgeInsets.symmetric(horizontal: 20),
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          // Camera Circle with Animation
+          AnimatedBuilder(
+            animation: Listenable.merge([
+              _pulseController,
+              _successController,
+              _colorAnimation,
+            ]),
+            builder: (context, child) {
+              double scale = 1.0;
+              Color borderColor = Colors.white.withOpacity(0.3);
+              
+              if (_faceFeatures != null && _validateFaceQuality()) {
+                scale = _successAnimation.value;
+                borderColor = Colors.green;
+                if (!_successController.isAnimating && !_successController.isCompleted) {
+                  _successController.forward();
+                }
+              } else if (_imageFile == null) {
+                scale = _pulseAnimation.value;
+                _pulseController.repeat(reverse: true);
+              } else {
+                _pulseController.stop();
+              }
+              
+              return Transform.scale(
+                scale: scale,
+                child: Container(
+                  width: 280,
+                  height: 280,
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    border: Border.all(
+                      color: borderColor,
+                      width: 4,
+                    ),
+                    boxShadow: [
+                      if (_faceFeatures != null && _validateFaceQuality())
+                        BoxShadow(
+                          color: Colors.green.withOpacity(0.3),
+                          spreadRadius: 5,
+                          blurRadius: 15,
+                        ),
+                    ],
+                  ),
+                  child: ClipOval(
+                    child: _imageFile != null
+                        ? Image.file(
+                            _imageFile!,
+                            fit: BoxFit.cover,
+                          )
+                        : Container(
+                            decoration: BoxDecoration(
+                              color: Colors.black.withOpacity(0.3),
+                              shape: BoxShape.circle,
+                            ),
+                            child: Center(
+                              child: Icon(
+                                Icons.face,
+                                size: 80,
+                                color: Colors.white.withOpacity(0.5),
+                              ),
+                            ),
+                          ),
                   ),
                 ),
-              ),
-              const SizedBox(width: 8),
-              Expanded(
-                child: ElevatedButton.icon(
-                  onPressed: _analyzeImageDetails,
-                  icon: const Icon(Icons.analytics, size: 16),
-                  label: const Text("Analyze", style: TextStyle(fontSize: 12)),
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: Colors.teal,
-                    padding: const EdgeInsets.symmetric(vertical: 8),
-                  ),
-                ),
-              ),
-            ],
-          ),
-          SizedBox(height: 0.02.sh),
-        ],
-
-        // Main Register Button
-        if (_image != null && _faceFeatures != null)
-          CustomButton(
-            text: _isOfflineMode
-                ? "🔐 Register Face (Offline)"
-                : "🔐 Register Face",
-            onTap: _registerFace,
-          ),
-
-        // Retake Button
-        if (_image != null && _faceFeatures == null)
-          CustomButton(
-            text: "🔄 Retake Photo",
-            onTap: () {
-              setState(() {
-                _image = null;
-                _imageFile = null;
-                _faceFeatures = null;
-              });
-              _addDebugLog("🔄 Photo reset for retake");
+              );
             },
           ),
-      ],
+          
+          const SizedBox(height: 40),
+          
+          // Capture Button with Improved UI
+          _buildCaptureButton(),
+        ],
+      ),
     );
   }
 
-  // ================ HELPER METHODS FOR UI ================
-  Color _getQualityColor() {
-    if (_faceFeatures == null) return Colors.red;
-    double quality = getFaceFeatureQuality(_faceFeatures!);
-    if (quality >= 0.8) return Colors.green;
-    if (quality >= 0.6) return Colors.blue;
-    if (quality >= 0.4) return Colors.orange;
-    return Colors.red;
+  Widget _buildCaptureButton() {
+    return GestureDetector(
+      onTap: _isProcessing ? null : _getImage,
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 200),
+        width: 120,
+        height: 120,
+        decoration: BoxDecoration(
+          shape: BoxShape.circle,
+          gradient: RadialGradient(
+            colors: _isProcessing
+                ? [Colors.grey, Colors.grey.withOpacity(0.5)]
+                : [
+                    const Color(0xFF4CAF50),
+                    const Color(0xFF2E7D4B),
+                  ],
+          ),
+          boxShadow: [
+            BoxShadow(
+              color: _isProcessing
+                  ? Colors.grey.withOpacity(0.3)
+                  : const Color(0xFF4CAF50).withOpacity(0.4),
+              spreadRadius: 2,
+              blurRadius: 15,
+              offset: const Offset(0, 5),
+            ),
+          ],
+        ),
+        child: _isProcessing
+            ? const Center(
+                child: SizedBox(
+                  width: 40,
+                  height: 40,
+                  child: CircularProgressIndicator(
+                    color: Colors.white,
+                    strokeWidth: 3,
+                  ),
+                ),
+              )
+            : const Center(
+                child: Icon(
+                  Icons.camera_alt,
+                  color: Colors.white,
+                  size: 40,
+                ),
+              ),
+      ),
+    );
   }
 
-  IconData _getQualityIcon() {
-    if (_faceFeatures == null) return Icons.error;
-    double quality = getFaceFeatureQuality(_faceFeatures!);
-    if (quality >= 0.8) return Icons.verified;
-    if (quality >= 0.6) return Icons.check_circle;
-    if (quality >= 0.4) return Icons.warning;
-    return Icons.error;
+  Widget _buildActionButton() {
+    if (_isRegistering) {
+      return Container(
+        margin: const EdgeInsets.symmetric(horizontal: 20),
+        padding: const EdgeInsets.all(20),
+        decoration: BoxDecoration(
+          color: Colors.blue.withOpacity(0.1),
+          borderRadius: BorderRadius.circular(16),
+        ),
+        child: const Column(
+          children: [
+            CircularProgressIndicator(color: Colors.blue),
+            SizedBox(height: 16),
+            Text(
+              "Registering your face...",
+              style: TextStyle(
+                color: Colors.blue,
+                fontSize: 16,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ],
+        ),
+      );
+    }
+
+    if (_faceFeatures != null && _validateFaceQuality()) {
+      return Container(
+        margin: const EdgeInsets.symmetric(horizontal: 20),
+        child: SizedBox(
+          width: double.infinity,
+          height: 56,
+          child: ElevatedButton(
+            onPressed: _registerFace,
+            style: ElevatedButton.styleFrom(
+              backgroundColor: const Color(0xFF4CAF50),
+              foregroundColor: Colors.white,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(16),
+              ),
+              elevation: 8,
+            ),
+            child: const Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Icon(Icons.verified, size: 24),
+                SizedBox(width: 12),
+                Text(
+                  "Register Face",
+                  style: TextStyle(
+                    fontSize: 18,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      );
+    }
+
+    if (_imageFile != null && _faceFeatures == null && !_isProcessing) {
+      return Container(
+        margin: const EdgeInsets.symmetric(horizontal: 20),
+        child: SizedBox(
+          width: double.infinity,
+          height: 56,
+          child: ElevatedButton(
+            onPressed: _retakePhoto,
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.orange,
+              foregroundColor: Colors.white,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(16),
+              ),
+              elevation: 8,
+            ),
+            child: const Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Icon(Icons.refresh, size: 24),
+                SizedBox(width: 12),
+                Text(
+                  "Try Again",
+                  style: TextStyle(
+                    fontSize: 18,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      );
+    }
+
+    return Container(
+      margin: const EdgeInsets.symmetric(horizontal: 20),
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        color: Colors.white.withOpacity(0.1),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(
+          color: Colors.white.withOpacity(0.2),
+        ),
+      ),
+      child: const Text(
+        "Tap the camera button above to capture your face",
+        style: TextStyle(
+          color: Colors.white70,
+          fontSize: 16,
+          fontWeight: FontWeight.w500,
+        ),
+        textAlign: TextAlign.center,
+      ),
+    );
   }
 
-  String _getFeaturesBreakdown(FaceFeatures features) {
-    List<String> detected = [];
-    List<String> missing = [];
-
-    if (features.leftEye != null) detected.add('LE'); else missing.add('LE');
-    if (features.rightEye != null) detected.add('RE'); else missing.add('RE');
-    if (features.noseBase != null) detected.add('N'); else missing.add('N');
-    if (features.leftMouth != null) detected.add('LM'); else missing.add('LM');
-    if (features.rightMouth != null) detected.add('RM'); else missing.add('RM');
-
-    return "Detected: [${detected.join(',')}] Missing: [${missing.join(',')}]";
-  }
-
-  // ================ IMAGE CAPTURE ================
+  // Image Capture
   Future<void> _getImage() async {
-    _addDebugLog("📸 Starting image capture...");
-
     setState(() {
       _imageFile = null;
       _image = null;
       _faceFeatures = null;
+      _isProcessing = true;
     });
 
     try {
@@ -726,722 +528,282 @@ class _RegisterFaceViewState extends State<RegisterFaceView> {
       if (pickedFile != null) {
         await _setPickedFile(pickedFile);
       } else {
-        _addDebugLog("❌ No image selected");
+        setState(() {
+          _isProcessing = false;
+        });
       }
     } catch (e) {
-      _addDebugLog("❌ Error capturing image: $e");
-      CustomSnackBar.errorSnackBar("Error capturing image: $e");
+      setState(() {
+        _isProcessing = false;
+      });
+      _showErrorDialog("Error capturing image. Please try again.");
     }
   }
 
   Future<void> _setPickedFile(XFile pickedFile) async {
-    final path = pickedFile.path;
-    _addDebugLog("📸 Processing image from: $path");
-
-    setState(() {
-      _imageFile = File(path);
-    });
-
     try {
+      setState(() {
+        _imageFile = File(pickedFile.path);
+      });
+
       // Read image bytes
       Uint8List imageBytes = await _imageFile!.readAsBytes();
-
       setState(() {
         _image = base64Encode(imageBytes);
       });
 
-      _addDebugLog("📸 Image encoded to base64 (${_image!.length} chars)");
-
       // Create InputImage for face detection
-      InputImage inputImage = InputImage.fromFilePath(path);
-
-      // Show loading dialog
-      showDialog(
-        context: context,
-        barrierDismissible: false,
-        builder: (context) => AlertDialog(
-          backgroundColor: const Color(0xFF2E2E2E),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              const CircularProgressIndicator(color: accentColor),
-              const SizedBox(height: 16),
-              const Text(
-                "🔍 Face Detection",
-                style: TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold),
-              ),
-              const SizedBox(height: 8),
-              Text(
-                "Processing with ML algorithms...",
-                style: TextStyle(color: Colors.white70, fontSize: 14),
-                textAlign: TextAlign.center,
-              ),
-            ],
-          ),
-        ),
-      );
+      InputImage inputImage = InputImage.fromFilePath(pickedFile.path);
 
       // Process face detection
       await _processFaceDetection(inputImage);
 
-      // Hide loading dialog
-      if (mounted) Navigator.of(context).pop();
-
     } catch (e) {
-      _addDebugLog("❌ Error processing image: $e");
-      CustomSnackBar.errorSnackBar("Error processing image: $e");
-      if (mounted) Navigator.of(context).pop();
+      setState(() {
+        _isProcessing = false;
+      });
+      _showErrorDialog("Error processing image. Please try again.");
     }
   }
 
-  // ================ FACE DETECTION ================
   Future<void> _processFaceDetection(InputImage inputImage) async {
-    _addDebugLog("🔍 Starting face detection...");
-
     try {
-      // Use face detection
       _faceFeatures = await extractFaceFeatures(inputImage, _faceDetector);
 
-      if (_faceFeatures != null) {
-        _addDebugLog("✅ Face detected and features extracted successfully!");
+      setState(() {
+        _isProcessing = false;
+      });
 
-        // Validate features quality
-        if (validateFaceFeatures(_faceFeatures!)) {
-          _addDebugLog("✅ Face features are sufficient for registration");
-        } else {
-          _addDebugLog("⚠️ Face features detected but may need improvement");
-        }
-
-        // Get quality score
-        double qualityScore = getFaceFeatureQuality(_faceFeatures!);
-        _addDebugLog("📊 Face quality score: ${(qualityScore * 100).toStringAsFixed(1)}%");
-
-        // Store debug data
-        _registrationDebugData['lastFaceDetection'] = {
-          'successful': true,
-          'qualityScore': qualityScore,
-          'featuresCount': _countDetectedLandmarks(_faceFeatures!),
-          'isValid': validateFaceFeatures(_faceFeatures!),
-          'timestamp': DateTime.now().toIso8601String(),
-        };
-
-      } else {
-        _addDebugLog("❌ No face detected");
-        _registrationDebugData['lastFaceDetection'] = {
-          'successful': false,
-          'timestamp': DateTime.now().toIso8601String(),
-        };
-        _showFaceDetectionTips();
+      if (_faceFeatures != null && _validateFaceQuality()) {
+        HapticFeedback.lightImpact();
+        _successController.forward();
       }
 
-      setState(() {});
-
     } catch (e) {
-      _addDebugLog("❌ Error in face detection: $e");
       setState(() {
         _faceFeatures = null;
+        _isProcessing = false;
       });
     }
   }
 
-  // ================ FACE REGISTRATION ================
+  bool _validateFaceQuality() {
+    if (_faceFeatures == null) return false;
+
+    int essentialCount = 0;
+    if (_faceFeatures!.leftEye != null) essentialCount++;
+    if (_faceFeatures!.rightEye != null) essentialCount++;
+    if (_faceFeatures!.noseBase != null) essentialCount++;
+
+    double qualityScore = getFaceFeatureQuality(_faceFeatures!);
+    return essentialCount >= 3 && qualityScore >= 0.4;
+  }
+
+  void _retakePhoto() {
+    setState(() {
+      _imageFile = null;
+      _image = null;
+      _faceFeatures = null;
+    });
+    _successController.reset();
+  }
+
+  // Face Registration
   Future<void> _registerFace() async {
-    if (_image == null || _faceFeatures == null) {
-      CustomSnackBar.errorSnackBar("Please capture your face first");
-      return;
-    }
+    if (_image == null || _faceFeatures == null) return;
 
     setState(() {
       _isRegistering = true;
     });
 
     try {
-      _addDebugLog("🔐 Starting face registration process...");
-      _addDebugLog("📶 Registration mode: ${_isOfflineMode ? 'Offline' : 'Online'}");
-
-      // Validate face quality before registration
-      if (!_validateFaceQuality()) {
-        setState(() {
-          _isRegistering = false;
-        });
-        return;
-      }
-
       // Clean the image data
       String cleanedImage = _image!;
       if (cleanedImage.contains('data:image') && cleanedImage.contains(',')) {
         cleanedImage = cleanedImage.split(',')[1];
       }
 
-      // Save locally with multiple backup methods
+      // Save locally
       await _saveLocalData(cleanedImage);
-      _addDebugLog("✅ Local storage completed");
 
-      // Save to cloud if online with retry mechanism
+      // Save to cloud if online
       if (!_isOfflineMode) {
-        bool cloudSuccess = await _saveToCloudWithRetry(cleanedImage);
-        if (!cloudSuccess) {
-          _addDebugLog("⚠️ Cloud save failed, but local save succeeded");
-        }
-      } else {
-        _addDebugLog("📱 Offline mode: Marking for cloud sync when online");
-        await _markForCloudSync();
+        await _saveToCloud(cleanedImage);
       }
-
-      // Validate the saved data
-      bool validationPassed = await _validateSavedData();
-      if (!validationPassed) {
-        throw Exception("Data validation failed after registration");
-      }
-
-      // Mark registration as complete
-      await _markRegistrationComplete();
 
       setState(() {
         _isRegistering = false;
       });
-
-      _addDebugLog("✅ Face registration completed successfully!");
 
       // Show success message
-      CustomSnackBar.successSnackBar(
-          _isOfflineMode
-              ? "🔐 Face registered locally! Will sync when online."
-              : "🔐 Face registered successfully!"
-      );
-
-      // Wait a moment then navigate
-      await Future.delayed(const Duration(seconds: 1));
-
-      // Navigate to verification
-      if (mounted) {
-        Navigator.of(context).push(
-          MaterialPageRoute(
-            builder: (context) => AuthenticateFaceView(
-              employeeId: widget.employeeId,
-              employeePin: widget.employeePin,
-              isRegistrationValidation: true,
-            ),
-          ),
-        );
-      }
+      _showSuccessDialog();
 
     } catch (e) {
       setState(() {
         _isRegistering = false;
       });
-
-      _addDebugLog("❌ Error in registration: $e");
-      CustomSnackBar.errorSnackBar("Registration failed. Please try again.");
+      _showErrorDialog("Registration failed. Please try again.");
     }
   }
 
-  // Validate face quality before registration
-  bool _validateFaceQuality() {
-    if (_faceFeatures == null) {
-      CustomSnackBar.errorSnackBar("No face features detected");
-      _addDebugLog("❌ Validation failed: No face features");
-      return false;
-    }
-
-    // Count essential features
-    int essentialCount = 0;
-    if (_faceFeatures!.leftEye != null) essentialCount++;
-    if (_faceFeatures!.rightEye != null) essentialCount++;
-    if (_faceFeatures!.noseBase != null) essentialCount++;
-
-    if (essentialCount < 3) {
-      CustomSnackBar.errorSnackBar("Face quality too low. Please retake with better lighting.");
-      _addDebugLog("❌ Validation failed: Only $essentialCount/3 essential features");
-      return false;
-    }
-
-    double qualityScore = getFaceFeatureQuality(_faceFeatures!);
-    _addDebugLog("📊 Face quality validation score: ${(qualityScore * 100).toStringAsFixed(1)}%");
-
-    if (qualityScore < 0.4) {
-      CustomSnackBar.errorSnackBar("Face quality too low (${(qualityScore * 100).toStringAsFixed(1)}%). Please retake.");
-      _addDebugLog("❌ Validation failed: Quality score too low");
-      return false;
-    }
-
-    _addDebugLog("✅ Face quality validation passed");
-    return true;
-  }
-
-  // Local storage with multiple backup methods
   Future<void> _saveLocalData(String cleanedImage) async {
+    final prefs = await SharedPreferences.getInstance();
+
+    // Save image
+    await prefs.setString('employee_image_${widget.employeeId}', cleanedImage);
+    await prefs.setString('secure_face_image_${widget.employeeId}', cleanedImage);
+
+    // Save face features
+    String featuresJson = jsonEncode(_faceFeatures!.toJson());
+    await prefs.setString('employee_face_features_${widget.employeeId}', featuresJson);
+    await prefs.setString('secure_face_features_${widget.employeeId}', featuresJson);
+
+    // Set registration flags
+    DateTime now = DateTime.now();
+    await prefs.setBool('face_registered_${widget.employeeId}', true);
+    await prefs.setString('face_registration_date_${widget.employeeId}', now.toIso8601String());
+
+    // Save complete user data
+    Map<String, dynamic> employeeData = {
+      'id': widget.employeeId,
+      'pin': widget.employeePin,
+      'faceRegistered': true,
+      'registrationDate': now.toIso8601String(),
+      'faceFeatures': _faceFeatures!.toJson(),
+      'image': cleanedImage,
+      'faceQualityScore': getFaceFeatureQuality(_faceFeatures!),
+    };
+
+    await prefs.setString('user_data_${widget.employeeId}', jsonEncode(employeeData));
+  }
+
+  Future<void> _saveToCloud(String cleanedImage) async {
     try {
-      final prefs = await SharedPreferences.getInstance();
-
-      _addDebugLog("💾 Saving face data with multiple backup methods...");
-
-      // Primary storage locations
-      await prefs.setString('employee_image_${widget.employeeId}', cleanedImage);
-      await prefs.setString('secure_face_image_${widget.employeeId}', cleanedImage);
-
-      // Face features storage
-      String featuresJson = jsonEncode(_faceFeatures!.toJson());
-      await prefs.setString('employee_face_features_${widget.employeeId}', featuresJson);
-      await prefs.setString('secure_face_features_${widget.employeeId}', featuresJson);
-
-      // Registration flags
-      DateTime now = DateTime.now();
-      await prefs.setBool('face_registered_${widget.employeeId}', true);
-      await prefs.setString('face_registration_date_${widget.employeeId}', now.toIso8601String());
-      await prefs.setString('face_registration_platform_${widget.employeeId}', 'Production');
-
-      // Employee data
-      Map<String, dynamic> employeeData = {
-        'id': widget.employeeId,
-        'pin': widget.employeePin,
-        'faceRegistered': true,
-        'registrationDate': now.toIso8601String(),
-        'platform': 'Production',
-        'faceFeatures': _faceFeatures!.toJson(),
+      Map<String, dynamic> cloudData = {
         'image': cleanedImage,
+        'faceFeatures': _faceFeatures!.toJson(),
+        'faceRegistered': true,
+        'registeredOn': FieldValue.serverTimestamp(),
         'faceQualityScore': getFaceFeatureQuality(_faceFeatures!),
-        'registrationMethod': 'production_v1',
-        'featuresCount': _countDetectedLandmarks(_faceFeatures!),
-        'debugLogs': _debugLogs,
-        'registrationDebugData': _registrationDebugData,
+        'lastUpdated': FieldValue.serverTimestamp(),
       };
 
-      await prefs.setString('user_data_${widget.employeeId}', jsonEncode(employeeData));
-
-      _addDebugLog("💾 Local storage completed successfully");
+      await FirebaseFirestore.instance
+          .collection('employees')
+          .doc(widget.employeeId)
+          .update(cloudData);
 
     } catch (e) {
-      _addDebugLog("❌ Error in local storage: $e");
-      throw e;
-    }
-  }
-
-  // Save to cloud with retry mechanism
-  Future<bool> _saveToCloudWithRetry(String cleanedImage) async {
-    _addDebugLog("🌐 Attempting cloud save with retry...");
-
-    for (int attempt = 1; attempt <= 3; attempt++) {
-      try {
-        _addDebugLog("🌐 Cloud save attempt $attempt/3...");
-
-        Map<String, dynamic> cloudData = {
-          'image': cleanedImage,
-          'faceFeatures': _faceFeatures!.toJson(),
-          'faceRegistered': true,
-          'registeredOn': FieldValue.serverTimestamp(),
-          'platform': 'Production',
-          'registrationMethod': 'production_v1',
-          'faceQualityScore': getFaceFeatureQuality(_faceFeatures!),
-          'featuresCount': _countDetectedLandmarks(_faceFeatures!),
-          'devicePlatform': Platform.operatingSystem,
-          'lastUpdated': FieldValue.serverTimestamp(),
-        };
-
-        await FirebaseFirestore.instance
-            .collection('employees')
-            .doc(widget.employeeId)
-            .update(cloudData);
-
-        _addDebugLog("✅ Cloud save successful on attempt $attempt");
-        return true;
-
-      } catch (e) {
-        _addDebugLog("❌ Cloud save attempt $attempt failed: $e");
-
-        if (attempt < 3) {
-          _addDebugLog("🔄 Retrying in ${attempt * 2} seconds...");
-          await Future.delayed(Duration(seconds: attempt * 2));
-        }
-      }
-    }
-
-    _addDebugLog("❌ All cloud save attempts failed");
-    return false;
-  }
-
-  // Mark for cloud sync when in offline mode
-  Future<void> _markForCloudSync() async {
-    try {
+      // Cloud save failed but local save succeeded
       final prefs = await SharedPreferences.getInstance();
       await prefs.setBool('pending_face_registration_${widget.employeeId}', true);
-      await prefs.setString('pending_sync_timestamp_${widget.employeeId}', DateTime.now().toIso8601String());
-
-      // Store sync data
-      Map<String, dynamic> syncData = {
-        'employeeId': widget.employeeId,
-        'image': _image,
-        'faceFeatures': _faceFeatures!.toJson(),
-        'platform': 'Production',
-        'registrationMethod': 'production_offline',
-        'pendingSince': DateTime.now().toIso8601String(),
-        'qualityScore': getFaceFeatureQuality(_faceFeatures!),
-        'featuresCount': _countDetectedLandmarks(_faceFeatures!),
-        'debugLogs': _debugLogs,
-      };
-
-      await prefs.setString('pending_sync_data_${widget.employeeId}', jsonEncode(syncData));
-
-      _addDebugLog("📱 Data marked for cloud sync when online");
-
-    } catch (e) {
-      _addDebugLog("❌ Error marking for cloud sync: $e");
     }
   }
 
-  // Validate saved data
-  Future<bool> _validateSavedData() async {
-    try {
-      _addDebugLog("🔍 Validating saved registration data...");
-
-      final prefs = await SharedPreferences.getInstance();
-
-      // Check image data
-      String? primaryImage = prefs.getString('employee_image_${widget.employeeId}');
-      String? secureImage = prefs.getString('secure_face_image_${widget.employeeId}');
-
-      if (primaryImage == null && secureImage == null) {
-        _addDebugLog("❌ Validation failed: No saved images found");
-        return false;
-      }
-
-      // Check face features
-      String? primaryFeatures = prefs.getString('employee_face_features_${widget.employeeId}');
-      String? secureFeatures = prefs.getString('secure_face_features_${widget.employeeId}');
-
-      if (primaryFeatures == null && secureFeatures == null) {
-        _addDebugLog("❌ Validation failed: No saved features found");
-        return false;
-      }
-
-      // Try to parse features
-      String? featuresJson = secureFeatures ?? primaryFeatures;
-      if (featuresJson != null) {
-        try {
-          Map<String, dynamic> featuresMap = jsonDecode(featuresJson);
-          FaceFeatures parsedFeatures = FaceFeatures.fromJson(featuresMap);
-
-          // Validate essential features
-          if (parsedFeatures.leftEye == null || parsedFeatures.rightEye == null || parsedFeatures.noseBase == null) {
-            _addDebugLog("❌ Validation failed: Missing essential features in parsed data");
-            return false;
-          }
-
-          _addDebugLog("✅ Successfully parsed and validated face features");
-
-        } catch (e) {
-          _addDebugLog("❌ Validation failed: Cannot parse features - $e");
-          return false;
-        }
-      }
-
-      // Check registration flags
-      bool isRegistered = prefs.getBool('face_registered_${widget.employeeId}') ?? false;
-
-      if (!isRegistered) {
-        _addDebugLog("❌ Validation failed: No registration flags set");
-        return false;
-      }
-
-      _addDebugLog("✅ Data validation passed");
-      return true;
-
-    } catch (e) {
-      _addDebugLog("❌ Error during validation: $e");
-      return false;
-    }
-  }
-
-  Future<void> _markRegistrationComplete() async {
-    try {
-      final prefs = await SharedPreferences.getInstance();
-      await prefs.setBool('registration_complete_${widget.employeeId}', true);
-      await prefs.setBool('is_authenticated', true);
-      await prefs.setString('authenticated_user_id', widget.employeeId);
-      await prefs.setInt('authentication_timestamp', DateTime.now().millisecondsSinceEpoch);
-
-      _addDebugLog("✅ Registration marked as complete");
-    } catch (e) {
-      _addDebugLog("❌ Error marking registration complete: $e");
-    }
-  }
-
-  // ================ TEST METHODS ================
-  Future<void> _testMultipleFaceDetection() async {
-    if (_imageFile == null) {
-      CustomSnackBar.errorSnackBar("No image to test");
-      return;
-    }
-
-    _addDebugLog("🧪 Testing multiple face detection methods...");
-
+  // Dialogs
+  void _showSuccessDialog() {
     showDialog(
       context: context,
       barrierDismissible: false,
       builder: (context) => AlertDialog(
-        backgroundColor: const Color(0xFF2E2E2E),
+        backgroundColor: const Color(0xFF1E293B),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(20),
+        ),
         content: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            const CircularProgressIndicator(color: accentColor),
-            const SizedBox(height: 16),
-            const Text(
-              "🧪 Testing Detection Methods",
-              style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+            const Icon(
+              Icons.check_circle,
+              color: Colors.green,
+              size: 60,
             ),
-            const SizedBox(height: 8),
+            const SizedBox(height: 20),
+            const Text(
+              "Face Registered Successfully!",
+              style: TextStyle(
+                color: Colors.white,
+                fontSize: 20,
+                fontWeight: FontWeight.bold,
+              ),
+              textAlign: TextAlign.center,
+            ),
+            const SizedBox(height: 12),
             Text(
-              "Running comprehensive tests...",
-              style: TextStyle(color: Colors.white70),
+              _isOfflineMode
+                  ? "Your face has been registered locally and will sync when online."
+                  : "You can now use face authentication to access the app.",
+              style: const TextStyle(
+                color: Colors.white70,
+                fontSize: 16,
+              ),
+              textAlign: TextAlign.center,
+            ),
+            const SizedBox(height: 30),
+            SizedBox(
+              width: double.infinity,
+              child: ElevatedButton(
+                onPressed: () {
+                  Navigator.of(context).pop();
+                  Navigator.of(context).push(
+                    MaterialPageRoute(
+                      builder: (context) => AuthenticateFaceView(
+                        employeeId: widget.employeeId,
+                        employeePin: widget.employeePin,
+                        isRegistrationValidation: true,
+                      ),
+                    ),
+                  );
+                },
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: const Color(0xFF4CAF50),
+                  padding: const EdgeInsets.symmetric(vertical: 16),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                ),
+                child: const Text(
+                  "Continue",
+                  style: TextStyle(
+                    color: Colors.white,
+                    fontSize: 16,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+              ),
             ),
           ],
         ),
       ),
     );
-
-    try {
-      InputImage inputImage = InputImage.fromFilePath(_imageFile!.path);
-
-      // Test 1: Ultra-lenient settings
-      final detector1 = FaceDetector(
-        options: FaceDetectorOptions(
-          performanceMode: FaceDetectorMode.fast,
-          minFaceSize: 0.01,
-          enableLandmarks: false,
-        ),
-      );
-      List<Face> faces1 = await detector1.processImage(inputImage);
-      _addDebugLog("🧪 Test 1 (ultra-lenient): ${faces1.length} faces");
-
-      // Test 2: Default settings
-      final detector2 = FaceDetector(options: FaceDetectorOptions());
-      List<Face> faces2 = await detector2.processImage(inputImage);
-      _addDebugLog("🧪 Test 2 (default): ${faces2.length} faces");
-
-      // Test 3: Accurate settings
-      final detector3 = FaceDetector(
-        options: FaceDetectorOptions(
-          performanceMode: FaceDetectorMode.accurate,
-          enableLandmarks: true,
-          enableClassification: true,
-        ),
-      );
-      List<Face> faces3 = await detector3.processImage(inputImage);
-      _addDebugLog("🧪 Test 3 (accurate): ${faces3.length} faces");
-
-      // Cleanup
-      detector1.close();
-      detector2.close();
-      detector3.close();
-
-      Navigator.pop(context);
-
-      // Show results
-      showDialog(
-        context: context,
-        builder: (context) => AlertDialog(
-          backgroundColor: const Color(0xFF2E2E2E),
-          title: const Text("🧪 Detection Test Results", style: TextStyle(color: Colors.white)),
-          content: Text(
-            "Ultra-lenient: ${faces1.length} faces\n"
-                "Default: ${faces2.length} faces\n"
-                "Accurate: ${faces3.length} faces\n\n"
-                "${faces1.isNotEmpty || faces2.isNotEmpty || faces3.isNotEmpty ? '✅ Face detection working!' : '❌ No faces detected with any method'}",
-            style: const TextStyle(color: Colors.white),
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(context),
-              child: const Text("OK", style: TextStyle(color: Colors.white)),
-            ),
-          ],
-        ),
-      );
-
-    } catch (e) {
-      Navigator.pop(context);
-      _addDebugLog("❌ Test failed: $e");
-      CustomSnackBar.errorSnackBar("Test failed: $e");
-    }
   }
 
-  Future<void> _testFaceQuality() async {
-    if (_faceFeatures == null) {
-      CustomSnackBar.errorSnackBar("No face features to test");
-      return;
-    }
-
-    _addDebugLog("🧪 Testing face quality metrics...");
-
-    double qualityScore = getFaceFeatureQuality(_faceFeatures!);
-    int featuresCount = _countDetectedLandmarks(_faceFeatures!);
-    bool isValid = validateFaceFeatures(_faceFeatures!);
-
+  void _showErrorDialog(String message) {
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
-        backgroundColor: const Color(0xFF2E2E2E),
-        title: const Text("🧪 Face Quality Report", style: TextStyle(color: Colors.white)),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text("Quality Score: ${(qualityScore * 100).toStringAsFixed(1)}%", style: const TextStyle(color: Colors.white)),
-            Text("Features Count: $featuresCount/10", style: const TextStyle(color: Colors.white)),
-            Text("Valid for Registration: ${isValid ? 'Yes' : 'No'}", style: const TextStyle(color: Colors.white)),
-            const SizedBox(height: 12),
-            Text("Feature Breakdown:", style: const TextStyle(color: Colors.yellow, fontWeight: FontWeight.bold)),
-            Text(_getFeaturesBreakdown(_faceFeatures!), style: const TextStyle(color: Colors.white70, fontFamily: 'monospace')),
-          ],
+        backgroundColor: const Color(0xFF1E293B),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(20),
+        ),
+        title: const Text(
+          "Error",
+          style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+        ),
+        content: Text(
+          message,
+          style: const TextStyle(color: Colors.white),
         ),
         actions: [
           TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text("OK", style: TextStyle(color: Colors.white)),
+            onPressed: () => Navigator.of(context).pop(),
+            child: const Text(
+              "OK",
+              style: TextStyle(color: Colors.blue),
+            ),
           ),
         ],
       ),
     );
-  }
-
-  Future<void> _analyzeImageDetails() async {
-    if (_imageFile == null) {
-      CustomSnackBar.errorSnackBar("No image to analyze");
-      return;
-    }
-
-    _addDebugLog("🧪 Analyzing image details...");
-
-    try {
-      Uint8List imageBytes = await _imageFile!.readAsBytes();
-      double imageSizeKB = imageBytes.length / 1024;
-
-      showDialog(
-        context: context,
-        builder: (context) => AlertDialog(
-          backgroundColor: const Color(0xFF2E2E2E),
-          title: const Text("🧪 Image Analysis", style: TextStyle(color: Colors.white)),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text("File Size: ${imageSizeKB.toStringAsFixed(1)} KB", style: const TextStyle(color: Colors.white)),
-              Text("Image Bytes: ${imageBytes.length}", style: const TextStyle(color: Colors.white)),
-              Text("Base64 Size: ${_image?.length ?? 0} chars", style: const TextStyle(color: Colors.white)),
-              const SizedBox(height: 8),
-              Text(
-                imageSizeKB < 10 ? "⚠️ Image might be too small" :
-                imageSizeKB > 5000 ? "⚠️ Image might be too large" :
-                "✅ Good image size",
-                style: TextStyle(color: imageSizeKB < 10 || imageSizeKB > 5000 ? Colors.orange : Colors.green),
-              ),
-            ],
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(context),
-              child: const Text("OK", style: TextStyle(color: Colors.white)),
-            ),
-          ],
-        ),
-      );
-    } catch (e) {
-      _addDebugLog("❌ Analysis failed: $e");
-      CustomSnackBar.errorSnackBar("Analysis failed: $e");
-    }
-  }
-
-  void _exportDebugData() {
-    Map<String, dynamic> exportData = {
-      'timestamp': DateTime.now().toIso8601String(),
-      'employeeId': widget.employeeId,
-      'debugLogs': _debugLogs,
-      'registrationDebugData': _registrationDebugData,
-      'isOfflineMode': _isOfflineMode,
-      'hasImage': _image != null,
-      'hasFaceFeatures': _faceFeatures != null,
-      'imageSize': _image?.length ?? 0,
-      'qualityScore': _faceFeatures != null ? getFaceFeatureQuality(_faceFeatures!) : null,
-      'featuresCount': _faceFeatures != null ? _countDetectedLandmarks(_faceFeatures!) : null,
-    };
-
-    String exportJson = jsonEncode(exportData);
-    Clipboard.setData(ClipboardData(text: exportJson));
-    _addDebugLog("📋 Debug data exported to clipboard");
-    CustomSnackBar.successSnackBar("Debug data copied to clipboard");
-  }
-
-  // ================ FACE DETECTION TIPS ================
-  void _showFaceDetectionTips() {
-    if (mounted) {
-      showDialog(
-        context: context,
-        builder: (context) => AlertDialog(
-          backgroundColor: const Color(0xFF2E2E2E),
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(16),
-          ),
-          title: const Row(
-            children: [
-              Icon(Icons.lightbulb, color: Colors.orange),
-              SizedBox(width: 8),
-              Text(
-                "💡 Face Detection Tips",
-                style: TextStyle(color: Colors.white, fontSize: 16),
-              ),
-            ],
-          ),
-          content: const Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                "For optimal face detection:",
-                style: TextStyle(color: Colors.white, fontWeight: FontWeight.w600),
-              ),
-              SizedBox(height: 12),
-              Text("• Use excellent lighting conditions", style: TextStyle(color: Colors.white)),
-              Text("• Face camera directly (avoid angles)", style: TextStyle(color: Colors.white)),
-              Text("• Remove sunglasses, masks, hats", style: TextStyle(color: Colors.white)),
-              Text("• Fill 60-80% of frame with your face", style: TextStyle(color: Colors.white)),
-              Text("• Clean camera lens thoroughly", style: TextStyle(color: Colors.white)),
-              Text("• Hold device steady during capture", style: TextStyle(color: Colors.white)),
-              Text("• Ensure good contrast with background", style: TextStyle(color: Colors.white)),
-              Text("• Avoid shadows on face", style: TextStyle(color: Colors.white)),
-              SizedBox(height: 8),
-              Text(
-                "✅ ML Kit provides excellent face recognition!",
-                style: TextStyle(color: Colors.green, fontSize: 12, fontWeight: FontWeight.bold),
-              ),
-            ],
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(context),
-              child: const Text(
-                "Try Again",
-                style: TextStyle(color: Colors.white),
-              ),
-            ),
-          ],
-        ),
-      );
-    }
-  }
-
-  // ================ HELPER FUNCTIONS ================
-  int _countDetectedLandmarks(FaceFeatures features) {
-    int count = 0;
-    if (features.rightEar != null) count++;
-    if (features.leftEar != null) count++;
-    if (features.rightEye != null) count++;
-    if (features.leftEye != null) count++;
-    if (features.rightCheek != null) count++;
-    if (features.leftCheek != null) count++;
-    if (features.rightMouth != null) count++;
-    if (features.leftMouth != null) count++;
-    if (features.noseBase != null) count++;
-    if (features.bottomMouth != null) count++;
-    return count;
   }
 }
